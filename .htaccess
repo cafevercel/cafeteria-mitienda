@@ -1,0 +1,15 @@
+<IfModule mod_rewrite.c>
+RewriteEngine On
+RewriteBase /
+
+# Redirige todas las solicitudes al directorio frontend
+RewriteCond %{REQUEST_URI} !^/frontend
+RewriteRule ^(.*)$ frontend/$1 [L]
+
+# Si el archivo o directorio existe, úsalo directamente
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+
+# De lo contrario, redirige a index.html
+RewriteRule ^ frontend/.next/server/pages/index.html [L]
+</IfModule>
