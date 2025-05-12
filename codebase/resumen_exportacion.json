@@ -1,0 +1,326 @@
+{
+  "fecha_exportacion": "2025-04-29 11:04:06",
+  "tablas": {
+    "merma": {
+      "tableName": "merma",
+      "rowCount": 234,
+      "columnCount": 7,
+      "columns": [
+        {
+          "name": "id",
+          "type": "integer"
+        },
+        {
+          "name": "producto_id",
+          "type": "integer"
+        },
+        {
+          "name": "producto_nombre",
+          "type": "character varying"
+        },
+        {
+          "name": "cantidad",
+          "type": "integer"
+        },
+        {
+          "name": "fecha",
+          "type": "timestamp without time zone"
+        },
+        {
+          "name": "usuario_id",
+          "type": "integer"
+        },
+        {
+          "name": "usuario_nombre",
+          "type": "character varying"
+        }
+      ]
+    },
+    "merma_parametros": {
+      "tableName": "merma_parametros",
+      "rowCount": 49,
+      "columnCount": 6,
+      "columns": [
+        {
+          "name": "id",
+          "type": "integer"
+        },
+        {
+          "name": "merma_id",
+          "type": "integer"
+        },
+        {
+          "name": "nombre",
+          "type": "character varying"
+        },
+        {
+          "name": "cantidad",
+          "type": "integer"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone"
+        }
+      ]
+    },
+    "producto_parametros": {
+      "tableName": "producto_parametros",
+      "rowCount": 317,
+      "columnCount": 4,
+      "columns": [
+        {
+          "name": "id",
+          "type": "integer"
+        },
+        {
+          "name": "producto_id",
+          "type": "integer"
+        },
+        {
+          "name": "nombre",
+          "type": "character varying"
+        },
+        {
+          "name": "cantidad",
+          "type": "integer"
+        }
+      ]
+    },
+    "productos": {
+      "tableName": "productos",
+      "rowCount": 602,
+      "columnCount": 7,
+      "columns": [
+        {
+          "name": "id",
+          "type": "integer"
+        },
+        {
+          "name": "nombre",
+          "type": "character varying"
+        },
+        {
+          "name": "precio",
+          "type": "numeric"
+        },
+        {
+          "name": "cantidad",
+          "type": "integer"
+        },
+        {
+          "name": "foto",
+          "type": "character varying"
+        },
+        {
+          "name": "tiene_parametros",
+          "type": "boolean"
+        },
+        {
+          "name": "precio_compra",
+          "type": "numeric"
+        }
+      ]
+    },
+    "transaccion_parametros": {
+      "tableName": "transaccion_parametros",
+      "rowCount": 1802,
+      "columnCount": 4,
+      "columns": [
+        {
+          "name": "id",
+          "type": "integer"
+        },
+        {
+          "name": "transaccion_id",
+          "type": "integer"
+        },
+        {
+          "name": "nombre",
+          "type": "character varying"
+        },
+        {
+          "name": "cantidad",
+          "type": "integer"
+        }
+      ]
+    },
+    "transacciones": {
+      "tableName": "transacciones",
+      "rowCount": 5049,
+      "columnCount": 8,
+      "columns": [
+        {
+          "name": "producto",
+          "type": "integer"
+        },
+        {
+          "name": "cantidad",
+          "type": "integer"
+        },
+        {
+          "name": "desde",
+          "type": "character varying"
+        },
+        {
+          "name": "hacia",
+          "type": "character varying"
+        },
+        {
+          "name": "fecha",
+          "type": "timestamp without time zone"
+        },
+        {
+          "name": "tipo",
+          "type": "character varying"
+        },
+        {
+          "name": "id",
+          "type": "integer"
+        },
+        {
+          "name": "parametro_nombre",
+          "type": "character varying"
+        }
+      ]
+    },
+    "usuario_producto_parametros": {
+      "tableName": "usuario_producto_parametros",
+      "rowCount": 1019,
+      "columnCount": 5,
+      "columns": [
+        {
+          "name": "id",
+          "type": "integer"
+        },
+        {
+          "name": "usuario_id",
+          "type": "integer"
+        },
+        {
+          "name": "producto_id",
+          "type": "integer"
+        },
+        {
+          "name": "nombre",
+          "type": "character varying"
+        },
+        {
+          "name": "cantidad",
+          "type": "integer"
+        }
+      ]
+    },
+    "usuario_productos": {
+      "tableName": "usuario_productos",
+      "rowCount": 2181,
+      "columnCount": 4,
+      "columns": [
+        {
+          "name": "usuario_id",
+          "type": "integer"
+        },
+        {
+          "name": "producto_id",
+          "type": "integer"
+        },
+        {
+          "name": "cantidad",
+          "type": "integer"
+        },
+        {
+          "name": "precio",
+          "type": "numeric"
+        }
+      ]
+    },
+    "usuarios": {
+      "tableName": "usuarios",
+      "rowCount": 9,
+      "columnCount": 5,
+      "columns": [
+        {
+          "name": "id",
+          "type": "integer"
+        },
+        {
+          "name": "nombre",
+          "type": "character varying"
+        },
+        {
+          "name": "password",
+          "type": "character varying"
+        },
+        {
+          "name": "telefono",
+          "type": "character varying"
+        },
+        {
+          "name": "rol",
+          "type": "character varying"
+        }
+      ]
+    },
+    "venta_parametros": {
+      "tableName": "venta_parametros",
+      "rowCount": 545,
+      "columnCount": 4,
+      "columns": [
+        {
+          "name": "id",
+          "type": "integer"
+        },
+        {
+          "name": "venta_id",
+          "type": "integer"
+        },
+        {
+          "name": "parametro",
+          "type": "character varying"
+        },
+        {
+          "name": "cantidad",
+          "type": "integer"
+        }
+      ]
+    },
+    "ventas": {
+      "tableName": "ventas",
+      "rowCount": 7559,
+      "columnCount": 7,
+      "columns": [
+        {
+          "name": "id",
+          "type": "integer"
+        },
+        {
+          "name": "producto",
+          "type": "integer"
+        },
+        {
+          "name": "cantidad",
+          "type": "integer"
+        },
+        {
+          "name": "precio_unitario",
+          "type": "numeric"
+        },
+        {
+          "name": "total",
+          "type": "numeric"
+        },
+        {
+          "name": "vendedor",
+          "type": "integer"
+        },
+        {
+          "name": "fecha",
+          "type": "timestamp without time zone"
+        }
+      ]
+    }
+  }
+}

@@ -4,10 +4,11 @@ import { query } from '@/lib/db';
 export async function PUT(request: NextRequest) {
     try {
         const body = await request.json();
-        const { productoId, vendedorId, cantidad, parametros } = body;
+        const { productoId, cantidad, parametros } = body;
+        const vendedorId = body.vendedorId || null; // Hacemos el vendedorId opcional, solo para tracking
 
-        if (!productoId || !vendedorId) {
-            return NextResponse.json({ error: 'Faltan datos requeridos' }, { status: 400 });
+        if (!productoId) {
+            return NextResponse.json({ error: 'Falta el ID del producto' }, { status: 400 });
         }
 
         await query('BEGIN');
@@ -30,8 +31,8 @@ export async function PUT(request: NextRequest) {
                 // Verificar y actualizar cada parámetro
                 for (const param of parametros) {
                     const paramResult = await query(
-                        'SELECT cantidad FROM usuario_producto_parametros WHERE usuario_id = $1 AND producto_id = $2 AND nombre = $3',
-                        [vendedorId, productoId, param.nombre]
+                        'SELECT cantidad FROM usuario_producto_parametros WHERE producto_id = $1 AND nombre = $2',
+                        [productoId, param.nombre]
                     );
 
                     if (paramResult.rows.length === 0 || paramResult.rows[0].cantidad < param.cantidad) {
@@ -40,8 +41,8 @@ export async function PUT(request: NextRequest) {
 
                     // Actualizar cantidad del parámetro en usuario_producto_parametros
                     await query(
-                        'UPDATE usuario_producto_parametros SET cantidad = cantidad - $1 WHERE usuario_id = $2 AND producto_id = $3 AND nombre = $4',
-                        [param.cantidad, vendedorId, productoId, param.nombre]
+                        'UPDATE usuario_producto_parametros SET cantidad = cantidad - $1 WHERE producto_id = $2 AND nombre = $3',
+                        [param.cantidad, productoId, param.nombre]
                     );
 
                     // Actualizar cantidad en producto_parametros (almacén)
@@ -74,22 +75,22 @@ export async function PUT(request: NextRequest) {
                 }
 
                 const usuarioProductoResult = await query(
-                    'SELECT cantidad FROM usuario_productos WHERE usuario_id = $1 AND producto_id = $2',
-                    [vendedorId, productoId]
+                    'SELECT cantidad FROM usuario_productos WHERE producto_id = $1',
+                    [productoId]
                 );
 
                 if (usuarioProductoResult.rows.length === 0) {
-                    throw new Error('El vendedor no tiene este producto asignado');
+                    throw new Error('Este producto no existe en el inventario');
                 }
 
                 if (cantidad > usuarioProductoResult.rows[0].cantidad) {
                     throw new Error('La cantidad a reducir es mayor que la cantidad disponible');
                 }
 
-                // Actualizar cantidad principal del vendedor
+                // Actualizar cantidad principal 
                 await query(
-                    'UPDATE usuario_productos SET cantidad = cantidad - $1 WHERE usuario_id = $2 AND producto_id = $3',
-                    [cantidad, vendedorId, productoId]
+                    'UPDATE usuario_productos SET cantidad = cantidad - $1 WHERE producto_id = $2',
+                    [cantidad, productoId]
                 );
 
                 // Actualizar cantidad en almacén
@@ -127,10 +128,10 @@ export async function PUT(request: NextRequest) {
                     ) as parametros
                 FROM usuario_productos up
                 JOIN productos p ON up.producto_id = p.id
-                LEFT JOIN usuario_producto_parametros upp ON up.producto_id = upp.producto_id AND up.usuario_id = upp.usuario_id
-                WHERE up.usuario_id = $1 AND up.producto_id = $2
+                LEFT JOIN usuario_producto_parametros upp ON up.producto_id = upp.producto_id
+                WHERE up.producto_id = $1
                 GROUP BY up.producto_id, p.nombre, p.precio, up.cantidad, p.foto, p.tiene_parametros
-            `, [vendedorId, productoId]);
+            `, [productoId]);
 
             return NextResponse.json(updatedData.rows[0]);
         } catch (error) {

@@ -40,18 +40,18 @@ export async function DELETE(
       for (const param of ventaParametrosResult.rows) {
         await query(
           `INSERT INTO usuario_producto_parametros 
-           (usuario_id, producto_id, nombre, cantidad)
-           VALUES ($1, $2, $3, $4)
-           ON CONFLICT (usuario_id, producto_id, nombre)
-           DO UPDATE SET cantidad = usuario_producto_parametros.cantidad + $4`,
-          [venta.vendedor, venta.producto, param.parametro, param.cantidad]
+           (producto_id, nombre, cantidad)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (producto_id, nombre)
+           DO UPDATE SET cantidad = usuario_producto_parametros.cantidad + $3`,
+          [venta.producto, param.parametro, param.cantidad]
         );
       }
     } else {
       // Si no hay parámetros, actualizamos la cantidad general
       await query(
-        'UPDATE usuario_productos SET cantidad = cantidad + $1 WHERE producto_id = $2 AND usuario_id = $3',
-        [venta.cantidad, venta.producto, venta.vendedor]
+        'UPDATE usuario_productos SET cantidad = cantidad + $1 WHERE producto_id = $2',
+        [venta.cantidad, venta.producto]
       );
     }
 

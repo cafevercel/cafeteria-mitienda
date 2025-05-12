@@ -15,10 +15,9 @@ interface ProductDialogProps {
   onClose: () => void;
   vendedores: Vendedor[];
   onEdit: (product: Producto, imageUrl: string | undefined) => Promise<void>;
-  onDelete: (productId: string, vendedorId: string, cantidad: number) => Promise<void>;
+  onDelete: (productId: string) => Promise<void>;
   onDeliver: (
     productId: string,
-    vendedorId: string,
     cantidadTotal: number,
     parametros: { nombre: string; cantidad: number }[]
   ) => Promise<void>;
@@ -45,14 +44,10 @@ export default function ProductDialog({
     precio_compra: product.precio_compra || 0, // Aseguramos que precio_compra tenga un valor
   });
 
-  const [selectedVendedor, setSelectedVendedor] = useState<string | null>(null);
-  const [deliveryStep, setDeliveryStep] = useState<1 | 2>(1);
   const [parameterQuantities, setParameterQuantities] = useState<{ [key: string]: number }>({});
   const [totalDeliveryQuantity, setTotalDeliveryQuantity] = useState(0);
   const [simpleDeliveryQuantity, setSimpleDeliveryQuantity] = useState<number>(0);
   const [isUploading, setIsUploading] = useState(false);
-
-
 
   // Efecto para sincronizar el estado con el producto recibido
   useEffect(() => {
@@ -175,18 +170,8 @@ export default function ProductDialog({
     }
   };
 
-
   // Manejo de la entrega del producto
   const handleDeliver = async () => {
-    if (!selectedVendedor) {
-      toast({
-        title: "Advertencia",
-        description: "Por favor seleccione un vendedor.",
-        variant: "default",
-      });
-      return;
-    }
-
     const cantidadAEntregar = product.tiene_parametros ? totalDeliveryQuantity : simpleDeliveryQuantity;
 
     if (cantidadAEntregar === 0) {
@@ -217,13 +202,10 @@ export default function ProductDialog({
 
       await onDeliver(
         product.id,
-        selectedVendedor,
         cantidadAEntregar,
         parametrosEntrega
       );
 
-      setDeliveryStep(1);
-      setSelectedVendedor(null);
       setParameterQuantities({});
       setTotalDeliveryQuantity(0);
       setSimpleDeliveryQuantity(0);
@@ -247,7 +229,7 @@ export default function ProductDialog({
   const handleDelete = async () => {
     if (window.confirm('¿Estás seguro de que quieres eliminar este producto?')) {
       try {
-        await onDelete(product.id, '', getTotalCantidad());
+        await onDelete(product.id);
         onClose();
         toast({
           title: "Éxito",
@@ -298,21 +280,13 @@ export default function ProductDialog({
             />
           ) : mode === 'deliver' ? (
             <DeliverMode
-              deliveryStep={deliveryStep}
               product={product}
-              vendedores={vendedores}
-              selectedVendedor={selectedVendedor}
               parameterQuantities={parameterQuantities}
               simpleDeliveryQuantity={simpleDeliveryQuantity}
               totalDeliveryQuantity={totalDeliveryQuantity}
-              onVendedorSelect={(id) => {
-                setSelectedVendedor(id);
-                setDeliveryStep(2);
-              }}
               onParameterQuantityChange={handleParameterQuantityChange}
               onSimpleDeliveryChange={(value) => setSimpleDeliveryQuantity(value)}
               onBack={() => {
-                setDeliveryStep(1);
                 setParameterQuantities({});
                 setTotalDeliveryQuantity(0);
                 setSimpleDeliveryQuantity(0);
@@ -472,146 +446,88 @@ const EditMode = ({
 
 // Subcomponente para el modo de entrega
 const DeliverMode = ({
-  deliveryStep,
   product,
-  vendedores,
-  selectedVendedor,
   parameterQuantities,
   simpleDeliveryQuantity,
   totalDeliveryQuantity,
-  onVendedorSelect,
   onParameterQuantityChange,
   onSimpleDeliveryChange,
   onBack,
   onDeliver,
   getTotalCantidad,
 }: {
-  deliveryStep: 1 | 2;
   product: Producto;
-  vendedores: Vendedor[];
-  selectedVendedor: string | null;
   parameterQuantities: { [key: string]: number };
   simpleDeliveryQuantity: number;
   totalDeliveryQuantity: number;
-  onVendedorSelect: (id: string) => void;
   onParameterQuantityChange: (paramName: string, value: number) => void;
   onSimpleDeliveryChange: (value: number) => void;
   onBack: () => void;
   onDeliver: () => void;
   getTotalCantidad: () => number;
 }) => (
-  <>
-    {deliveryStep === 1 ? (
+  <div className="space-y-4">
+    <div className="space-y-4">
       <div className="space-y-4">
-        <Label>Seleccionar vendedor:</Label>
-        <div className="grid gap-2">
-          {vendedores.map((vendedor) => (
-            <Button
-              key={vendedor.id}
-              onClick={() => onVendedorSelect(vendedor.id)}
-              variant={selectedVendedor === vendedor.id ? 'default' : 'outline'}
-              className="w-full"
-            >
-              {vendedor.nombre}
-            </Button>
-          ))}
-        </div>
-        <Button
-          onClick={onBack}
-          className="w-full mt-4"
-        >
-          Cancelar
-        </Button>
-      </div>
-    ) : (
-      <div className="space-y-4">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="font-medium">Cantidades a entregar</h3>
-          <div className="text-sm">
-            <span className="font-medium">Total: </span>
-            <span
-              className={`${(product.tiene_parametros ? totalDeliveryQuantity : simpleDeliveryQuantity) > getTotalCantidad()
-                ? 'text-red-500'
-                : 'text-green-600'
-                }`}
-            >
-              {product.tiene_parametros ? totalDeliveryQuantity : simpleDeliveryQuantity}
-            </span>
-          </div>
-        </div>
-
+        <h3 className="text-lg font-semibold">Seleccionar cantidad a entregar</h3>
+        
         {product.tiene_parametros && product.parametros ? (
-          product.parametros.map((param, index) => (
-            <div key={index} className="space-y-2 p-3 bg-gray-50 rounded-lg">
-              <div className="flex justify-between items-center">
-                <Label className="text-sm font-medium">{param.nombre}</Label>
-                <span className="text-xs text-gray-500">
-                  Disponible: {param.cantidad}
-                </span>
-              </div>
-              <div className="flex gap-2 items-center">
+          <div className="space-y-2">
+            <p className="text-sm text-gray-500">Disponible total: {getTotalCantidad()}</p>
+            
+            {product.parametros.map((param) => (
+              <div key={param.nombre} className="flex justify-between items-center">
+                <span>{param.nombre} (Disponible: {param.cantidad})</span>
                 <Input
                   type="number"
                   value={parameterQuantities[param.nombre] || 0}
-                  onChange={(e) =>
-                    onParameterQuantityChange(
-                      param.nombre,
-                      Math.min(Number(e.target.value), param.cantidad)
-                    )
-                  }
+                  onChange={(e) => onParameterQuantityChange(param.nombre, parseInt(e.target.value) || 0)}
+                  className="w-20 ml-2"
                   min={0}
                   max={param.cantidad}
-                  className="w-full"
                 />
               </div>
+            ))}
+            
+            <div className="flex justify-between items-center font-semibold">
+              <span>Total a entregar:</span>
+              <span>{totalDeliveryQuantity}</span>
             </div>
-          ))
+          </div>
         ) : (
-          <div className="space-y-2 p-3 bg-gray-50 rounded-lg">
+          <div className="space-y-2">
+            <p className="text-sm text-gray-500">Disponible: {product.cantidad}</p>
             <div className="flex justify-between items-center">
-              <Label className="text-sm font-medium">Cantidad</Label>
-              <span className="text-xs text-gray-500">
-                Disponible: {product.cantidad}
-              </span>
-            </div>
-            <div className="flex gap-2 items-center">
+              <span>Cantidad:</span>
               <Input
                 type="number"
                 value={simpleDeliveryQuantity}
-                onChange={(e) =>
-                  onSimpleDeliveryChange(Math.min(Number(e.target.value), product.cantidad))
-                }
+                onChange={(e) => onSimpleDeliveryChange(parseInt(e.target.value) || 0)}
+                className="w-20 ml-2"
                 min={0}
                 max={product.cantidad}
-                className="w-full"
               />
             </div>
           </div>
         )}
-
-        <div className="flex justify-between gap-2 mt-6">
-          <Button
-            variant="outline"
-            onClick={onBack}
-            className="flex-1"
-          >
-            Atrás
-          </Button>
-          <Button
-            onClick={onDeliver}
-            disabled={
-              product.tiene_parametros
-                ? totalDeliveryQuantity === 0 || totalDeliveryQuantity > getTotalCantidad()
-                : simpleDeliveryQuantity === 0 || simpleDeliveryQuantity > getTotalCantidad()
-            }
-            className="flex-1"
-          >
-            Confirmar entrega
-          </Button>
-        </div>
       </div>
-    )}
-  </>
+    </div>
+
+    <div className="flex justify-end space-x-2 pt-4">
+      <Button variant="outline" onClick={onBack}>
+        Cancelar
+      </Button>
+      <Button 
+        onClick={onDeliver}
+        disabled={
+          (product.tiene_parametros ? totalDeliveryQuantity === 0 : simpleDeliveryQuantity === 0) || 
+          (product.tiene_parametros ? totalDeliveryQuantity > getTotalCantidad() : simpleDeliveryQuantity > product.cantidad)
+        }
+      >
+        Entregar
+      </Button>
+    </div>
+  </div>
 );
 
 // Subcomponente para el modo de visualización

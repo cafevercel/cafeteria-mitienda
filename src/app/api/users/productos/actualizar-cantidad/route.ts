@@ -5,9 +5,9 @@ export async function PUT(request: NextRequest) {
   try {
     const { vendorId, productId, newQuantity, parametros } = await request.json();
 
-    if (!vendorId || !productId) {
+    if (!productId) {
       return NextResponse.json(
-        { error: 'ID del vendedor y del producto son requeridos' },
+        { error: 'ID del producto es requerido' },
         { status: 400 }
       );
     }
@@ -21,10 +21,9 @@ export async function PUT(request: NextRequest) {
           await query(`
             UPDATE usuario_producto_parametros 
             SET cantidad = $1 
-            WHERE usuario_id = $2 
-            AND producto_id = $3 
-            AND nombre = $4
-          `, [param.cantidad, vendorId, productId, param.nombre]);
+            WHERE producto_id = $2 
+            AND nombre = $3
+          `, [param.cantidad, productId, param.nombre]);
         }
 
         // Actualizar la cantidad total sumando los parámetros
@@ -32,17 +31,15 @@ export async function PUT(request: NextRequest) {
         await query(`
           UPDATE usuario_productos 
           SET cantidad = $1 
-          WHERE usuario_id = $2 
-          AND producto_id = $3
-        `, [totalQuantity, vendorId, productId]);
+          WHERE producto_id = $2
+        `, [totalQuantity, productId]);
       } else {
         // Actualizar solo la cantidad total
         await query(`
           UPDATE usuario_productos 
           SET cantidad = $1 
-          WHERE usuario_id = $2 
-          AND producto_id = $3
-        `, [newQuantity, vendorId, productId]);
+          WHERE producto_id = $2
+        `, [newQuantity, productId]);
       }
 
       await query('COMMIT');

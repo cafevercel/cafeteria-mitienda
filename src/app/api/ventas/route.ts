@@ -16,27 +16,27 @@ export async function POST(request: NextRequest) {
 
     // Verificar si el producto tiene parámetros
     const productoResult = await query(
-      `SELECT p.precio, p.tiene_parametros, up.cantidad as stock_vendedor 
+      `SELECT p.precio, p.tiene_parametros, up.cantidad as stock_disponible 
        FROM productos p 
        JOIN usuario_productos up ON p.id = up.producto_id 
-       WHERE p.id = $1 AND up.usuario_id = $2`,
-      [productoId, vendedorId]
+       WHERE p.id = $1`,
+      [productoId]
     );
 
     if (productoResult.rows.length === 0) {
       await query('ROLLBACK');
-      return NextResponse.json({ error: 'Producto no encontrado o no asignado al vendedor' }, { status: 404 });
+      return NextResponse.json({ error: 'Producto no encontrado en el inventario' }, { status: 404 });
     }
 
-    const { precio: precioUnitario, stock_vendedor, tiene_parametros } = productoResult.rows[0];
+    const { precio: precioUnitario, stock_disponible, tiene_parametros } = productoResult.rows[0];
 
     // Verificar stock según si tiene parámetros o no
     if (tiene_parametros && parametros) {
       for (const param of parametros) {
         const stockParam = await query(
           `SELECT cantidad FROM usuario_producto_parametros 
-           WHERE usuario_id = $1 AND producto_id = $2 AND nombre = $3`,
-          [vendedorId, productoId, param.nombre]
+           WHERE producto_id = $1 AND nombre = $2`,
+          [productoId, param.nombre]
         );
 
         if (!stockParam.rows.length || stockParam.rows[0].cantidad < param.cantidad) {
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
           }, { status: 400 });
         }
       }
-    } else if (!tiene_parametros && stock_vendedor < cantidad) {
+    } else if (!tiene_parametros && stock_disponible < cantidad) {
       await query('ROLLBACK');
       return NextResponse.json({ error: 'Stock insuficiente' }, { status: 400 });
     }
@@ -79,15 +79,15 @@ export async function POST(request: NextRequest) {
         await query(
           `UPDATE usuario_producto_parametros 
            SET cantidad = cantidad - $1 
-           WHERE usuario_id = $2 AND producto_id = $3 AND nombre = $4`,
-          [param.cantidad, vendedorId, productoId, param.nombre]
+           WHERE producto_id = $2 AND nombre = $3`,
+          [param.cantidad, productoId, param.nombre]
         );
       }
     } else {
       // Actualizar stock normal
       await query(
-        'UPDATE usuario_productos SET cantidad = cantidad - $1 WHERE producto_id = $2 AND usuario_id = $3',
-        [cantidad, productoId, vendedorId]
+        'UPDATE usuario_productos SET cantidad = cantidad - $1 WHERE producto_id = $2',
+        [cantidad, productoId]
       );
     }
 

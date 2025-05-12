@@ -19,19 +19,18 @@ import {
   getCurrentUser,
   getInventario,
   registerUser,
-  getProductosVendedor,
+  getProductosCompartidos,
   getVentasVendedor,
   agregarProducto,
   editarProducto,
   entregarProducto,
-  reducirProductoVendedor,
+  reducirProductoInventario,
   getTransaccionesVendedor,
   editarVendedor,
   eliminarProducto,
   deleteSale,
   createMerma,
   getMermas,
-  transferProduct,
   deleteMerma,
   verificarNombreProducto
 } from '../../services/api'
@@ -163,7 +162,6 @@ export default function AlmacenPage() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [activeSection, setActiveSection] = useState('productos')
   const [showMassDeliveryDialog, setShowMassDeliveryDialog] = useState(false)
-  const [massDeliveryStep, setMassDeliveryStep] = useState(1)
   const [selectedProducts, setSelectedProducts] = useState<{
     [productId: string]: {
       cantidad: number;
@@ -173,7 +171,6 @@ export default function AlmacenPage() {
     };
   }>({});
 
-  const [selectedVendors, setSelectedVendors] = useState<string[]>([])
   const [productSearchTerm, setProductSearchTerm] = useState("")
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
   const [sortBy, setSortBy] = useState<'nombre' | 'cantidad'>('nombre')
@@ -303,7 +300,7 @@ export default function AlmacenPage() {
 
       // Actualizar los estados después de la operación
       if (vendedorSeleccionado) {
-        const updatedProducts = await getProductosVendedor(vendedorSeleccionado.id);
+        const updatedProducts = await getProductosCompartidos();
         setProductosVendedor(updatedProducts);
       }
 
@@ -416,10 +413,48 @@ export default function AlmacenPage() {
     return producto.cantidad; // Si no tiene parámetros, usar la cantidad directa
   };
 
+  const handleProductDelivery = async (
+    productId: string,
+    cantidad: number,
+    parametros?: Array<{ nombre: string; cantidad: number }>
+  ) => {
+    try {
+      if (!productId) {
+        toast({
+          title: "Error",
+          description: "ID de producto inválido",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      await entregarProducto(productId, cantidad, parametros);
+      
+      toast({
+        title: "Éxito",
+        description: "Producto entregado correctamente",
+      });
+      
+      // Actualizar inventario
+      await fetchInventario();
+    } catch (error) {
+      console.error('Error en entrega de producto:', error);
+      toast({
+        title: "Error",
+        description: "Error al entregar el producto",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleMassDelivery = async () => {
     try {
-      if (Object.keys(selectedProducts).length === 0 || selectedVendors.length === 0) {
-        alert('Por favor, selecciona al menos un producto y un vendedor.');
+      if (Object.keys(selectedProducts).length === 0) {
+        toast({
+          title: "Error",
+          description: "Por favor, selecciona al menos un producto.",
+          variant: "destructive",
+        });
         return;
       }
 
@@ -438,12 +473,20 @@ export default function AlmacenPage() {
 
         // Validar que la cantidad sea un número válido
         if (isNaN(cantidadTotal) || cantidadTotal <= 0) {
-          alert(`Cantidad inválida para el producto ${producto.nombre}`);
+          toast({
+            title: "Error",
+            description: `Cantidad inválida para el producto ${producto.nombre}`,
+            variant: "destructive",
+          });
           continue;
         }
 
         if (producto.cantidad < cantidadTotal) {
-          alert(`Stock insuficiente para ${producto.nombre}`);
+          toast({
+            title: "Error",
+            description: `Stock insuficiente para ${producto.nombre}`,
+            variant: "destructive",
+          });
           continue;
         }
 
@@ -457,31 +500,37 @@ export default function AlmacenPage() {
             }))
           : undefined;
 
-        for (const vendorId of selectedVendors) {
-          try {
-            await entregarProducto(
-              productId,
-              vendorId,
-              cantidadTotal,
-              parametrosArray
-            );
-          } catch (error) {
-            console.error(`Error en entrega: ${error}`);
-            alert(`Error al entregar ${producto.nombre} al vendedor ${vendorId}`);
-          }
+        try {
+          await entregarProducto(
+            productId,
+            cantidadTotal,
+            parametrosArray
+          );
+        } catch (error) {
+          console.error(`Error en entrega: ${error}`);
+          toast({
+            title: "Error",
+            description: `Error al entregar ${producto.nombre}`,
+            variant: "destructive",
+          });
         }
       }
 
       await fetchInventario();
       setShowMassDeliveryDialog(false);
-      setMassDeliveryStep(1);
       setSelectedProducts({});
-      setSelectedVendors([]);
-      alert('Entrega masiva realizada con éxito');
+      toast({
+        title: "Éxito",
+        description: "Entrega masiva realizada con éxito",
+      });
 
     } catch (error) {
       console.error('Error en entrega masiva:', error);
-      alert('Error en la entrega masiva');
+      toast({
+        title: "Error",
+        description: "Error en la entrega masiva",
+        variant: "destructive",
+      });
     }
   };
 
@@ -617,31 +666,30 @@ export default function AlmacenPage() {
 
   const handleVerVendedor = async (vendedor: Vendedor) => {
     try {
-      const [productos, ventas, transacciones] = await Promise.all([
-        getProductosVendedor(vendedor.id),
+      const [ventas, transacciones] = await Promise.all([
         getVentasVendedor(vendedor.id),
-        getTransaccionesVendedor(vendedor.id)
-      ])
+        getTransaccionesVendedor()
+      ]);
 
-      setProductosVendedor(productos)
-      setVentasVendedor(ventas)
-      setTransaccionesVendedor(transacciones)
-      setVendedorSeleccionado(vendedor)
-
-      const ventasDiariasCalculadas = calcularVentasDiarias(ventas)
-      const ventasSemanalesCalculadas = calcularVentasSemanales(ventas)
-
-      setVentasDiarias(ventasDiariasCalculadas)
-      setVentasSemanales(ventasSemanalesCalculadas)
+      // Obtener productos del inventario compartido
+      const productos = await getProductosCompartidos();
+      
+      setVendedorSeleccionado(vendedor);
+      setProductosVendedor(productos);
+      setVentasVendedor(ventas);
+      setTransaccionesVendedor(transacciones);
+      setVentasSemanales(calcularVentasSemanales(ventas));
+      setVentasDiarias(calcularVentasDiarias(ventas));
+      setActiveSection('vendedor');
     } catch (error) {
-      console.error('Error al cargar datos del vendedor:', error)
+      console.error('Error al obtener datos del vendedor:', error);
       toast({
         title: "Error",
         description: "No se pudieron cargar los datos del vendedor",
         variant: "destructive",
-      })
+      });
     }
-  }
+  };
 
 
   useEffect(() => {
@@ -749,31 +797,79 @@ export default function AlmacenPage() {
 
 
 
-  const handleProductDelivery = async (
+  const handleReduceVendorProduct = async (
     productId: string,
-    vendedorId: string,
     cantidad: number,
     parametros?: Array<{ nombre: string; cantidad: number }>
   ) => {
     try {
-      await entregarProducto(productId, vendedorId, cantidad, parametros)
-      await fetchInventario()
-      setSelectedProduct(null)
-      alert('Producto entregado exitosamente')
-    } catch (error) {
-      console.error('Error entregando producto:', error)
-      if (error instanceof Error) {
-        alert(`Error al entregar producto: ${error.message}`)
-      } else if (typeof error === 'object' && error !== null && 'response' in error) {
-        const axiosError = error as any
-        alert(`Error al entregar producto: ${axiosError.response?.data?.error || 'Error desconocido'}`)
-      } else {
-        alert('Error desconocido al entregar producto')
-      }
-    }
-  }
+      // Si hay parámetros, enviarlos en la reducción
+      await reducirProductoInventario(productId, cantidad, parametros);
 
-  // En AlmacenPage.tsx
+      if (vendedorSeleccionado) {
+        const updatedProducts = await getProductosCompartidos();
+        setProductosVendedor(updatedProducts);
+        const updatedTransactions = await getTransaccionesVendedor();
+        setTransaccionesVendedor(updatedTransactions);
+      }
+
+      await fetchInventario();
+      toast({
+        title: "Éxito",
+        description: "Producto reducido correctamente",
+      });
+    } catch (error) {
+      console.error('Error al reducir producto:', error);
+      toast({
+        title: "Error",
+        description: "Error al reducir el producto",
+        variant: "destructive",
+      });
+    }
+  };
+
+
+  const handleEditVendedor = async (editedVendor: Vendedor & { newPassword?: string }) => {
+    try {
+      await editarVendedor(editedVendor.id, editedVendor);
+      await fetchVendedores();
+      setVendedorSeleccionado(null);
+      toast({
+        title: "Éxito",
+        description: "Vendedor actualizado exitosamente",
+      });
+    } catch (error) {
+      console.error('Error editing vendor:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : 'Error desconocido al editar el vendedor',
+        variant: "destructive",
+      });
+    }
+  };
+
+  const filteredInventario = sortedInventario.filter((producto) =>
+    producto.nombre.toLowerCase().includes(searchTerm.toLowerCase())
+  )
+
+  const handleUpdateProductQuantity = async (
+    vendorId: string,
+    productId: string,
+    newQuantity: number,
+    parametros?: Array<{ nombre: string; cantidad: number }>
+  ) => {
+    try {
+      await updateProductQuantity(vendorId, productId, newQuantity, parametros);
+      // Actualizar los productos del vendedor después de la actualización
+      if (vendedorSeleccionado) {
+        const updatedProducts = await getProductosCompartidos();
+        setProductosVendedor(updatedProducts);
+      }
+    } catch (error) {
+      console.error('Error al actualizar la cantidad:', error);
+    }
+  };
+
   const handleEditProduct = async (editedProduct: Producto, imageUrl: string | undefined) => {
     try {
       const formData = new FormData();
@@ -812,135 +908,6 @@ export default function AlmacenPage() {
         description: "Error al actualizar el producto",
         variant: "destructive",
       });
-    }
-  };
-
-
-
-
-  const handleReduceVendorProduct = async (
-    productId: string,
-    vendorId: string,
-    cantidad: number,
-    parametros?: Array<{ nombre: string; cantidad: number }>
-  ) => {
-    try {
-      // Si hay parámetros, enviarlos en la reducción
-      await reducirProductoVendedor(productId, vendorId, cantidad, parametros);
-
-      if (vendedorSeleccionado) {
-        const updatedProducts = await getProductosVendedor(vendedorSeleccionado.id);
-        setProductosVendedor(updatedProducts);
-        const updatedTransactions = await getTransaccionesVendedor(vendedorSeleccionado.id);
-        setTransaccionesVendedor(updatedTransactions);
-      }
-
-      await fetchInventario();
-
-      toast({
-        title: "Éxito",
-        description: "Cantidad de producto reducida exitosamente",
-      });
-    } catch (error) {
-      console.error('Error reducing vendor product quantity:', error);
-      toast({
-        title: "Error",
-        description: "Error al reducir la cantidad del producto",
-        variant: "destructive",
-      });
-    }
-  };
-
-
-  const handleProductTransfer = async (
-    productId: string,
-    fromVendorId: string,
-    toVendorId: string,
-    cantidad: number,
-    parametros?: Array<{ nombre: string; cantidad: number }>
-
-  ) => {
-    console.log('handleProductTransfer recibió:', {
-      productId,
-      fromVendorId,
-      toVendorId,
-      cantidad,
-      parametros
-    });
-    try {
-      await transferProduct({
-        productId,
-        fromVendorId,
-        toVendorId,
-        cantidad,
-        parametros
-      });
-
-      if (vendedorSeleccionado) {
-        const updatedProducts = await getProductosVendedor(vendedorSeleccionado.id);
-        setProductosVendedor(updatedProducts);
-
-        const updatedTransactions = await getTransaccionesVendedor(vendedorSeleccionado.id);
-        setTransaccionesVendedor(updatedTransactions);
-      }
-
-      await fetchInventario();
-
-      toast({
-        title: "Transferencia exitosa",
-        description: "El producto ha sido transferido correctamente.",
-      });
-    } catch (error) {
-      console.error('Error en la transferencia:', error);
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Error al transferir el producto",
-        variant: "destructive",
-      });
-    }
-  };
-
-
-
-
-  const handleEditVendedor = async (editedVendor: Vendedor & { newPassword?: string }) => {
-    try {
-      await editarVendedor(editedVendor.id, editedVendor);
-      await fetchVendedores();
-      setVendedorSeleccionado(null);
-      toast({
-        title: "Éxito",
-        description: "Vendedor actualizado exitosamente",
-      });
-    } catch (error) {
-      console.error('Error editing vendor:', error);
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : 'Error desconocido al editar el vendedor',
-        variant: "destructive",
-      });
-    }
-  };
-
-  const filteredInventario = sortedInventario.filter((producto) =>
-    producto.nombre.toLowerCase().includes(searchTerm.toLowerCase())
-  )
-
-  const handleUpdateProductQuantity = async (
-    vendorId: string,
-    productId: string,
-    newQuantity: number,
-    parametros?: Array<{ nombre: string; cantidad: number }>
-  ) => {
-    try {
-      await updateProductQuantity(vendorId, productId, newQuantity, parametros);
-      // Actualizar los productos del vendedor después de la actualización
-      if (vendedorSeleccionado) {
-        const updatedProducts = await getProductosVendedor(vendedorSeleccionado.id);
-        setProductosVendedor(updatedProducts);
-      }
-    } catch (error) {
-      console.error('Error al actualizar la cantidad:', error);
     }
   };
 
@@ -1332,166 +1299,130 @@ export default function AlmacenPage() {
           <DialogHeader>
             <DialogTitle>Entrega Masiva</DialogTitle>
           </DialogHeader>
-          {massDeliveryStep === 1 ? (
-            <div className="space-y-4">
-              <div className="max-h-[60vh] overflow-y-auto space-y-2 pr-2">
-                {vendedores.map((vendedor) => (
-                  <div key={vendedor.id} className="flex items-center space-x-2 p-2 hover:bg-gray-50 rounded">
-                    <Checkbox
-                      id={`vendor-${vendedor.id}`}
-                      checked={selectedVendors.includes(vendedor.id)}
-                      onCheckedChange={(checked) => {
-                        if (checked) {
-                          setSelectedVendors([...selectedVendors, vendedor.id])
-                        } else {
-                          setSelectedVendors(selectedVendors.filter(id => id !== vendedor.id))
-                        }
-                      }}
-                    />
-                    <label htmlFor={`vendor-${vendedor.id}`} className="flex-grow cursor-pointer">
-                      {vendedor.nombre}
-                    </label>
+          <div className="space-y-4">
+            <Input
+              placeholder="Buscar productos..."
+              value={productSearchTerm}
+              onChange={(e) => setProductSearchTerm(e.target.value)}
+            />
+            <div className="max-h-[55vh] overflow-y-auto space-y-2 pr-2">
+              {filteredInventarioForMassDelivery.map((producto) => (
+                <div key={producto.id} className="flex flex-col p-3 border rounded-lg bg-white">
+                  <div className="flex items-start gap-3">
+                    <div className="flex items-center h-5">
+                      <Checkbox
+                        id={`product-${producto.id}`}
+                        checked={!!selectedProducts[producto.id]}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedProducts((prev) => ({
+                              ...prev,
+                              [producto.id]: {
+                                cantidad: 0,
+                                parametros: producto.tiene_parametros ? {} : undefined,
+                              },
+                            }));
+                          } else {
+                            setSelectedProducts((prev) => {
+                              const { [producto.id]: _, ...rest } = prev;
+                              return rest;
+                            });
+                          }
+                        }}
+                      />
+                    </div>
+
+                    <div className="w-16 h-16 relative rounded-md overflow-hidden flex-shrink-0">
+                      <Image
+                        src={producto.foto || '/placeholder.svg'}
+                        alt={producto.nombre}
+                        fill
+                        className="object-cover"
+                      />
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <label htmlFor={`product-${producto.id}`} className="font-medium text-sm block">
+                        {producto.nombre}
+                      </label>
+                      <div className="text-xs text-gray-600 mt-1 space-y-1">
+                        <p>Precio: ${producto.precio}</p>
+                        <p>Disponible: {producto.cantidad}</p>
+                      </div>
+                    </div>
                   </div>
-                ))}
-              </div>
-              <div className="sticky bottom-0 pt-2 bg-white">
-                <Button
-                  onClick={() => setMassDeliveryStep(2)}
-                  disabled={selectedVendors.length === 0}
-                  className="w-full"
-                >
-                  Siguiente
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <Input
-                placeholder="Buscar productos..."
-                value={productSearchTerm}
-                onChange={(e) => setProductSearchTerm(e.target.value)}
-              />
-              <div className="max-h-[55vh] overflow-y-auto space-y-2 pr-2">
-                {filteredInventarioForMassDelivery.map((producto) => (
-                  <div key={producto.id} className="flex flex-col p-3 border rounded-lg bg-white">
-                    <div className="flex items-start gap-3">
-                      <div className="flex items-center h-5">
-                        <Checkbox
-                          id={`product-${producto.id}`}
-                          checked={!!selectedProducts[producto.id]}
-                          onCheckedChange={(checked) => {
-                            if (checked) {
+
+                  {selectedProducts[producto.id] && (
+                    <div className="mt-3 pl-8 space-y-3">
+                      {!producto.tiene_parametros ? (
+                        <div className="flex items-center gap-2">
+                          <label className="text-sm text-gray-600 flex-shrink-0">Cantidad:</label>
+                          <Input
+                            type="number"
+                            value={selectedProducts[producto.id]?.cantidad || ''}
+                            onChange={(e) =>
                               setSelectedProducts((prev) => ({
                                 ...prev,
                                 [producto.id]: {
-                                  cantidad: 0,
-                                  parametros: producto.tiene_parametros ? {} : undefined,
+                                  ...prev[producto.id],
+                                  cantidad: parseInt(e.target.value, 10) || 0,
                                 },
-                              }));
-                            } else {
-                              setSelectedProducts((prev) => {
-                                const { [producto.id]: _, ...rest } = prev;
-                                return rest;
-                              });
+                              }))
                             }
-                          }}
-                        />
-                      </div>
-
-                      <div className="w-16 h-16 relative rounded-md overflow-hidden flex-shrink-0">
-                        <Image
-                          src={producto.foto || '/placeholder.svg'}
-                          alt={producto.nombre}
-                          fill
-                          className="object-cover"
-                        />
-                      </div>
-
-                      <div className="flex-1 min-w-0">
-                        <label htmlFor={`product-${producto.id}`} className="font-medium text-sm block">
-                          {producto.nombre}
-                        </label>
-                        <div className="text-xs text-gray-600 mt-1 space-y-1">
-                          <p>Precio: ${producto.precio}</p>
-                          <p>Disponible: {producto.cantidad}</p>
+                            className="w-24 h-8"
+                            min={1}
+                            max={producto.cantidad}
+                          />
                         </div>
-                      </div>
-                    </div>
-
-                    {selectedProducts[producto.id] && (
-                      <div className="mt-3 pl-8 space-y-3">
-                        {!producto.tiene_parametros ? (
-                          <div className="flex items-center gap-2">
-                            <label className="text-sm text-gray-600 flex-shrink-0">Cantidad:</label>
-                            <Input
-                              type="number"
-                              value={selectedProducts[producto.id]?.cantidad || ''}
-                              onChange={(e) =>
-                                setSelectedProducts((prev) => ({
-                                  ...prev,
-                                  [producto.id]: {
-                                    ...prev[producto.id],
-                                    cantidad: parseInt(e.target.value, 10) || 0,
-                                  },
-                                }))
-                              }
-                              className="w-24 h-8"
-                              min={1}
-                              max={producto.cantidad}
-                            />
-                          </div>
-                        ) : (
-                          <div className="space-y-2">
-                            {producto.parametros?.map((parametro) => (
-                              <div key={parametro.nombre} className="flex items-center gap-2">
-                                <label className="text-sm text-gray-600 flex-1">
-                                  {parametro.nombre}:
-                                  <span className="text-xs text-gray-500 ml-1">
-                                    (Máx: {parametro.cantidad})
-                                  </span>
-                                </label>
-                                <Input
-                                  type="number"
-                                  value={selectedProducts[producto.id]?.parametros?.[parametro.nombre] || ''}
-                                  onChange={(e) => {
-                                    const value = parseInt(e.target.value, 10) || 0;
-                                    setSelectedProducts((prev) => ({
-                                      ...prev,
-                                      [producto.id]: {
-                                        ...prev[producto.id],
-                                        parametros: {
-                                          ...prev[producto.id]?.parametros,
-                                          [parametro.nombre]: value,
-                                        },
+                      ) : (
+                        <div className="space-y-2">
+                          {producto.parametros?.map((parametro) => (
+                            <div key={parametro.nombre} className="flex items-center gap-2">
+                              <label className="text-sm text-gray-600 flex-1">
+                                {parametro.nombre}:
+                                <span className="text-xs text-gray-500 ml-1">
+                                  (Máx: {parametro.cantidad})
+                                </span>
+                              </label>
+                              <Input
+                                type="number"
+                                value={selectedProducts[producto.id]?.parametros?.[parametro.nombre] || ''}
+                                onChange={(e) => {
+                                  const value = parseInt(e.target.value, 10) || 0;
+                                  setSelectedProducts((prev) => ({
+                                    ...prev,
+                                    [producto.id]: {
+                                      ...prev[producto.id],
+                                      parametros: {
+                                        ...prev[producto.id]?.parametros,
+                                        [parametro.nombre]: value,
                                       },
-                                    }));
-                                  }}
-                                  className="w-24 h-8"
-                                  min={0}
-                                  max={parametro.cantidad}
-                                />
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-              <div className="sticky bottom-0 pt-2 bg-white flex justify-between space-x-2">
-                <Button variant="outline" onClick={() => setMassDeliveryStep(1)}>
-                  Atrás
-                </Button>
-                <Button
-                  onClick={handleMassDelivery}
-                  disabled={Object.keys(selectedProducts).length === 0}
-                >
-                  Entregar
-                </Button>
-              </div>
+                                    },
+                                  }));
+                                }}
+                                className="w-24 h-8"
+                                min={0}
+                                max={parametro.cantidad}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
-          )}
+            <div className="sticky bottom-0 pt-2 bg-white">
+              <Button
+                onClick={handleMassDelivery}
+                disabled={Object.keys(selectedProducts).length === 0}
+                className="w-full"
+              >
+                Entregar
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -1736,7 +1667,7 @@ export default function AlmacenPage() {
           vendedores={vendedores}
           onEdit={handleEditProduct}
           onDelete={handleDeleteProduct}
-          onDeliver={handleProductDelivery}
+          onDeliver={(productId, cantidadTotal, parametros) => handleProductDelivery(productId, cantidadTotal, parametros)}
         />
       )}
 
@@ -1751,10 +1682,9 @@ export default function AlmacenPage() {
           ventasSemanales={ventasSemanales}
           ventasDiarias={ventasDiarias}
           transacciones={transaccionesVendedor}
-          onProductReduce={handleReduceVendorProduct}
+          onProductReduce={(productId, cantidad, parametros) => handleReduceVendorProduct(productId, cantidad, parametros)}
           onDeleteSale={deleteSale}
           onProductMerma={handleProductMerma}
-          onProductTransfer={handleProductTransfer}
           vendedores={vendedores}
           onDeleteVendorData={handleDeleteVendorData}
           onUpdateProductQuantity={handleUpdateProductQuantity}

@@ -25,30 +25,27 @@ export async function getVendedores(): Promise<Partial<IUsuario>[]> {
   return result.rows;
 }
 
-export async function updateUsuarioProducto(
-  usuarioId: string,
+export async function updateInventarioProducto(
   productoId: string,
   cantidad: number,
   precio: number
-): Promise<IUsuario | null> {
+): Promise<any> {
   const result = await query(
-    `INSERT INTO usuario_productos (usuario_id, producto_id, cantidad, precio)
-     VALUES ($1, $2, $3, $4)
-     ON CONFLICT (usuario_id, producto_id)
-     DO UPDATE SET cantidad = usuario_productos.cantidad + $3, precio = $4
+    `INSERT INTO usuario_productos (producto_id, cantidad, precio)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (producto_id)
+     DO UPDATE SET cantidad = usuario_productos.cantidad + $2, precio = $3
      RETURNING *`,
-    [usuarioId, productoId, cantidad, precio]
+    [productoId, cantidad, precio]
   );
   return result.rows[0];
 }
 
-export async function getUsuarioProductos(usuarioId: string): Promise<Array<{ producto: string; cantidad: number; precio: number }>> {
+export async function getInventarioProductos(): Promise<Array<{ producto: string; cantidad: number; precio: number }>> {
   const result = await query(
     `SELECT p.id as producto, up.cantidad, up.precio
      FROM usuario_productos up
-     JOIN productos p ON up.producto_id = p.id
-     WHERE up.usuario_id = $1`,
-    [usuarioId]
+     JOIN productos p ON up.producto_id = p.id`
   );
   return result.rows;
 }

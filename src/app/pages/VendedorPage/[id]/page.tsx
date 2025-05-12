@@ -17,12 +17,12 @@ import { format, parseISO, isValid, startOfWeek, endOfWeek, addDays } from 'date
 import { es } from 'date-fns/locale'
 import { OptimizedImage } from '@/components/OptimizedImage';
 import {
-  getTransaccionesVendedor,
-  getProductosVendedor,
   realizarVenta,
   getVentasMes,
   getTransaccionesProducto,
-  getVentasProducto
+  getVentasProducto,
+  getProductosCompartidos,
+  getTransaccionesVendedor
 } from '../../../services/api'
 import { WeekPicker } from '@/components/Weekpicker'
 
@@ -290,8 +290,8 @@ const useVendedorData = (vendedorId: string) => {
 
   const fetchProductos = useCallback(async () => {
     try {
-      const data = await getProductosVendedor(vendedorId)
-      console.log('Raw data from getProductosVendedor:', data);
+      const data = await getProductosCompartidos();
+      console.log('Raw data from getProductosCompartidos:', data);
 
       // Modificamos el filtrado considerando los parámetros
       setProductosDisponibles(data.filter((producto: Producto) => {
@@ -310,7 +310,7 @@ const useVendedorData = (vendedorId: string) => {
       console.error('Error al obtener productos:', error)
       setError('No se pudieron cargar los productos. Por favor, intenta de nuevo.')
     }
-  }, [vendedorId])
+  }, [])
 
   const fetchVentasRegistro = useCallback(async () => {
     try {
@@ -333,13 +333,13 @@ const useVendedorData = (vendedorId: string) => {
 
   const fetchTransacciones = useCallback(async () => {
     try {
-      const data = await getTransaccionesVendedor(vendedorId);
+      const data = await getTransaccionesVendedor();
       setTransacciones(data);
     } catch (error) {
       console.error('Error al obtener transacciones:', error);
       setError('No se pudieron cargar las transacciones. Por favor, intenta de nuevo.');
     }
-  }, [vendedorId]);
+  }, []);
 
   useEffect(() => {
     const loadData = async () => {
@@ -356,7 +356,7 @@ const useVendedorData = (vendedorId: string) => {
     };
 
     loadData();
-  }, [vendedorId, fetchProductos, fetchVentasRegistro, fetchTransacciones]);
+  }, [fetchProductos, fetchVentasRegistro, fetchTransacciones]);
 
   return {
     isLoading,
@@ -610,15 +610,7 @@ const TransaccionesList = ({
     });
   };
 
-  const filteredByRole = filteredTransacciones.filter(transaction => {
-    if (transaction.desde === vendedorId) {
-      return transaction.tipo === 'Baja';
-    }
-    if (transaction.hacia === vendedorId) {
-      return transaction.tipo === 'Entrega';
-    }
-    return false;
-  });
+  const filteredByRole = filteredTransacciones;
 
   const groupedTransactions = filteredByRole.reduce((acc, transaction) => {
     const key = getTransactionKey(transaction);

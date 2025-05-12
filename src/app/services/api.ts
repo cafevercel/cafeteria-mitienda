@@ -28,6 +28,14 @@ interface Producto {
   }>;
 }
 
+/**
+ * Este archivo contiene todas las funciones de API para interactuar con el backend.
+ * NOTA: El sistema ahora utiliza un inventario compartido para todos los vendedores.
+ * - Las tablas usuario_productos y usuario_producto_parametros ya no tienen usuario_id
+ * - Todas las transacciones y entregas de productos van al inventario común
+ * - Solo las ventas siguen asociadas a vendedores específicos
+ */
+
 export const uploadImage = async (file: File) => {
   const formData = new FormData();
   formData.append('file', file);
@@ -121,16 +129,13 @@ export const registerUser = async (userData: Omit<User, 'id'>): Promise<User> =>
   return response.data;
 };
 
-export const getProductosVendedor = async (vendedorId: string) => {
-  if (!vendedorId) {
-    throw new Error('ID del vendedor no proporcionado');
-  }
+export const getProductosCompartidos = async () => {
   try {
-    const response = await api.get(`/users/productos/${vendedorId}`);
+    const response = await api.get('/productos/compartidos');
     return response.data;
   } catch (error) {
-    console.error('Error al obtener productos del vendedor:', error);
-    throw new Error('No se pudieron obtener los productos del vendedor');
+    console.error('Error al obtener productos compartidos:', error);
+    throw new Error('No se pudieron cargar los productos compartidos. Por favor, intenta de nuevo.');
   }
 };
 
@@ -218,14 +223,12 @@ export const editarProducto = async (id: string, formData: FormData) => {
 
 export const entregarProducto = async (
   productoId: string,
-  vendedorId: string,
   cantidad: number,
   parametros?: Array<{ nombre: string; cantidad: number }>
 ) => {
   try {
     const response = await api.post('/transacciones', {
       productoId,
-      vendedorId,
       cantidad,
       tipo: 'Entrega',
       parametros
@@ -274,37 +277,22 @@ export const realizarVenta = async (
   parametros?: VentaParametro[],
   vendedorId?: string
 ): Promise<Venta> => {
+  if (!vendedorId) {
+    throw new Error('Se requiere ID del vendedor');
+  }
+
   try {
-    if (!vendedorId) {
-      throw new Error('El ID del vendedor es requerido');
-    }
+    const requestBody = { productoId, cantidad, fecha, parametros, vendedorId };
+    console.log('Enviando datos de venta:', requestBody);
 
-    const fechaAjustada = new Date(fecha + 'T12:00:00');
-    const fechaISO = fechaAjustada.toISOString();
-
-    const response = await api.post<Venta>('/ventas', {
-      productoId,
-      cantidad,
-      fecha: fechaISO,
-      vendedorId,
-      parametros
-    });
-
+    const response = await api.post('/ventas', requestBody);
     return response.data;
   } catch (error) {
     console.error('Error al realizar la venta:', error);
-    if (axios.isAxiosError(error)) {
-      if (error.response?.data?.error) {
-        throw new Error(error.response.data.error);
-      }
-      if (error.response?.status === 400) {
-        throw new Error('Datos de venta inválidos');
-      }
-      if (error.response?.status === 404) {
-        throw new Error('Producto no encontrado o no disponible');
-      }
+    if (axios.isAxiosError(error) && error.response) {
+      throw new Error(`Error al realizar la venta: ${error.response.data.error || error.response.data.message || 'Ocurrió un error'}`);
     }
-    throw new Error('Error al crear la venta');
+    throw new Error('Error al realizar la venta');
   }
 };
 
@@ -313,13 +301,13 @@ export const getVentasMes = async (vendedorId: string): Promise<Venta[]> => {
   return response.data;
 };
 
-export const getTransaccionesVendedor = async (vendedorId: string) => {
+export const getTransaccionesVendedor = async () => {
   try {
-    const response = await api.get(`/transacciones?vendedorId=${vendedorId}`);
+    const response = await api.get('/transacciones/compartidas');
     return response.data;
   } catch (error) {
-    console.error('Error al obtener transacciones del vendedor:', error);
-    throw new Error('No se pudieron obtener las transacciones del vendedor');
+    console.error('Error al obtener transacciones compartidas:', error);
+    throw new Error('No se pudieron obtener las transacciones compartidas');
   }
 };
 
@@ -346,16 +334,14 @@ const handleApiError = (error: unknown, context: string) => {
   }
 };
 
-export const reducirProductoVendedor = async (
+export const reducirProductoInventario = async (
   productoId: string,
-  vendedorId: string,
   cantidad: number,
   parametros?: Array<{ nombre: string; cantidad: number }>
 ) => {
   try {
     const payload = {
       productoId,
-      vendedorId,
       cantidad,
       parametros
     };
@@ -519,37 +505,6 @@ export const deleteMerma = async (productoId: string): Promise<void> => {
   } catch (error) {
     console.error('Error en deleteMerma:', error);
     throw error;
-  }
-};
-
-export const transferProduct = async ({
-  productId,
-  fromVendorId,
-  toVendorId,
-  cantidad,
-  parametros
-}: TransferProductParams) => {
-  try {
-    // Una única llamada que manejará ambas transacciones
-    const response = await api.post('/transacciones/transfer', {
-      productId,
-      fromVendorId,
-      toVendorId,
-      cantidad,
-      parametros
-    });
-
-    return response.data;
-  } catch (error) {
-    console.error('Error al transferir producto:', error);
-    if (axios.isAxiosError(error)) {
-      if (error.response) {
-        throw new Error(error.response.data.message || 'Error al transferir el producto');
-      } else if (error.request) {
-        throw new Error('No se recibió respuesta del servidor');
-      }
-    }
-    throw new Error('No se pudo completar la transferencia del producto');
   }
 };
 
