@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import getProductosVendedor from '@/app/services/api' // Cambiado a importación por defecto
+import getProductosVendedor from "@/app/services/api"
 
 interface Producto {
   id: string;
