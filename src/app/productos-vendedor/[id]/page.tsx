@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { getProductosVendedor } from '@/app/services/api'
+import getProductosVendedor from '@/app/services/api' // Cambiado a importación por defecto
 
 interface Producto {
   id: string;
@@ -24,8 +24,8 @@ export default function ProductosVendedor() {
 
     const fetchProductos = async () => {
       try {
-        const data = await getProductosVendedor(id)
-        setProductos(data)
+        const response = await getProductosVendedor(id)
+        setProductos(response.data) // Extraer los datos de la respuesta Axios
       } catch (error) {
         console.error('Error al obtener productos:', error)
       }
