@@ -120,7 +120,7 @@ export default function VendorDialog({
   onUpdateProductQuantity,
   initialMode = 'view'
 }: VendorDialogProps) {
-  const [mode, setMode] = useState<'view' | 'edit' | 'ventas'>(initialMode)
+  const [mode, setMode] = useState<'view' | 'edit' | 'ventas' | 'productos' | 'transacciones'>(initialMode)
   const [editedVendor, setEditedVendor] = useState(vendor)
   const [searchTerm, setSearchTerm] = useState('')
   const [ventasLocales, setVentasLocales] = useState<Venta[]>(ventas)
