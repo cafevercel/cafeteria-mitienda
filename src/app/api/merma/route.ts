@@ -6,19 +6,67 @@ export async function POST(request: Request) {
   try {
     const { producto_id, usuario_id, cantidad, parametros } = await request.json();
 
-    // 1. Obtener información del producto y usuario
+    // 1. Obtener información del producto
     const producto = await sql`
       SELECT * FROM productos WHERE id = ${producto_id}
     `;
-    const usuario = await sql`
-      SELECT * FROM usuarios WHERE id = ${usuario_id}
-    `;
 
-    if (!producto.rows[0] || !usuario.rows[0]) {
+    if (!producto.rows[0]) {
       return NextResponse.json(
-        { error: 'Producto o usuario no encontrado' },
+        { error: 'Producto no encontrado' },
         { status: 404 }
       );
+    }
+
+    // Verificar si es merma de cafetería específicamente
+    const esCafeteria = usuario_id === 'cafeteria';
+    
+    // Verificar si es una merma directa (sin usuario) o desde cafetería
+    const esMermaDirecta = !usuario_id || usuario_id.trim() === '' || esCafeteria;
+    
+    // Buscar un usuario administrador para asociar con la merma en caso de cafetería
+    // Esto es necesario porque la columna usuario_id no puede ser nula en la base de datos
+    let idUsuarioMerma;
+    let nombreUsuario = 'Cafetería';
+    
+    if (esMermaDirecta) {
+      // Buscar un usuario con rol 'Almacen' para asociar con la merma
+      const adminUser = await sql`
+        SELECT id, nombre FROM usuarios WHERE rol = 'Almacen' LIMIT 1
+      `;
+      
+      if (adminUser.rows.length > 0) {
+        idUsuarioMerma = adminUser.rows[0].id;
+      } else {
+        // Si no hay usuarios de almacén, buscar cualquier usuario
+        const anyUser = await sql`
+          SELECT id, nombre FROM usuarios LIMIT 1
+        `;
+        
+        if (anyUser.rows.length === 0) {
+          return NextResponse.json(
+            { error: 'No hay usuarios disponibles para asociar con la merma' },
+            { status: 500 }
+          );
+        }
+        
+        idUsuarioMerma = anyUser.rows[0].id;
+      }
+    } else {
+      // Si hay un usuario_id específico (no es cafetería ni vacío), verificar que exista
+      const usuario = await sql`
+        SELECT * FROM usuarios WHERE id = ${usuario_id}
+      `;
+      
+      if (!usuario.rows[0]) {
+        return NextResponse.json(
+          { error: 'Usuario no encontrado' },
+          { status: 404 }
+        );
+      }
+      
+      idUsuarioMerma = usuario_id;
+      nombreUsuario = usuario.rows[0].nombre;
     }
 
     // 2. Crear registro en la tabla merma
@@ -35,8 +83,8 @@ export async function POST(request: Request) {
         ${producto.rows[0].nombre},
         ${cantidad},
         NOW(),
-        ${usuario_id},
-        ${usuario.rows[0].nombre}
+        ${idUsuarioMerma},
+        ${nombreUsuario}
       )
       RETURNING id
     `;
@@ -56,7 +104,7 @@ export async function POST(request: Request) {
         ) VALUES (
           ${producto_id},
           ${cantidad},
-          ${usuario_id},
+          ${esMermaDirecta ? 'Inventario' : usuario_id},
           'MERMA',
           NOW(),
           'Baja'
@@ -93,14 +141,31 @@ export async function POST(request: Request) {
           )
         `;
 
-        // Actualizar inventario
-        await sql`
-          UPDATE usuario_producto_parametros
-          SET cantidad = cantidad - ${param.cantidad}
-          WHERE usuario_id = ${usuario_id}
-          AND producto_id = ${producto_id}
-          AND nombre = ${param.nombre}
-        `;
+        if (esCafeteria) {
+          // Si viene de cafetería, actualizar usuario_producto_parametros
+          await sql`
+            UPDATE usuario_producto_parametros
+            SET cantidad = cantidad - ${param.cantidad}
+            WHERE producto_id = ${producto_id}
+            AND nombre = ${param.nombre}
+          `;
+        } else if (esMermaDirecta) {
+          // Si es merma directa (no cafetería), actualizar en producto_parametros
+          await sql`
+            UPDATE producto_parametros
+            SET cantidad = cantidad - ${param.cantidad}
+            WHERE producto_id = ${producto_id}
+            AND nombre = ${param.nombre}
+          `;
+        } else {
+          // Si es un vendedor específico, actualizar en usuario_producto_parametros
+          await sql`
+            UPDATE usuario_producto_parametros
+            SET cantidad = cantidad - ${param.cantidad}
+            WHERE producto_id = ${producto_id}
+            AND nombre = ${param.nombre}
+          `;
+        }
       }
     } else {
       // 3b. Para productos sin parámetros
@@ -115,20 +180,35 @@ export async function POST(request: Request) {
         ) VALUES (
           ${producto_id},
           ${cantidad},
-          ${usuario_id},
+          ${esMermaDirecta ? 'Inventario' : usuario_id},
           'MERMA',
           NOW(),
           'Baja'
         )
       `;
 
-      // Actualizar inventario
-      await sql`
-        UPDATE usuario_productos 
-        SET cantidad = cantidad - ${cantidad}
-        WHERE usuario_id = ${usuario_id}
-        AND producto_id = ${producto_id}
-      `;
+      if (esCafeteria) {
+        // Si viene de cafetería, actualizar usuario_productos
+        await sql`
+          UPDATE usuario_productos 
+          SET cantidad = cantidad - ${cantidad}
+          WHERE producto_id = ${producto_id}
+        `;
+      } else if (esMermaDirecta) {
+        // Si es merma directa (no cafetería), actualizar en productos
+        await sql`
+          UPDATE productos 
+          SET cantidad = cantidad - ${cantidad}
+          WHERE id = ${producto_id}
+        `;
+      } else {
+        // Si es de un vendedor específico, actualizar en usuario_productos
+        await sql`
+          UPDATE usuario_productos 
+          SET cantidad = cantidad - ${cantidad}
+          WHERE producto_id = ${producto_id}
+        `;
+      }
     }
 
     return NextResponse.json({ success: true, merma_id: mermaId });

@@ -1,0 +1,7 @@
+-- Crear tabla de gastos
+CREATE TABLE IF NOT EXISTS gastos (
+  id SERIAL PRIMARY KEY,
+  nombre VARCHAR(255) NOT NULL,
+  cantidad DECIMAL(10, 2) NOT NULL,
+  fecha TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+); 

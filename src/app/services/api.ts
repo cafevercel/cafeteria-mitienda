@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Venta, Vendedor, Transaccion, VentaParametro, TransferProductParams } from '@/types';
+import { Venta, Vendedor, Transaccion, VentaParametro, TransferProductParams, Gasto, Producto } from '@/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
 
@@ -15,13 +15,14 @@ interface User {
   password: string;
 }
 
-interface Producto {
+interface LocalProducto {
   id: string;
   nombre: string;
   precio: number;
   cantidad: number;
-  foto?: string;
-  tieneParametros: boolean;
+  foto?: string | null;
+  tiene_parametros: boolean;
+  tieneParametros?: boolean;
   parametros?: Array<{
     nombre: string;
     cantidad: number;
@@ -116,8 +117,13 @@ export const getVendedores = async (): Promise<Vendedor[]> => {
 
 export const getInventario = async (): Promise<Producto[]> => {
   try {
-    const response = await api.get<Producto[]>('/productos');
-    return response.data;
+    const response = await api.get<LocalProducto[]>('/productos');
+    // Asegurar que los datos cumplan con el tipo Producto
+    return response.data.map(p => ({
+      ...p,
+      foto: p.foto || null,
+      tiene_parametros: Boolean(p.tiene_parametros)
+    })) as Producto[];
   } catch (error) {
     console.error('Error fetching inventory:', error);
     throw error;
@@ -377,9 +383,9 @@ export const getVentasVendedor = async (vendedorId: string): Promise<Venta[]> =>
   }
 };
 
-export const editarVendedor = async (vendedorId: string, editedVendor: Vendedor & { newPassword?: string }): Promise<void> => {
+export const editarVendedor = async (vendedorId: string, editedVendor: Partial<Vendedor> & { newPassword?: string }): Promise<void> => {
   try {
-    const vendorData: Vendedor = { ...editedVendor };
+    const vendorData: Partial<Vendedor> = { ...editedVendor };
 
     // If a new password is provided, include it in the request
     if (editedVendor.newPassword) {
@@ -389,7 +395,9 @@ export const editarVendedor = async (vendedorId: string, editedVendor: Vendedor 
     // Remove the newPassword field from the request payload
     delete (vendorData as any).newPassword;
 
+    console.log('Enviando datos para actualizar vendedor:', vendedorId, vendorData);
     const response = await api.put(`/users/vendedores?id=${vendedorId}`, vendorData);
+    return response.data;
   } catch (error) {
     console.error('Error al editar vendedor:', error);
     if (axios.isAxiosError(error) && error.response) {
@@ -460,6 +468,9 @@ export const createMerma = async (
   cantidad: number,
   parametros?: { nombre: string; cantidad: number }[]
 ) => {
+  // Si usuario_id está vacío, usamos un valor especial para que el backend sepa que es merma directa
+  const id_usuario = usuario_id.trim() === '' ? 'cafeteria' : usuario_id;
+  
   const response = await fetch('/api/merma', {
     method: 'POST',
     headers: {
@@ -467,7 +478,7 @@ export const createMerma = async (
     },
     body: JSON.stringify({
       producto_id,
-      usuario_id,
+      usuario_id: id_usuario,
       cantidad,
       parametros
     }),
@@ -515,5 +526,101 @@ export const verificarNombreProducto = async (nombre: string): Promise<boolean> 
   } catch (error) {
     console.error('Error al verificar nombre del producto:', error);
     throw new Error('Error al verificar el nombre del producto');
+  }
+};
+
+export const getProductosCafeteria = async () => {
+  try {
+    const response = await api.get('/cafeteria/productos');
+    return response.data;
+  } catch (error) {
+    console.error('Error al obtener productos de cafetería:', error);
+    throw new Error('No se pudieron cargar los productos de cafetería. Por favor, intenta de nuevo.');
+  }
+};
+
+export const getVendedorProductos = async (vendedorId: string): Promise<LocalProducto[]> => {
+  try {
+    // Usamos la ruta de productos compartidos que ya existe
+    const response = await api.get(`/productos/compartidos`);
+    
+    // Aseguramos que la respuesta tenga la estructura correcta
+    const productos = response.data.map((producto: any) => ({
+      ...producto,
+      tieneParametros: producto.tiene_parametros || false,
+      tiene_parametros: producto.tiene_parametros || false
+    }));
+    
+    return productos;
+  } catch (error) {
+    console.error('Error al obtener productos del vendedor:', error);
+    throw new Error('No se pudieron obtener los productos del vendedor');
+  }
+};
+
+export const getVendedorVentas = async (vendedorId: string): Promise<Venta[]> => {
+  try {
+    // Usamos la ruta de ventas con el parámetro vendedorId que ya existe
+    const response = await api.get(`/ventas`, {
+      params: { vendedorId }
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error al obtener ventas del vendedor:', error);
+    throw new Error('No se pudieron obtener las ventas del vendedor');
+  }
+};
+
+export const getVendedorTransacciones = async (vendedorId: string): Promise<Transaccion[]> => {
+  try {
+    // Usamos la función de transacciones compartidas que ya existe
+    const response = await api.get(`/transacciones/compartidas`);
+    return response.data;
+  } catch (error) {
+    console.error('Error al obtener transacciones del vendedor:', error);
+    throw new Error('No se pudieron obtener las transacciones del vendedor');
+  }
+};
+
+export const getAllVentas = async (): Promise<Venta[]> => {
+  try {
+    const response = await api.get(`/ventas`, {
+      params: { all: true }
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error al obtener todas las ventas:', error);
+    throw new Error('No se pudieron obtener todas las ventas');
+  }
+};
+
+// Métodos para manejar gastos
+
+export const getGastos = async (): Promise<Gasto[]> => {
+  try {
+    const response = await api.get('/gastos');
+    return response.data;
+  } catch (error) {
+    console.error('Error al obtener gastos:', error);
+    throw new Error('No se pudieron obtener los gastos');
+  }
+};
+
+export const crearGasto = async (gasto: Omit<Gasto, 'id'>): Promise<Gasto> => {
+  try {
+    const response = await api.post('/gastos', gasto);
+    return response.data;
+  } catch (error) {
+    console.error('Error al crear gasto:', error);
+    throw new Error('No se pudo crear el gasto');
+  }
+};
+
+export const eliminarGasto = async (gastoId: string): Promise<void> => {
+  try {
+    await api.delete(`/gastos?id=${gastoId}`);
+  } catch (error) {
+    console.error('Error al eliminar gasto:', error);
+    throw new Error('No se pudo eliminar el gasto');
   }
 };

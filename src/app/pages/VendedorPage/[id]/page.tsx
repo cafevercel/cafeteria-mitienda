@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -87,6 +87,7 @@ interface Venta {
   precio_unitario: number;
   total: number | string;
   vendedor: string;
+  vendedor_nombre?: string;
   fecha: string;
   parametros?: ProductoParametro[];
 }
@@ -1139,11 +1140,15 @@ export default function VendedorPage() {
     error,
     productosDisponibles,
     productosAgotados,
+    ventasRegistro,
     transacciones,
+    ventasDia,
+    ventasAgrupadas,
     ventasSemanales,
     ventasDiarias,
     fetchProductos,
     fetchVentasRegistro,
+    fetchTransacciones,
     sortOrder,
     setSortOrder,
     sortBy,
@@ -1156,7 +1161,7 @@ export default function VendedorPage() {
   } = useVendedorData(vendedorId)
 
   const [busqueda, setBusqueda] = useState('')
-  const [seccionActual, setSeccionActual] = useState<'productos' | 'ventas' | 'registro'>('productos')
+  const [seccion, setSeccion] = useState<'productos' | 'ventas' | 'registro'>('productos')
   const [menuAbierto, setMenuAbierto] = useState(false)
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -1296,7 +1301,7 @@ export default function VendedorPage() {
   )
 
   const cambiarSeccion = (seccion: 'productos' | 'ventas' | 'registro') => {
-    setSeccionActual(seccion)
+    setSeccion(seccion)
     setMenuAbierto(false)
   }
 
@@ -1314,26 +1319,49 @@ export default function VendedorPage() {
   }
 
   return (
-    <div className="flex h-screen">
-      <Sheet open={menuAbierto} onOpenChange={setMenuAbierto}>
-        <SheetTrigger asChild>
-          <Button variant="outline" size="icon" className="fixed top-4 right-4 z-50">
-            <MenuIcon className="h-4 w-4" />
-          </Button>
-        </SheetTrigger>
-        <SheetContent side="right" className="w-[200px]">
-          <nav className="flex flex-col space-y-4">
-            <Button variant="ghost" onClick={() => cambiarSeccion('productos')}>Productos</Button>
-            <Button variant="ghost" onClick={() => cambiarSeccion('ventas')}>Ventas</Button>
-            <Button variant="ghost" onClick={() => cambiarSeccion('registro')}>Registro</Button>
-          </nav>
-        </SheetContent>
-      </Sheet>
+    <div className="min-h-screen bg-orange-50 pb-10">
+      <header className="bg-white border-b border-orange-200 shadow-sm p-4 mb-6">
+        <div className="container mx-auto flex items-center justify-between">
+          <h1 className="text-2xl font-bold text-orange-800">Panel de Vendedor</h1>
+          <div className="flex items-center space-x-4">
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button variant="outline" size="icon" className="border-orange-300 hover:bg-orange-100">
+                  <MenuIcon className="h-5 w-5 text-orange-600" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="bg-white border-l border-orange-200">
+                <nav className="flex flex-col space-y-4 mt-8">
+                  <Button
+                    variant="ghost"
+                    className={`${seccion === 'productos' ? 'bg-orange-100 text-orange-800' : 'text-orange-700 hover:bg-orange-50 hover:text-orange-800'}`}
+                    onClick={() => cambiarSeccion('productos')}
+                  >
+                    Productos
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className={`${seccion === 'ventas' ? 'bg-orange-100 text-orange-800' : 'text-orange-700 hover:bg-orange-50 hover:text-orange-800'}`}
+                    onClick={() => cambiarSeccion('ventas')}
+                  >
+                    Ventas
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className={`${seccion === 'registro' ? 'bg-orange-100 text-orange-800' : 'text-orange-700 hover:bg-orange-50 hover:text-orange-800'}`}
+                    onClick={() => cambiarSeccion('registro')}
+                  >
+                    Registro
+                  </Button>
+                </nav>
+              </SheetContent>
+            </Sheet>
+          </div>
+        </div>
+      </header>
 
-      <main className="flex-1 p-6 overflow-auto">
-        <h1 className="text-2xl font-bold mb-4">Panel de Vendedor</h1>
-
-        {seccionActual === 'productos' && (
+      <div className="container mx-auto px-4">
+        {seccion === 'productos' && (
           <Tabs defaultValue="disponibles">
             <div className="flex justify-between items-center mb-4">
               <TabsList>
@@ -1400,7 +1428,7 @@ export default function VendedorPage() {
             </TabsContent>
           </Tabs>
         )}
-        {seccionActual === 'ventas' && (
+        {seccion === 'ventas' && (
           <Tabs defaultValue="vender">
             <TabsList>
               <TabsTrigger value="vender">Vender</TabsTrigger>
@@ -1494,144 +1522,113 @@ export default function VendedorPage() {
                   <h3 className="font-bold mb-2">Productos Seleccionados:</h3>
                   {productosSeleccionados.map((producto) => (
                     <div key={producto.id} className="flex justify-between items-center mb-2 p-2 bg-gray-100 rounded">
-                      <div className="flex flex-col">
-                        <span className="font-medium">{producto.nombre}</span>
-                        <span className="text-sm text-gray-600">Precio: ${formatPrice(producto.precio)}</span>
-                        {producto.parametrosVenta && producto.parametrosVenta.length > 0 && (
-                          <div className="text-sm text-gray-500">
-                            <p className="font-medium">Parámetros:</p>
-                            {producto.parametrosVenta
-                              .filter(param => param.cantidad > 0) // Filtrar solo parámetros con cantidad > 0
-                              .map(param => (
-                                <p key={param.nombre} className="ml-2">
+                      <div className="flex items-center">
+                        <OptimizedImage
+                          src={producto.foto || '/placeholder.svg'}
+                          fallbackSrc="/placeholder.svg"
+                          alt={producto.nombre}
+                          width={40} 
+                          height={40}
+                          className="rounded-md mr-2"
+                        />
+                        <div>
+                          <p className="font-medium">{producto.nombre}</p>
+                          {producto.parametrosVenta && producto.parametrosVenta.length > 0 ? (
+                            <div className="text-xs text-gray-600">
+                              {producto.parametrosVenta.map(param => (
+                                <div key={param.nombre}>
                                   {param.nombre}: {param.cantidad}
-                                </p>
+                                </div>
                               ))}
-                          </div>
-                        )}
+                            </div>
+                          ) : (
+                            <div className="flex items-center space-x-2">
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                onClick={() => handleAjustarCantidad(producto.id, -1)}
+                                className="h-6 w-6"
+                                disabled={producto.cantidadVendida <= 1}
+                              >
+                                <Minus className="h-3 w-3" />
+                              </Button>
+                              <span>{producto.cantidadVendida}</span>
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                onClick={() => handleAjustarCantidad(producto.id, 1)}
+                                className="h-6 w-6"
+                                disabled={producto.cantidadVendida >= producto.cantidad}
+                              >
+                                <Plus className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        {!producto.parametrosVenta ? (
-                          <>
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              onClick={() => handleAjustarCantidad(producto.id, -1)}
-                            >
-                              <Minus className="h-4 w-4" />
-                            </Button>
-                            <span>{producto.cantidadVendida}</span>
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              onClick={() => handleAjustarCantidad(producto.id, 1)}
-                              disabled={producto.cantidadVendida >= producto.cantidad}
-                            >
-                              <Plus className="h-4 w-4" />
-                            </Button>
-                          </>
-                        ) : (
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={() => setProductosSeleccionados(prev =>
-                              prev.filter(p => p.id !== producto.id)
-                            )}
-                            className="text-red-500 hover:text-red-700"
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                        onClick={() => handleAjustarCantidad(producto.id, -producto.cantidadVendida)}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
                     </div>
                   ))}
 
-
+                  {productosSeleccionados.length > 0 && (
+                    <div className="mt-4">
+                      <Button onClick={handleEnviarVenta} className="w-full">
+                        Registrar Venta
+                      </Button>
+                    </div>
+                  )}
                 </div>
-                <h2 className="text-xl font-semibold">3. Enviar el formulario de ventas</h2>
-                <Button onClick={handleEnviarVenta}>Enviar</Button>
               </div>
             </TabsContent>
             <TabsContent value="registro">
               <div className="space-y-4">
-                <h2 className="text-xl font-semibold">Registro de Ventas</h2>
-                <Tabs defaultValue="por-dia">
-                  <TabsList>
-                    <TabsTrigger value="por-dia">Por día</TabsTrigger>
-                    <TabsTrigger value="por-semana">Por semana</TabsTrigger>
-                  </TabsList>
-                  <TabsContent value="por-dia">
-                    <div className="space-y-4">
-                      <div className="relative mb-4">
-                        <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                        <Input
-                          placeholder="Buscar ventas..."
-                          value={busqueda}
-                          onChange={(e) => setBusqueda(e.target.value)}
-                          className="pl-10"
-                        />
-                      </div>
-                      {ventasDiarias.length > 0 ? (
-                        ventasDiarias
-                          .filter(venta => 
-                            venta.ventas.some(v => 
-                              v.producto_nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-                              formatDate(v.fecha).toLowerCase().includes(busqueda.toLowerCase()) ||
-                              v.total.toString().includes(busqueda)
-                            )
+                <div className="mb-4">
+                  <div className="relative">
+                    <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                    <Input
+                      placeholder="Buscar ventas..."
+                      value={busqueda}
+                      onChange={(e) => setBusqueda(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <div className="mb-4">
+                    <h3 className="text-lg font-semibold mb-2">Ventas por Día</h3>
+                    {ventasDiarias.length > 0 ? (
+                      ventasDiarias
+                        .filter(venta => 
+                          venta.ventas.some(v => 
+                            v.producto_nombre?.toLowerCase().includes(busqueda.toLowerCase()) ||
+                            formatDate(v.fecha).toLowerCase().includes(busqueda.toLowerCase()) ||
+                            v.total.toString().includes(busqueda)
                           )
-                          .map((venta) => (
-                            <VentaDiaDesplegable 
-                              key={venta.fecha} 
-                              venta={venta} 
-                              busqueda={busqueda}
-                            />
-                          ))
-                      ) : (
-                        <div className="text-center py-4">No hay ventas registradas</div>
-                      )}
-                    </div>
-                  </TabsContent>
-                  <TabsContent value="por-semana">
-                    <div className="space-y-4">
-                      <div className="relative mb-4">
-                        <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                        <Input
-                          placeholder="Buscar ventas..."
-                          value={busqueda}
-                          onChange={(e) => setBusqueda(e.target.value)}
-                          className="pl-10"
-                        />
-                      </div>
-                      {ventasSemanales.length > 0 ? (
-                        ventasSemanales
-                          .filter(venta => 
-                            venta.ventas.some(v => 
-                              v.producto_nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-                              formatDate(v.fecha).toLowerCase().includes(busqueda.toLowerCase()) ||
-                              v.total.toString().includes(busqueda)
-                            ) ||
-                            formatDate(venta.fechaInicio).toLowerCase().includes(busqueda.toLowerCase()) ||
-                            formatDate(venta.fechaFin).toLowerCase().includes(busqueda.toLowerCase())
-                          )
-                          .map((venta) => (
-                            <VentaSemanaDesplegable 
-                              key={`${venta.fechaInicio}-${venta.fechaFin}`} 
-                              venta={venta}
-                              busqueda={busqueda}
-                            />
-                          ))
-                      ) : (
-                        <div className="text-center py-4">No hay ventas registradas</div>
-                      )}
-                    </div>
-                  </TabsContent>
-                </Tabs>
+                        )
+                        .map((venta) => (
+                          <VentaDiaDesplegable 
+                            key={venta.fecha} 
+                            venta={venta}
+                            busqueda={busqueda}
+                          />
+                        ))
+                    ) : (
+                      <div className="text-center py-4">No hay ventas diarias registradas</div>
+                    )}
+                  </div>
+                </div>
               </div>
             </TabsContent>
           </Tabs>
         )}
-        {seccionActual === 'registro' && (
+        {seccion === 'registro' && (
           <div className="space-y-4">
             <h2 className="text-xl font-semibold mb-4">Registro de Actividades</h2>
             <div className="relative mb-4">
@@ -1653,8 +1650,7 @@ export default function VendedorPage() {
             </div>
           </div>
         )}
-
-      </main>
+      </div>
       <ParametrosDialog
         producto={selectedProduct}
         open={parametrosDialogOpen}

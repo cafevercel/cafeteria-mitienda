@@ -8,8 +8,6 @@ export interface VentaSemana {
   ganancia: number
 }
 
-
-
 export interface Parametro {
   nombre: string;
   cantidad: number;
@@ -21,7 +19,7 @@ export interface Producto {
   precio: number;
   precio_compra?: number;
   cantidad: number;
-  foto: string;
+  foto?: string | null;
   tiene_parametros: boolean;  // Propiedad del backend
   tieneParametros?: boolean;  // Propiedad del frontend
   parametros?: Parametro[] 
@@ -43,6 +41,15 @@ export interface Venta {
   vendedor: string;
   fecha: string;
   parametros?: VentaParametro[];
+  ganancia_unitaria?: number; // Ganancia por unidad (precio venta - precio compra)
+  ganancia_total?: number; // Ganancia total de la venta (ganancia_unitaria * cantidad)
+}
+
+export interface Gasto {
+  id: string;
+  nombre: string;
+  cantidad: number;
+  fecha: string;
 }
 
 export interface Vendedor {
@@ -52,6 +59,7 @@ export interface Vendedor {
   rol: string;
   telefono?: string;
   password: string;
+  activo?: boolean;
 }
 
 export interface Usuario {
@@ -59,6 +67,7 @@ export interface Usuario {
   nombre: string;
   rol: 'Almacen' | 'Vendedor';
   telefono?: string;
+  activo?: boolean;
 }
 
 // Agregar nueva interface para los parámetros de transacción

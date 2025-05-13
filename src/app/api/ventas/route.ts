@@ -105,6 +105,7 @@ export async function GET(request: NextRequest) {
   const vendedorId = searchParams.get('vendedorId');
   const productoId = searchParams.get('productoId');
   const ventaId = searchParams.get('id');
+  const getAllVentas = searchParams.get('all') === 'true';
 
   try {
     let result;
@@ -137,12 +138,14 @@ export async function GET(request: NextRequest) {
     const baseQuery = `
       SELECT v.*, p.nombre as producto_nombre, p.foto as producto_foto, 
              v.precio_unitario,
+             u.nombre as vendedor_nombre,
              json_agg(json_build_object(
                'nombre', vp.parametro,
                'cantidad', vp.cantidad
              )) FILTER (WHERE vp.parametro IS NOT NULL) as parametros
       FROM ventas v
       JOIN productos p ON v.producto = p.id
+      JOIN usuarios u ON v.vendedor = u.id
       LEFT JOIN venta_parametros vp ON v.id = vp.venta_id
     `;
 
@@ -153,7 +156,7 @@ export async function GET(request: NextRequest) {
       result = await query(
         `${baseQuery}
          WHERE v.producto = $1 ${vendedorFilter}
-         GROUP BY v.id, p.nombre, p.foto
+         GROUP BY v.id, p.nombre, p.foto, u.nombre
          ORDER BY v.fecha DESC`,
         params
       );
@@ -161,12 +164,19 @@ export async function GET(request: NextRequest) {
       result = await query(
         `${baseQuery}
          WHERE v.vendedor = $1
-         GROUP BY v.id, p.nombre, p.foto
+         GROUP BY v.id, p.nombre, p.foto, u.nombre
          ORDER BY v.fecha DESC`,
         [vendedorId]
       );
+    } else if (getAllVentas) {
+      // Si se solicitan todas las ventas
+      result = await query(
+        `${baseQuery}
+         GROUP BY v.id, p.nombre, p.foto, u.nombre
+         ORDER BY v.fecha DESC`
+      );
     } else {
-      return NextResponse.json({ error: 'Se requiere vendedorId, productoId o id' }, { status: 400 });
+      return NextResponse.json({ error: 'Se requiere vendedorId, productoId, id o all=true' }, { status: 400 });
     }
 
     return NextResponse.json(result.rows);

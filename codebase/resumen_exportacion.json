@@ -1,9 +1,9 @@
 {
-  "fecha_exportacion": "2025-04-29 11:04:06",
+  "fecha_exportacion": "2025-05-13 03:22:02",
   "tablas": {
     "merma": {
       "tableName": "merma",
-      "rowCount": 234,
+      "rowCount": 0,
       "columnCount": 7,
       "columns": [
         {
@@ -38,7 +38,7 @@
     },
     "merma_parametros": {
       "tableName": "merma_parametros",
-      "rowCount": 49,
+      "rowCount": 0,
       "columnCount": 6,
       "columns": [
         {
@@ -69,7 +69,7 @@
     },
     "producto_parametros": {
       "tableName": "producto_parametros",
-      "rowCount": 317,
+      "rowCount": 0,
       "columnCount": 4,
       "columns": [
         {
@@ -92,7 +92,7 @@
     },
     "productos": {
       "tableName": "productos",
-      "rowCount": 602,
+      "rowCount": 3,
       "columnCount": 7,
       "columns": [
         {
@@ -127,7 +127,7 @@
     },
     "transaccion_parametros": {
       "tableName": "transaccion_parametros",
-      "rowCount": 1802,
+      "rowCount": 0,
       "columnCount": 4,
       "columns": [
         {
@@ -150,7 +150,7 @@
     },
     "transacciones": {
       "tableName": "transacciones",
-      "rowCount": 5049,
+      "rowCount": 5,
       "columnCount": 8,
       "columns": [
         {
@@ -189,15 +189,11 @@
     },
     "usuario_producto_parametros": {
       "tableName": "usuario_producto_parametros",
-      "rowCount": 1019,
-      "columnCount": 5,
+      "rowCount": 0,
+      "columnCount": 4,
       "columns": [
         {
           "name": "id",
-          "type": "integer"
-        },
-        {
-          "name": "usuario_id",
           "type": "integer"
         },
         {
@@ -216,11 +212,11 @@
     },
     "usuario_productos": {
       "tableName": "usuario_productos",
-      "rowCount": 2181,
+      "rowCount": 2,
       "columnCount": 4,
       "columns": [
         {
-          "name": "usuario_id",
+          "name": "id",
           "type": "integer"
         },
         {
@@ -239,7 +235,7 @@
     },
     "usuarios": {
       "tableName": "usuarios",
-      "rowCount": 9,
+      "rowCount": 3,
       "columnCount": 5,
       "columns": [
         {
@@ -266,7 +262,7 @@
     },
     "venta_parametros": {
       "tableName": "venta_parametros",
-      "rowCount": 545,
+      "rowCount": 0,
       "columnCount": 4,
       "columns": [
         {
@@ -289,7 +285,7 @@
     },
     "ventas": {
       "tableName": "ventas",
-      "rowCount": 7559,
+      "rowCount": 1,
       "columnCount": 7,
       "columns": [
         {

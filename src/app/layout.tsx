@@ -4,8 +4,8 @@ import { Inter } from 'next/font/google'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata = {
-  title: 'Punto de Venta',
-  description: 'Sistema de Punto de Venta',
+  title: 'Cafetería MiTienda',
+  description: 'Sistema de Gestión de Inventario y Ventas',
 }
 
 export default function RootLayout({
@@ -15,7 +15,13 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es">
-      <body className={inter.className}>{children}</body>
+      <head>
+        <link rel="icon" href="/favicon.ico" />
+        <meta name="theme-color" content="#FFA500" />
+      </head>
+      <body className={`${inter.className} bg-orange-50 min-h-screen`}>
+        {children}
+      </body>
     </html>
   )
 }

@@ -13,6 +13,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Credenciales inválidas' }, { status: 401 });
   }
 
+  // Verificar si el usuario está activo (solo para vendedores)
+  if (user.rol === 'Vendedor' && user.activo === false) {
+    return NextResponse.json({ 
+      error: 'Acceso denegado. Por favor, póngase en contacto con el administrador.' 
+    }, { status: 403 });
+  }
+
   // Return user data directly without token
   return NextResponse.json({
     id: user.id.toString(),

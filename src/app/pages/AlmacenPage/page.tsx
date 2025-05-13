@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import * as XLSX from 'xlsx';
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
-import { startOfWeek, endOfWeek, format } from 'date-fns';
+import { startOfWeek, endOfWeek, format, parseISO, isValid } from 'date-fns';
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -13,13 +13,14 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Menu, ArrowUpDown, Plus, Truck, UserPlus, FileSpreadsheet, Trash2, X } from "lucide-react"
+import { Menu, ArrowUpDown, Plus, Truck, UserPlus, FileSpreadsheet, Trash2, X, Minus, Loader2, MoreVertical, Eye, Edit, DollarSign, Search } from "lucide-react"
 import {
   getVendedores,
   getCurrentUser,
   getInventario,
   registerUser,
   getProductosCompartidos,
+  getProductosCafeteria,
   getVentasVendedor,
   agregarProducto,
   editarProducto,
@@ -32,7 +33,10 @@ import {
   createMerma,
   getMermas,
   deleteMerma,
-  verificarNombreProducto
+  verificarNombreProducto,
+  getVendedorProductos,
+  getVendedorVentas,
+  getVendedorTransacciones
 } from '../../services/api'
 import ProductDialog from '@/components/ProductDialog'
 import VendorDialog from '@/components/VendedorDialog'
@@ -41,6 +45,11 @@ import { ImageUpload } from '@/components/ImageUpload'
 import { Producto, Vendedor, Venta, Transaccion, Merma, Parametro } from '@/types'
 import { toast } from "@/hooks/use-toast";
 import { useVendorProducts } from '@/hooks/use-vendor-products';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import VentasCafeteriaList from '@/components/VentasCafeteriaList'
+import TransaccionesList from '@/components/TransaccionesList'
+import BalanceSection from '@/components/BalanceSection'
+import React from 'react'
 
 
 interface VentaSemana {
@@ -135,6 +144,7 @@ const useAlmacenData = () => {
 export default function AlmacenPage() {
   const { isAuthenticated, vendedores, inventario, fetchVendedores, fetchInventario, setInventario } = useAlmacenData()
   const [showRegisterModal, setShowRegisterModal] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
   const [newUser, setNewUser] = useState<NewUser>({
     nombre: '',
     password: '',
@@ -145,6 +155,7 @@ export default function AlmacenPage() {
   const [ventasVendedor, setVentasVendedor] = useState<Venta[]>([])
   const [transaccionesVendedor, setTransaccionesVendedor] = useState<Transaccion[]>([])
   const [vendedorSeleccionado, setVendedorSeleccionado] = useState<Vendedor | null>(null)
+  const [modeVendedor, setModeVendedor] = useState<'view' | 'edit' | 'ventas'>('view')
   const [ventasSemanales, setVentasSemanales] = useState<VentaSemana[]>([])
   const [ventasDiarias, setVentasDiarias] = useState<VentaDia[]>([])
   const [showAddProductModal, setShowAddProductModal] = useState(false)
@@ -185,6 +196,18 @@ export default function AlmacenPage() {
   const [nombreExiste, setNombreExiste] = useState(false);
   const [verificandoNombre, setVerificandoNombre] = useState(false);
   const { updateProductQuantity } = useVendorProducts();
+  const [activeCafeteriaTab, setActiveCafeteriaTab] = useState<'productos' | 'transacciones' | 'ventas'>('productos');
+  const [reduceDialogOpen, setReduceDialogOpen] = useState(false)
+  const [productToReduce, setProductToReduce] = useState<Producto | null>(null)
+  const [quantityToReduce, setQuantityToReduce] = useState(0)
+  const [parameterQuantities, setParameterQuantities] = useState<Record<string, number>>({})
+  const [showDestinationDialog, setShowDestinationDialog] = useState(false)
+  const [selectedDestination, setSelectedDestination] = useState<'almacen' | 'merma' | null>(null)
+  const [cafeteriaFilterOption, setCafeteriaFilterOption] = useState<'todos' | 'pocos' | 'sin-existencias'>('todos')
+  const [cafeteriaProductos, setCafeteriaProductos] = useState<Producto[]>([])
+  const [cafeteriaSortBy, setCafeteriaSortBy] = useState<'nombre' | 'precio' | 'cantidadCaf' | 'cantidadAlm'>('nombre')
+  const [cafeteriaSortOrder, setCafeteriaSortOrder] = useState<'asc' | 'desc'>('asc')
+  const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set());
 
   const isProductoAgotado = (producto: Producto): boolean => {
     if (producto.tiene_parametros && producto.parametros) {
@@ -206,6 +229,43 @@ export default function AlmacenPage() {
       case 'inventario':
         return filteredBySearch.filter(producto => !isProductoAgotado(producto));
       default:
+        return filteredBySearch;
+    }
+  };
+
+  const getFilteredCafeteriaProducts = (productos: Producto[]): Producto[] => {
+    // Filtrar primero por término de búsqueda
+    const filteredBySearch = productos.filter((producto) =>
+      producto.nombre.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    // Calcular la cantidad total para cada producto
+    const calcularCantidadTotal = (producto: Producto): number => {
+      if (producto.tiene_parametros && producto.parametros) {
+        // Filtrar parámetros válidos (no numéricos y cantidad > 0)
+        const parametrosValidos = producto.parametros.filter(param => 
+          isNaN(Number(param.nombre)) && // Excluir nombres que son solo números
+          param.nombre.trim() !== '' // Excluir nombres vacíos
+        );
+        
+        return parametrosValidos.reduce((total, param) => total + (param.cantidad || 0), 0);
+      }
+      return producto.cantidad || 0;
+    };
+
+    // Luego aplicar el filtro seleccionado
+    switch (cafeteriaFilterOption) {
+      case 'pocos':
+        return filteredBySearch.filter(producto => {
+          const cantidad = calcularCantidadTotal(producto);
+          return cantidad >= 0 && cantidad < 5; // Incluir productos con cantidad 0
+        });
+      case 'sin-existencias':
+        return filteredBySearch.filter(producto => {
+          const cantidad = calcularCantidadTotal(producto);
+          return cantidad === 0;
+        });
+      default: // 'todos'
         return filteredBySearch;
     }
   };
@@ -302,6 +362,12 @@ export default function AlmacenPage() {
       if (vendedorSeleccionado) {
         const updatedProducts = await getProductosCompartidos();
         setProductosVendedor(updatedProducts);
+      }
+
+      // Si estamos en la sección de cafetería, actualizar específicamente esos productos
+      if (activeSection === 'cafeteria') {
+        const updatedCafeteriaProducts = await getProductosCafeteria();
+        setCafeteriaProductos(updatedCafeteriaProducts);
       }
 
       await fetchInventario();
@@ -500,14 +566,14 @@ export default function AlmacenPage() {
             }))
           : undefined;
 
-        try {
-          await entregarProducto(
-            productId,
-            cantidadTotal,
-            parametrosArray
-          );
-        } catch (error) {
-          console.error(`Error en entrega: ${error}`);
+          try {
+            await entregarProducto(
+              productId,
+              cantidadTotal,
+              parametrosArray
+            );
+          } catch (error) {
+            console.error(`Error en entrega: ${error}`);
           toast({
             title: "Error",
             description: `Error al entregar ${producto.nombre}`,
@@ -598,96 +664,143 @@ export default function AlmacenPage() {
     }
   }
 
-  const calcularVentasDiarias = (ventas: Venta[]): VentaDia[] => {
-    const ventasPorDia: { [key: string]: Venta[] } = {};
-    ventas.forEach(venta => {
-      const fecha = venta.fecha.split('T')[0];
-      if (!ventasPorDia[fecha]) ventasPorDia[fecha] = [];
-      ventasPorDia[fecha].push(venta);
+  // Función para calcular ventas diarias
+  const calcularVentasDiarias = (ventas: Venta[]) => {
+    const ventasPorDia = ventas.reduce((acc: Record<string, Venta[]>, venta) => {
+      const fecha = parseISO(venta.fecha);
+      if (!isValid(fecha)) {
+        console.error(`Fecha inválida en venta: ${venta.fecha}`);
+        return acc;
+      }
+      
+      const fechaStr = format(fecha, 'yyyy-MM-dd');
+      if (!acc[fechaStr]) {
+        acc[fechaStr] = [];
+      }
+      acc[fechaStr].push(venta);
+      return acc;
+    }, {});
+
+    const ventasDiarias = Object.entries(ventasPorDia).map(([fecha, ventasDelDia]) => {
+      return {
+        fecha,
+        ventas: ventasDelDia,
+        total: ventasDelDia.reduce((sum, venta) => sum + parseFloat(venta.total.toString()), 0)
+      };
     });
 
-    return Object.entries(ventasPorDia).map(([fecha, ventasDelDia]) => ({
-      fecha,
-      ventas: ventasDelDia,
-      total: ventasDelDia.reduce((sum, venta) => sum + parseFloat(venta.total.toString()), 0)
-    }));
+    setVentasDiarias(ventasDiarias);
   };
 
-  const calcularVentasSemanales = (ventas: Venta[]): VentaSemana[] => {
-    const weekMap = new Map();
-
-    const getWeekKey = (date: Date) => {
-      // Asegúrate de que la semana empiece en lunes
-      const mondayOfWeek = startOfWeek(date, { weekStartsOn: 1 });
-      // Asegura que la semana empieza el lunes
-      const sundayOfWeek = endOfWeek(date, { weekStartsOn: 1 });
-      // Y termina el domingo
-      return `${format(mondayOfWeek, 'yyyy-MM-dd')}_${format(sundayOfWeek, 'yyyy-MM-dd')}`;
-    };
-
-    ventas.forEach((venta) => {
-      const ventaDate = new Date(venta.fecha);
-
-      // Validar que la fecha sea válida
-      if (isNaN(ventaDate.getTime())) {
-        console.error(`Fecha inválida en la venta: ${venta.fecha}`);
-        return;
+  // Función para calcular ventas semanales
+  const calcularVentasSemanales = (ventas: Venta[]) => {
+    const ventasPorSemana = ventas.reduce((acc: Record<string, VentaSemana>, venta) => {
+      const fecha = parseISO(venta.fecha);
+      if (!isValid(fecha)) {
+        console.error(`Fecha inválida en venta: ${venta.fecha}`);
+        return acc;
       }
-
-      const weekKey = getWeekKey(ventaDate);
-
-      // Si la semana no existe en el Map, se agrega
-      if (!weekMap.has(weekKey)) {
-        const mondayOfWeek = startOfWeek(ventaDate, { weekStartsOn: 1 });
-        const sundayOfWeek = endOfWeek(ventaDate, { weekStartsOn: 1 });
-        weekMap.set(weekKey, {
-          fechaInicio: format(mondayOfWeek, 'yyyy-MM-dd'),
-          fechaFin: format(sundayOfWeek, 'yyyy-MM-dd'),
+      
+      const inicioSemana = startOfWeek(fecha, { weekStartsOn: 1 });
+      const finSemana = endOfWeek(fecha, { weekStartsOn: 1 });
+      const claveWeek = `${format(inicioSemana, 'yyyy-MM-dd')}_${format(finSemana, 'yyyy-MM-dd')}`;
+      
+      if (!acc[claveWeek]) {
+        acc[claveWeek] = {
+          fechaInicio: format(inicioSemana, 'yyyy-MM-dd'),
+          fechaFin: format(finSemana, 'yyyy-MM-dd'),
           ventas: [],
           total: 0,
-          ganancia: 0,
-        });
+          ganancia: 0
+        };
       }
+      
+      acc[claveWeek].ventas.push(venta);
+      const ventaTotal = parseFloat(venta.total.toString());
+      acc[claveWeek].total += ventaTotal;
+      acc[claveWeek].ganancia = parseFloat((acc[claveWeek].total * 0.08).toFixed(2));
+      
+      return acc;
+    }, {});
 
-      // Obtener la semana y agregar una copia de la venta
-      const currentWeek = weekMap.get(weekKey)!;
-      currentWeek.ventas.push({ ...venta });
-
-      // Acumulación del total
-      currentWeek.total += typeof venta.total === 'number' ? venta.total : parseFloat(venta.total) || 0;
-
-      // Calcular la ganancia
-      currentWeek.ganancia = parseFloat((currentWeek.total * 0.08).toFixed(2));
-    });
-
-    return Array.from(weekMap.values());
+    const ventasSemanas = Object.values(ventasPorSemana);
+    setVentasSemanales(ventasSemanas);
   };
 
-
-  const handleVerVendedor = async (vendedor: Vendedor) => {
+  // Funciones auxiliares
+  const getProductosCompartidos = async () => {
+    // Esta función debería estar definida en el servicio API
+    // Pero por ahora, usamos la función existente como alternativa
     try {
-      const [ventas, transacciones] = await Promise.all([
-        getVentasVendedor(vendedor.id),
-        getTransaccionesVendedor()
-      ]);
-
-      // Obtener productos del inventario compartido
-      const productos = await getProductosCompartidos();
-      
-      setVendedorSeleccionado(vendedor);
-      setProductosVendedor(productos);
-      setVentasVendedor(ventas);
-      setTransaccionesVendedor(transacciones);
-      setVentasSemanales(calcularVentasSemanales(ventas));
-      setVentasDiarias(calcularVentasDiarias(ventas));
-      setActiveSection('vendedor');
+      return await getVendedorProductos(vendedorSeleccionado?.id || '');
     } catch (error) {
-      console.error('Error al obtener datos del vendedor:', error);
+      console.error('Error al obtener productos compartidos:', error);
+      return [];
+    }
+  };
+
+  const handleVerVendedor = async (vendedor: Vendedor, initialMode: 'view' | 'edit' | 'ventas' = 'view') => {
+    try {
+      setIsLoading(true);
+      
+      // Primero establecemos el modo y el vendedor seleccionado para mostrar algo al usuario
+      setModeVendedor(initialMode);
+      setVendedorSeleccionado(vendedor);
+      
+      // Usamos Promise.allSettled para que si alguna falla, las otras continúen
+      const [productosResult, ventasResult, transaccionesResult] = await Promise.allSettled([
+        getVendedorProductos(vendedor.id),
+        getVendedorVentas(vendedor.id),
+        getVendedorTransacciones(vendedor.id)
+      ]);
+      
+      // Procesamos los resultados individualmente
+      if (productosResult.status === 'fulfilled') {
+        // Mapeamos los productos a la estructura esperada
+        const productosCorregidos = productosResult.value.map(p => ({
+          id: p.id,
+          nombre: p.nombre,
+          precio: p.precio,
+          cantidad: p.cantidad,
+          foto: p.foto || null,
+          tiene_parametros: Boolean(p.tiene_parametros || p.tieneParametros),
+          tieneParametros: Boolean(p.tiene_parametros || p.tieneParametros),
+          parametros: p.parametros || []
+        }));
+        
+        setProductosVendedor(productosCorregidos);
+      } else {
+        console.error('Error al obtener productos:', productosResult.reason);
+        setProductosVendedor([]); // Array vacío si hay error
+      }
+      
+      if (ventasResult.status === 'fulfilled') {
+        const ventas = ventasResult.value;
+        setVentasVendedor(ventas);
+        calcularVentasDiarias(ventas);
+        calcularVentasSemanales(ventas);
+      } else {
+        console.error('Error al obtener ventas:', ventasResult.reason);
+        setVentasVendedor([]);
+        setVentasDiarias([]);
+        setVentasSemanales([]);
+      }
+      
+      if (transaccionesResult.status === 'fulfilled') {
+        setTransaccionesVendedor(transaccionesResult.value);
+      } else {
+        console.error('Error al obtener transacciones:', transaccionesResult.reason);
+        setTransaccionesVendedor([]); // Array vacío si hay error
+      }
+    } catch (error) {
+      console.error('Error al cargar datos del vendedor:', error);
       toast({
         title: "Error",
-        description: "No se pudieron cargar los datos del vendedor",
+        description: "No se pudieron cargar algunos datos del vendedor. La información puede estar incompleta.",
         variant: "destructive",
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -911,36 +1024,223 @@ export default function AlmacenPage() {
     }
   };
 
+  useEffect(() => {
+    const loadCafeteriaData = async () => {
+      if (activeSection === 'cafeteria') {
+        try {
+          // Cambiar getProductosCompartidos por getProductosCafeteria
+          const productos = await getProductosCafeteria();
+          
+          // Debug para ver qué estamos recibiendo
+          console.log('Debug - Productos recibidos de getProductosCafeteria:', productos);
+          
+          if (productos && productos.length > 0) {
+            setProductosVendedor(productos);
+            setCafeteriaProductos(productos);
+          } else {
+            // Si no hay productos, establecer arrays vacíos
+            setProductosVendedor([]);
+            setCafeteriaProductos([]);
+            toast({
+              title: "Información",
+              description: "No hay productos disponibles en la cafetería.",
+              variant: "default",
+            });
+          }
+          
+          // Cargar transacciones
+          const transacciones = await getTransaccionesVendedor();
+          setTransaccionesVendedor(transacciones);
+          
+          // Actualizar también el inventario general
+          await fetchInventario();
+        } catch (error) {
+          console.error('Error al cargar datos de cafetería:', error);
+          toast({
+            title: "Error",
+            description: "No se pudieron cargar los datos de la cafetería",
+            variant: "destructive",
+          });
+        }
+      }
+    };
+
+    loadCafeteriaData();
+  }, [activeSection]);
+
+  // Corregir la función handleReduceCafeteriaProduct para que coincida con la firma correcta
+  const handleReduceCafeteriaProduct = async (
+    productId: string,
+    cantidad: number,
+    parametros?: Array<{ nombre: string; cantidad: number }>
+  ) => {
+    try {
+      // La función reducirProductoInventario ahora espera solo 3 parámetros
+      await reducirProductoInventario(productId, cantidad, parametros);
+      
+      // Actualizar los datos después de la operación
+      const updatedProducts = await getProductosCafeteria();
+      setProductosVendedor(updatedProducts);
+      setCafeteriaProductos(updatedProducts);
+      
+      // Actualizar las transacciones
+      const transacciones = await getTransaccionesVendedor();
+      setTransaccionesVendedor(transacciones);
+      
+      // Actualizar el inventario general
+      await fetchInventario();
+      
+      toast({
+        title: "Éxito",
+        description: "Producto reducido correctamente",
+      });
+      
+    } catch (error) {
+      console.error('Error al reducir producto:', error);
+      toast({
+        title: "Error",
+        description: "Error al reducir el producto",
+        variant: "destructive",
+      });
+      throw error; // Re-lanzar el error para que pueda ser capturado por el manejador superior
+    }
+  };
+
+  const handleCafeteriaSort = (key: 'nombre' | 'precio' | 'cantidadCaf' | 'cantidadAlm') => {
+    if (cafeteriaSortBy === key) {
+      setCafeteriaSortOrder(cafeteriaSortOrder === 'asc' ? 'desc' : 'asc')
+    } else {
+      setCafeteriaSortBy(key)
+      setCafeteriaSortOrder('asc')
+    }
+  }
+
+  const handleToggleVendedorActivo = async (vendedorId: string, activo: boolean) => {
+    try {
+      // Solo enviamos el campo activo para actualizar
+      await editarVendedor(vendedorId, { activo });
+      await fetchVendedores();
+      toast({
+        title: "Éxito",
+        description: `Vendedor ${activo ? 'activado' : 'desactivado'} exitosamente`,
+      });
+    } catch (error) {
+      console.error('Error al actualizar el estado del vendedor:', error);
+      toast({
+        title: "Error",
+        description: "Error al actualizar el estado del vendedor",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Efecto para cargar los datos del vendedor cuando cambia
+  useEffect(() => {
+    if (!vendedorSeleccionado) return;
+    
+    setIsLoading(true);
+    
+    // Limpiar datos anteriores
+    setProductosVendedor([]);
+    setVentasVendedor([]);
+    setTransaccionesVendedor([]);
+    setVentasDiarias([]);
+    setVentasSemanales([]);
+    
+    const loadData = async () => {
+      try {
+        if (modeVendedor === 'edit') {
+          // Para editar solo necesitamos los productos
+          const productos = await getVendedorProductos(vendedorSeleccionado.id);
+          setProductosVendedor(productos.map(p => ({
+            ...p,
+            tiene_parametros: p.tiene_parametros || p.tieneParametros || false,
+            tieneParametros: p.tiene_parametros || p.tieneParametros || false,
+            foto: p.foto || ''
+          })) as any);
+        } else if (modeVendedor === 'ventas') {
+          // Para ventas necesitamos las ventas y cálculos relacionados
+          const ventas = await getVendedorVentas(vendedorSeleccionado.id);
+          setVentasVendedor(ventas);
+          calcularVentasDiarias(ventas);
+          calcularVentasSemanales(ventas);
+        }
+      } catch (error) {
+        console.error('Error al cargar datos del vendedor:', error);
+        toast({
+          title: "Error",
+          description: "No se pudieron cargar algunos datos. La información podría estar incompleta.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    loadData();
+  }, [vendedorSeleccionado, modeVendedor]);
+
+  // Agregar una función para alternar la expansión de productos
+  const toggleProductExpansion = (productId: string) => {
+    setExpandedProducts(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(productId)) {
+        newSet.delete(productId);
+      } else {
+        newSet.add(productId);
+      }
+      return newSet;
+    });
+  };
+
   if (!isAuthenticated) {
     return <div>Cargando...</div>
   }
 
   return (
-    <div className="container mx-auto p-4 relative">
+    <div className="container mx-auto p-4 relative bg-orange-50">
       <div className="flex justify-between items-center mb-4">
-        <h1 className="text-2xl font-bold">Panel de Almacén</h1>
+        <h1 className="text-2xl font-bold text-orange-800">Panel de Almacén</h1>
         <Sheet open={isMenuOpen} onOpenChange={setIsMenuOpen}>
           <SheetTrigger asChild>
-            <Button variant="outline" size="icon" className="fixed top-4 right-4 z-50">
-              <Menu className="h-6 w-6" />
+            <Button variant="outline" size="icon" className="fixed top-4 right-4 z-50 border-orange-300 hover:bg-orange-100">
+              <Menu className="h-6 w-6 text-orange-600" />
               <span className="sr-only">Abrir menú</span>
             </Button>
           </SheetTrigger>
-          <SheetContent side="right">
+          <SheetContent side="right" className="bg-white border-l border-orange-200">
             <nav className="flex flex-col space-y-4">
               <Button
                 variant="ghost"
-                className={activeSection === 'productos' ? 'bg-accent' : ''}
+                className={activeSection === 'productos' ? 'bg-orange-100 text-orange-800' : 'text-orange-700 hover:bg-orange-50 hover:text-orange-800'}
                 onClick={() => {
                   setActiveSection('productos')
                   setIsMenuOpen(false)
                 }}
               >
-                Productos
+                Almacén
               </Button>
               <Button
                 variant="ghost"
-                className={activeSection === 'vendedores' ? 'bg-accent' : ''}
+                className={activeSection === 'cafeteria' ? 'bg-orange-100 text-orange-800' : 'text-orange-700 hover:bg-orange-50 hover:text-orange-800'}
+                onClick={() => {
+                  setActiveSection('cafeteria')
+                  setIsMenuOpen(false)
+                  
+                  if (!cafeteriaProductos.length) {
+                    toast({
+                      title: "Aviso",
+                      description: "No se encontró un vendedor con el nombre 'Cafetería'. Por favor, créelo primero.",
+                      variant: "default",
+                    });
+                  }
+                }}
+              >
+                Cafetería
+              </Button>
+              <Button
+                variant="ghost"
+                className={activeSection === 'vendedores' ? 'bg-orange-100 text-orange-800' : 'text-orange-700 hover:bg-orange-50 hover:text-orange-800'}
                 onClick={() => {
                   setActiveSection('vendedores')
                   setIsMenuOpen(false)
@@ -950,13 +1250,23 @@ export default function AlmacenPage() {
               </Button>
               <Button
                 variant="ghost"
-                className={activeSection === 'ventas' ? 'bg-accent' : ''}
+                className={activeSection === 'ventas' ? 'bg-orange-100 text-orange-800' : 'text-orange-700 hover:bg-orange-50 hover:text-orange-800'}
                 onClick={() => {
                   setActiveSection('ventas')
                   setIsMenuOpen(false)
                 }}
               >
                 Ventas
+              </Button>
+              <Button
+                variant="ghost"
+                className={activeSection === 'balance' ? 'bg-orange-100 text-orange-800' : 'text-orange-700 hover:bg-orange-50 hover:text-orange-800'}
+                onClick={() => {
+                  setActiveSection('balance')
+                  setIsMenuOpen(false)
+                }}
+              >
+                Balance
               </Button>
             </nav>
           </SheetContent>
@@ -970,7 +1280,7 @@ export default function AlmacenPage() {
           <div className="flex flex-wrap justify-end gap-2 mb-4">
             <Button
               onClick={() => setShowAddProductModal(true)}
-              className="flex-grow sm:flex-grow-0 bg-green-500 hover:bg-green-600 text-white"
+              className="flex-grow sm:flex-grow-0 bg-primary hover:bg-primary/90 text-white"
             >
               <Plus className="mr-2 h-4 w-4" />
               <span className="hidden sm:inline">Agregar Producto</span>
@@ -978,7 +1288,7 @@ export default function AlmacenPage() {
             </Button>
             <Button
               onClick={() => setShowMassDeliveryDialog(true)}
-              className="flex-grow sm:flex-grow-0 bg-blue-500 hover:bg-blue-600 text-white"
+              className="flex-grow sm:flex-grow-0 bg-orange-400 hover:bg-orange-500 text-white"
             >
               <Truck className="mr-2 h-4 w-4" />
               <span className="hidden sm:inline">Entrega Masiva</span>
@@ -986,7 +1296,7 @@ export default function AlmacenPage() {
             </Button>
             <Button
               onClick={handleExportToExcel}
-              className="flex-grow sm:flex-grow-0 bg-purple-500 hover:bg-purple-600 text-white"
+              className="flex-grow sm:flex-grow-0 bg-orange-300 hover:bg-orange-400 text-orange-800"
             >
               <FileSpreadsheet className="mr-2 h-4 w-4" />
               <span className="hidden sm:inline">Exportar a Excel</span>
@@ -994,15 +1304,16 @@ export default function AlmacenPage() {
             </Button>
           </div>
 
-          <Card>
-            <CardHeader>
+          <Card className="border-orange-200 shadow-md">
+            <CardHeader className="border-b border-orange-100">
               <div className="flex justify-between items-center">
-                <CardTitle>Lista de productos</CardTitle>
+                <CardTitle className="text-orange-800">Productos en Almacén</CardTitle>
                 <div className="flex space-x-2">
                   <Button
                     variant={activeProductTab === 'inventario' ? "default" : "outline"}
                     onClick={() => setActiveProductTab('inventario')}
                     size="sm"
+                    className={activeProductTab === 'inventario' ? "bg-primary text-white" : "border-orange-200 text-orange-700 hover:bg-orange-50"}
                   >
                     Inventario
                   </Button>
@@ -1010,7 +1321,7 @@ export default function AlmacenPage() {
                     variant={activeProductTab === 'agotados' ? "default" : "outline"}
                     onClick={() => setActiveProductTab('agotados')}
                     size="sm"
-                    className="relative"
+                    className={`relative ${activeProductTab === 'agotados' ? "bg-primary text-white" : "border-orange-200 text-orange-700 hover:bg-orange-50"}`}
                   >
                     Agotados
                   </Button>
@@ -1018,6 +1329,7 @@ export default function AlmacenPage() {
                     variant={activeProductTab === 'merma' ? "default" : "outline"}
                     onClick={() => setActiveProductTab('merma')}
                     size="sm"
+                    className={activeProductTab === 'merma' ? "bg-primary text-white" : "border-orange-200 text-orange-700 hover:bg-orange-50"}
                   >
                     Merma
                   </Button>
@@ -1267,19 +1579,50 @@ export default function AlmacenPage() {
             <CardContent>
               <div className="space-y-2">
                 {vendedores.map((vendedor) => (
-                  <Button
+                  <div
                     key={vendedor.id}
-                    onClick={() => handleVerVendedor(vendedor)}
-                    className="w-full h-auto p-4 flex items-center text-left bg-white hover:bg-gray-100 border border-gray-200 rounded-lg shadow-sm transition-colors"
-                    variant="ghost"
+                    className="w-full h-auto p-4 flex items-center text-left bg-white border border-gray-200 rounded-lg shadow-sm"
                   >
-                    <div className="flex-grow">
-                      <span className="font-semibold text-gray-800">{vendedor.nombre}</span>
-                      <div className="text-sm text-gray-600">
-                        <span>Teléfono: {vendedor.telefono}</span>
+                    <div className="flex items-center space-x-4 flex-grow">
+                      <Checkbox 
+                        id={`vendedor-activo-${vendedor.id}`}
+                        checked={vendedor.activo !== false}
+                        onCheckedChange={(checked) => {
+                          handleToggleVendedorActivo(vendedor.id, !!checked);
+                        }}
+                      />
+                      <div className="flex-grow">
+                        <span className="font-semibold text-gray-800">{vendedor.nombre}</span>
+                        <div className="text-sm text-gray-600">
+                          <span>Teléfono: {vendedor.telefono}</span>
+                        </div>
+                      </div>
+                      <div className="flex space-x-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => {
+                            setVendedorSeleccionado(vendedor);
+                            setModeVendedor('edit');
+                          }}
+                        >
+                          <Edit className="h-4 w-4" />
+                          <span className="ml-1">Editar</span>
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => {
+                            setVendedorSeleccionado(vendedor);
+                            setModeVendedor('ventas');
+                          }}
+                        >
+                          <DollarSign className="h-4 w-4" />
+                          <span className="ml-1">Ventas</span>
+                        </Button>
                       </div>
                     </div>
-                  </Button>
+                  </div>
                 ))}
               </div>
             </CardContent>
@@ -1294,135 +1637,454 @@ export default function AlmacenPage() {
         <SalesSection userRole="Almacen" />
       )}
 
+      {activeSection === 'cafeteria' && (
+        <div>
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <CardTitle>Productos en Cafetería</CardTitle>
+                <div className="flex space-x-2">
+                  <Button
+                    variant={activeCafeteriaTab === 'productos' ? "default" : "outline"}
+                    onClick={() => setActiveCafeteriaTab('productos')}
+                    size="sm"
+                  >
+                    Productos
+                  </Button>
+                  <Button
+                    variant={activeCafeteriaTab === 'transacciones' ? "default" : "outline"}
+                    onClick={() => setActiveCafeteriaTab('transacciones')}
+                    size="sm"
+                  >
+                    Transacciones
+                  </Button>
+                  <Button
+                    variant={activeCafeteriaTab === 'ventas' ? "default" : "outline"}
+                    onClick={() => setActiveCafeteriaTab('ventas')}
+                    size="sm"
+                  >
+                    Ventas
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {activeCafeteriaTab === 'productos' ? (
+                <div>
+                  {/* Barra de búsqueda para productos */}
+                  <div className="mb-4 flex flex-col space-y-2 md:flex-row md:space-y-0 md:space-x-2 items-start">
+                    <Input
+                      placeholder="Buscar productos..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="flex-grow"
+                    />
+                    <Select 
+                      value={cafeteriaFilterOption} 
+                      onValueChange={(value) => setCafeteriaFilterOption(value as 'todos' | 'pocos' | 'sin-existencias')}
+                    >
+                      <SelectTrigger className="w-full md:w-auto min-w-[200px]">
+                        <SelectValue placeholder="Filtrar productos" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="todos">Todos los productos</SelectItem>
+                        <SelectItem value="pocos">Menos de 5 unidades</SelectItem>
+                        <SelectItem value="sin-existencias">Sin existencias</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  {/* Tabla de productos en cafetería */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Foto
+                          </th>
+                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <button
+                              onClick={() => handleCafeteriaSort('nombre')}
+                              className="flex items-center space-x-1 focus:outline-none"
+                            >
+                              <span>Nombre</span>
+                              <ArrowUpDown className="h-3 w-3" />
+                            </button>
+                          </th>
+                          <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <button
+                              onClick={() => handleCafeteriaSort('precio')}
+                              className="flex items-center justify-end space-x-1 focus:outline-none ml-auto"
+                            >
+                              <span>Precio</span>
+                              <ArrowUpDown className="h-3 w-3" />
+                            </button>
+                          </th>
+                          <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <button
+                              onClick={() => handleCafeteriaSort('cantidadCaf')}
+                              className="flex items-center justify-end space-x-1 focus:outline-none ml-auto"
+                            >
+                              <span>Cant. Caf</span>
+                              <ArrowUpDown className="h-3 w-3" />
+                            </button>
+                          </th>
+                          <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <button
+                              onClick={() => handleCafeteriaSort('cantidadAlm')}
+                              className="flex items-center justify-end space-x-1 focus:outline-none ml-auto"
+                            >
+                              <span>Cant. Alm</span>
+                              <ArrowUpDown className="h-3 w-3" />
+                            </button>
+                          </th>
+                          <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Acción
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {getFilteredCafeteriaProducts(productosVendedor)
+                          .sort((a, b) => {
+                            // Calcular la cantidad en cafetería de los productos
+                            const cantidadCafeteriaA = a.tiene_parametros && a.parametros
+                              ? a.parametros.filter(p => isNaN(Number(p.nombre)) && p.nombre.trim() !== '')
+                                  .reduce((sum, param) => sum + param.cantidad, 0)
+                              : a.cantidad;
+                              
+                            const cantidadCafeteriaB = b.tiene_parametros && b.parametros
+                              ? b.parametros.filter(p => isNaN(Number(p.nombre)) && p.nombre.trim() !== '')
+                                  .reduce((sum, param) => sum + param.cantidad, 0)
+                              : b.cantidad;
+                              
+                            // Buscar el producto correspondiente en el almacén
+                            const productoAlmacenA = inventario.find(p => p.id === a.id);
+                            const productoAlmacenB = inventario.find(p => p.id === b.id);
+                            
+                            // Calcular la cantidad en almacén
+                            const cantidadAlmacenA = productoAlmacenA 
+                              ? (productoAlmacenA.tiene_parametros && productoAlmacenA.parametros 
+                                ? productoAlmacenA.parametros.filter(p => isNaN(Number(p.nombre)) && p.nombre.trim() !== '')
+                                    .reduce((sum, param) => sum + param.cantidad, 0) 
+                                : productoAlmacenA.cantidad)
+                              : 0;
+                              
+                            const cantidadAlmacenB = productoAlmacenB 
+                              ? (productoAlmacenB.tiene_parametros && productoAlmacenB.parametros 
+                                ? productoAlmacenB.parametros.filter(p => isNaN(Number(p.nombre)) && p.nombre.trim() !== '')
+                                    .reduce((sum, param) => sum + param.cantidad, 0) 
+                                : productoAlmacenB.cantidad)
+                              : 0;
+                            
+                            // Ordenar según el campo seleccionado
+                            switch (cafeteriaSortBy) {
+                              case 'nombre':
+                                return cafeteriaSortOrder === 'asc'
+                                  ? a.nombre.localeCompare(b.nombre)
+                                  : b.nombre.localeCompare(a.nombre);
+                              case 'precio':
+                                return cafeteriaSortOrder === 'asc'
+                                  ? Number(a.precio) - Number(b.precio)
+                                  : Number(b.precio) - Number(a.precio);
+                              case 'cantidadCaf':
+                                return cafeteriaSortOrder === 'asc'
+                                  ? cantidadCafeteriaA - cantidadCafeteriaB
+                                  : cantidadCafeteriaB - cantidadCafeteriaA;
+                              case 'cantidadAlm':
+                                return cafeteriaSortOrder === 'asc'
+                                  ? cantidadAlmacenA - cantidadAlmacenB
+                                  : cantidadAlmacenB - cantidadAlmacenA;
+                              default:
+                                return 0;
+                            }
+                          })
+                          .map((producto) => {
+                            // Encontrar el producto correspondiente en el almacén
+                            const productoAlmacen = inventario.find(p => p.id === producto.id);
+                            
+                            // Calcular la cantidad total en el almacén
+                            const cantidadAlmacen = productoAlmacen 
+                              ? (productoAlmacen.tiene_parametros && productoAlmacen.parametros 
+                                ? productoAlmacen.parametros.filter(p => isNaN(Number(p.nombre)) && p.nombre.trim() !== '')
+                                    .reduce((sum, param) => sum + param.cantidad, 0) 
+                                : productoAlmacen.cantidad)
+                              : 0;
+                            
+                            // Calcular la cantidad total en cafetería
+                            const cantidadCafeteria = producto.tiene_parametros && producto.parametros
+                              ? producto.parametros.filter(p => isNaN(Number(p.nombre)) && p.nombre.trim() !== '')
+                                  .reduce((sum, param) => sum + param.cantidad, 0)
+                              : producto.cantidad;
+                            
+                            // Determinar si es cantidad cero para aplicar el estilo rojo
+                            const cantidadCero = cantidadCafeteria === 0;
+                            
+                            return (
+                              <React.Fragment key={producto.id}>
+                                <tr 
+                                  className={`hover:bg-gray-50 ${cantidadCero ? 'bg-red-50' : ''} ${producto.tiene_parametros ? 'cursor-pointer' : ''}`}
+                                  onClick={() => {
+                                    if (producto.tiene_parametros && producto.parametros && producto.parametros.length > 0) {
+                                      toggleProductExpansion(producto.id);
+                                    }
+                                  }}
+                                >
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                    <div className="w-10 h-10 relative">
+                                      <Image
+                                        src={producto.foto || '/placeholder.svg'}
+                                        alt={producto.nombre}
+                                        fill
+                                        className="rounded-md object-cover"
+                                        onError={(e) => {
+                                          // Fallback a imagen por defecto
+                                          (e.target as HTMLImageElement).src = '/placeholder.svg';
+                                        }}
+                                      />
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                    <div className={`text-sm font-medium ${cantidadCero ? 'text-red-600' : 'text-gray-900'}`}>{producto.nombre}</div>
+                                    {producto.tiene_parametros && producto.parametros && producto.parametros.length > 0 && (
+                                      <div className="text-xs text-blue-500 hover:underline">
+                                        {expandedProducts.has(producto.id) ? 'Ocultar parámetros' : 'Ver parámetros'} ({producto.parametros.length})
+                                      </div>
+                                    )}
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-right">
+                                    <div className={`text-sm ${cantidadCero ? 'text-red-600' : 'text-gray-900'}`}>${Number(producto.precio).toFixed(2)}</div>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-right">
+                                    <div className={`text-sm ${cantidadCero ? 'text-red-600 font-semibold' : 'text-gray-900'}`}>
+                                      {cantidadCafeteria}
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-right">
+                                    <div className={`text-sm ${cantidadCero ? 'text-red-600' : 'text-gray-900'}`}>{cantidadAlmacen}</div>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-right">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={(e) => {
+                                        e.stopPropagation(); // Evitar que se expanda al hacer clic en el botón
+                                        setProductToReduce(producto);
+                                        setReduceDialogOpen(true);
+                                      }}
+                                      disabled={cantidadCero}
+                                    >
+                                      <Minus className="h-4 w-4" />
+                                    </Button>
+                                  </td>
+                                </tr>
+                                {expandedProducts.has(producto.id) && producto.tiene_parametros && producto.parametros && (
+                                  <tr className="bg-gray-50">
+                                    <td colSpan={6} className="px-6 py-3">
+                                      <div className="ml-12 space-y-2 text-sm">
+                                        {producto.parametros
+                                          .filter(p => isNaN(Number(p.nombre)) && p.nombre.trim() !== '')
+                                          .map((parametro, idx) => (
+                                            <div key={idx} className="bg-white p-2 rounded border">
+                                              <div className="font-medium">{parametro.nombre}</div>
+                                              <div className={`${parametro.cantidad === 0 ? 'text-red-600 font-semibold' : 'text-gray-700'}`}>
+                                                Cantidad: {parametro.cantidad}
+                                              </div>
+                                            </div>
+                                          ))}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                )}
+                              </React.Fragment>
+                            );
+                          })}
+                        {getFilteredCafeteriaProducts(productosVendedor).length === 0 && (
+                          <tr>
+                            <td colSpan={6} className="px-6 py-10 text-center text-gray-500">
+                              No se encontraron productos que coincidan con el filtro seleccionado
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : activeCafeteriaTab === 'ventas' ? (
+                <div className="space-y-4">
+                  <div className="mb-4">
+                    <div className="relative">
+                      <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                      <Input
+                        placeholder="Buscar por producto o vendedor..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pl-10"
+                      />
+                    </div>
+                  </div>
+                  <VentasCafeteriaList searchTerm={searchTerm} />
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="mb-4">
+                    <div className="relative">
+                      <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                      <Input
+                        type="search"
+                        placeholder="Buscar..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pl-10"
+                      />
+                    </div>
+                  </div>
+                  <div className="overflow-auto">
+                    <TransaccionesList
+                      transacciones={transaccionesVendedor}
+                      searchTerm={searchTerm}
+                      vendedorId=""
+                    />
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {activeSection === 'balance' && (
+        <BalanceSection />
+      )}
+
       <Dialog open={showMassDeliveryDialog} onOpenChange={setShowMassDeliveryDialog}>
         <DialogContent className="max-w-[95vw] w-full md:max-w-[600px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Entrega Masiva</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
-            <Input
-              placeholder="Buscar productos..."
-              value={productSearchTerm}
-              onChange={(e) => setProductSearchTerm(e.target.value)}
-            />
-            <div className="max-h-[55vh] overflow-y-auto space-y-2 pr-2">
-              {filteredInventarioForMassDelivery.map((producto) => (
-                <div key={producto.id} className="flex flex-col p-3 border rounded-lg bg-white">
-                  <div className="flex items-start gap-3">
-                    <div className="flex items-center h-5">
-                      <Checkbox
-                        id={`product-${producto.id}`}
-                        checked={!!selectedProducts[producto.id]}
-                        onCheckedChange={(checked) => {
-                          if (checked) {
-                            setSelectedProducts((prev) => ({
-                              ...prev,
-                              [producto.id]: {
-                                cantidad: 0,
-                                parametros: producto.tiene_parametros ? {} : undefined,
-                              },
-                            }));
-                          } else {
-                            setSelectedProducts((prev) => {
-                              const { [producto.id]: _, ...rest } = prev;
-                              return rest;
-                            });
-                          }
-                        }}
-                      />
-                    </div>
-
-                    <div className="w-16 h-16 relative rounded-md overflow-hidden flex-shrink-0">
-                      <Image
-                        src={producto.foto || '/placeholder.svg'}
-                        alt={producto.nombre}
-                        fill
-                        className="object-cover"
-                      />
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <label htmlFor={`product-${producto.id}`} className="font-medium text-sm block">
-                        {producto.nombre}
-                      </label>
-                      <div className="text-xs text-gray-600 mt-1 space-y-1">
-                        <p>Precio: ${producto.precio}</p>
-                        <p>Disponible: {producto.cantidad}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {selectedProducts[producto.id] && (
-                    <div className="mt-3 pl-8 space-y-3">
-                      {!producto.tiene_parametros ? (
-                        <div className="flex items-center gap-2">
-                          <label className="text-sm text-gray-600 flex-shrink-0">Cantidad:</label>
-                          <Input
-                            type="number"
-                            value={selectedProducts[producto.id]?.cantidad || ''}
-                            onChange={(e) =>
+            <div className="space-y-4">
+              <Input
+                placeholder="Buscar productos..."
+                value={productSearchTerm}
+                onChange={(e) => setProductSearchTerm(e.target.value)}
+              />
+              <div className="max-h-[55vh] overflow-y-auto space-y-2 pr-2">
+                {filteredInventarioForMassDelivery.map((producto) => (
+                  <div key={producto.id} className="flex flex-col p-3 border rounded-lg bg-white">
+                    <div className="flex items-start gap-3">
+                      <div className="flex items-center h-5">
+                        <Checkbox
+                          id={`product-${producto.id}`}
+                          checked={!!selectedProducts[producto.id]}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
                               setSelectedProducts((prev) => ({
                                 ...prev,
                                 [producto.id]: {
-                                  ...prev[producto.id],
-                                  cantidad: parseInt(e.target.value, 10) || 0,
+                                  cantidad: 0,
+                                  parametros: producto.tiene_parametros ? {} : undefined,
                                 },
-                              }))
+                              }));
+                            } else {
+                              setSelectedProducts((prev) => {
+                                const { [producto.id]: _, ...rest } = prev;
+                                return rest;
+                              });
                             }
-                            className="w-24 h-8"
-                            min={1}
-                            max={producto.cantidad}
-                          />
+                          }}
+                        />
+                      </div>
+
+                      <div className="w-16 h-16 relative rounded-md overflow-hidden flex-shrink-0">
+                        <Image
+                          src={producto.foto || '/placeholder.svg'}
+                          alt={producto.nombre}
+                          fill
+                          className="object-cover"
+                        />
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <label htmlFor={`product-${producto.id}`} className="font-medium text-sm block">
+                          {producto.nombre}
+                        </label>
+                        <div className="text-xs text-gray-600 mt-1 space-y-1">
+                          <p>Precio: ${producto.precio}</p>
+                          <p>Disponible: {producto.cantidad}</p>
                         </div>
-                      ) : (
-                        <div className="space-y-2">
-                          {producto.parametros?.map((parametro) => (
-                            <div key={parametro.nombre} className="flex items-center gap-2">
-                              <label className="text-sm text-gray-600 flex-1">
-                                {parametro.nombre}:
-                                <span className="text-xs text-gray-500 ml-1">
-                                  (Máx: {parametro.cantidad})
-                                </span>
-                              </label>
-                              <Input
-                                type="number"
-                                value={selectedProducts[producto.id]?.parametros?.[parametro.nombre] || ''}
-                                onChange={(e) => {
-                                  const value = parseInt(e.target.value, 10) || 0;
-                                  setSelectedProducts((prev) => ({
-                                    ...prev,
-                                    [producto.id]: {
-                                      ...prev[producto.id],
-                                      parametros: {
-                                        ...prev[producto.id]?.parametros,
-                                        [parametro.nombre]: value,
-                                      },
-                                    },
-                                  }));
-                                }}
-                                className="w-24 h-8"
-                                min={0}
-                                max={parametro.cantidad}
-                              />
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                      </div>
                     </div>
-                  )}
-                </div>
-              ))}
-            </div>
+
+                    {selectedProducts[producto.id] && (
+                      <div className="mt-3 pl-8 space-y-3">
+                        {!producto.tiene_parametros ? (
+                          <div className="flex items-center gap-2">
+                            <label className="text-sm text-gray-600 flex-shrink-0">Cantidad:</label>
+                            <Input
+                              type="number"
+                              value={selectedProducts[producto.id]?.cantidad || ''}
+                              onChange={(e) =>
+                                setSelectedProducts((prev) => ({
+                                  ...prev,
+                                  [producto.id]: {
+                                    ...prev[producto.id],
+                                    cantidad: parseInt(e.target.value, 10) || 0,
+                                  },
+                                }))
+                              }
+                              className="w-24 h-8"
+                              min={1}
+                              max={producto.cantidad}
+                            />
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            {producto.parametros?.map((parametro) => (
+                              <div key={parametro.nombre} className="flex items-center gap-2">
+                                <label className="text-sm text-gray-600 flex-1">
+                                  {parametro.nombre}:
+                                  <span className="text-xs text-gray-500 ml-1">
+                                    (Máx: {parametro.cantidad})
+                                  </span>
+                                </label>
+                                <Input
+                                  type="number"
+                                  value={selectedProducts[producto.id]?.parametros?.[parametro.nombre] || ''}
+                                  onChange={(e) => {
+                                    const value = parseInt(e.target.value, 10) || 0;
+                                    setSelectedProducts((prev) => ({
+                                      ...prev,
+                                      [producto.id]: {
+                                        ...prev[producto.id],
+                                        parametros: {
+                                          ...prev[producto.id]?.parametros,
+                                          [parametro.nombre]: value,
+                                        },
+                                      },
+                                    }));
+                                  }}
+                                  className="w-24 h-8"
+                                  min={0}
+                                  max={parametro.cantidad}
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             <div className="sticky bottom-0 pt-2 bg-white">
-              <Button
-                onClick={handleMassDelivery}
-                disabled={Object.keys(selectedProducts).length === 0}
+                <Button
+                  onClick={handleMassDelivery}
+                  disabled={Object.keys(selectedProducts).length === 0}
                 className="w-full"
-              >
-                Entregar
-              </Button>
+                >
+                  Entregar
+                </Button>
+              </div>
             </div>
-          </div>
         </DialogContent>
       </Dialog>
 
@@ -1682,14 +2344,243 @@ export default function AlmacenPage() {
           ventasSemanales={ventasSemanales}
           ventasDiarias={ventasDiarias}
           transacciones={transaccionesVendedor}
-          onProductReduce={(productId, cantidad, parametros) => handleReduceVendorProduct(productId, cantidad, parametros)}
+          onProductReduce={(productId, vendorId, cantidad, parametros) => handleReduceVendorProduct(productId, cantidad, parametros)}
           onDeleteSale={deleteSale}
           onProductMerma={handleProductMerma}
           vendedores={vendedores}
           onDeleteVendorData={handleDeleteVendorData}
           onUpdateProductQuantity={handleUpdateProductQuantity}
+          initialMode={modeVendedor}
+          onProductTransfer={async (productId, fromVendorId, toVendorId, cantidad, parametros) => {
+            // Implementación temporal para evitar el error
+            console.log('Transferencia de producto no implementada', { 
+              productId, fromVendorId, toVendorId, cantidad, parametros 
+            });
+            toast({
+              title: "Aviso",
+              description: "La transferencia de productos entre vendedores no está disponible actualmente",
+              variant: "default",
+            });
+            return Promise.resolve();
+          }}
         />
       )}
+
+      <Dialog open={reduceDialogOpen} onOpenChange={setReduceDialogOpen}>
+        <DialogContent className="max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Reducir cantidad de producto</DialogTitle>
+          </DialogHeader>
+
+          <div className="flex-1 min-h-0">
+            <div className="space-y-4">
+              <p className="font-medium">{productToReduce?.nombre}</p>
+
+              {productToReduce?.parametros && productToReduce.parametros.length > 0 ? (
+                <div className="space-y-4">
+                  <p className="text-sm text-gray-500">Especifique la cantidad a reducir para cada parámetro:</p>
+
+                  <div className="space-y-2 max-h-[40vh] overflow-y-auto pr-2">
+                    {productToReduce.parametros
+                      .filter(parametro => parametro.cantidad > 0)
+                      .map((parametro, index) => (
+                        <div key={index} className="flex items-center justify-between space-x-4 p-2 border rounded-lg">
+                          <div>
+                            <p className="font-medium">{parametro.nombre}</p>
+                            <p className="text-sm text-gray-500">Disponible: {parametro.cantidad}</p>
+                          </div>
+                          <Input
+                            type="number"
+                            className="w-24"
+                            value={parameterQuantities[parametro.nombre] || 0}
+                            onChange={(e) => {
+                              const value = Math.max(0, Math.min(Number(e.target.value), parametro.cantidad))
+                              setParameterQuantities(prev => ({
+                                ...prev,
+                                [parametro.nombre]: value
+                              }))
+                            }}
+                            min={0}
+                            max={parametro.cantidad}
+                          />
+                        </div>
+                      ))}
+                  </div>
+
+                  <div className="text-sm text-gray-500">
+                    Total a reducir: {Object.values(parameterQuantities).reduce((a, b) => a + b, 0)}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-sm text-gray-500">Especifique la cantidad a reducir:</p>
+                  <div className="flex items-center space-x-4">
+                    <Input
+                      type="number"
+                      value={quantityToReduce}
+                      onChange={(e) => setQuantityToReduce(Math.max(0, Math.min(Number(e.target.value), productToReduce?.cantidad || 0)))}
+                      max={productToReduce?.cantidad}
+                      min={0}
+                    />
+                    <span className="text-sm text-gray-500">
+                      Disponible: {productToReduce?.cantidad}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex justify-end space-x-2 pt-4">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setReduceDialogOpen(false)
+                setParameterQuantities({})
+                setQuantityToReduce(0)
+              }}
+              disabled={isLoading}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => {
+                if (productToReduce?.parametros && productToReduce.parametros.length > 0) {
+                  const totalQuantity = Object.values(parameterQuantities).reduce((a, b) => a + b, 0)
+                  if (totalQuantity > 0) {
+                    setQuantityToReduce(totalQuantity)
+                    setShowDestinationDialog(true)
+                    setReduceDialogOpen(false)
+                  }
+                } else if (quantityToReduce > 0) {
+                  setShowDestinationDialog(true)
+                  setReduceDialogOpen(false)
+                }
+              }}
+              disabled={
+                isLoading ||
+                (productToReduce?.parametros
+                  ? Object.values(parameterQuantities).reduce((a, b) => a + b, 0) <= 0
+                  : quantityToReduce <= 0)
+              }
+            >
+              Siguiente
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Diálogo para seleccionar destino (Almacén o Merma) */}
+      <Dialog open={showDestinationDialog} onOpenChange={setShowDestinationDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Enviar a:</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-4">
+            <Button
+              variant={selectedDestination === 'almacen' ? 'default' : 'outline'}
+              onClick={() => setSelectedDestination('almacen')}
+            >
+              Almacén
+            </Button>
+            <Button
+              variant={selectedDestination === 'merma' ? 'default' : 'outline'}
+              onClick={() => setSelectedDestination('merma')}
+            >
+              Merma
+            </Button>
+          </div>
+          <div className="flex justify-between pt-4">
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setShowDestinationDialog(false)
+                setSelectedDestination(null)
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={async () => {
+                if (!productToReduce || !selectedDestination) return;
+
+                setIsLoading(true);
+                try {
+                  // Preparar los parámetros
+                  const parametrosReduccion = productToReduce.tiene_parametros && productToReduce.parametros
+                    ? Object.entries(parameterQuantities)
+                      .filter(([_, cantidad]) => cantidad > 0)
+                      .map(([nombre, cantidad]) => ({
+                        nombre,
+                        cantidad
+                      }))
+                    : undefined;
+
+                  if (selectedDestination === 'merma') {
+                    // Enviar a merma usando una cadena vacía como el ID de vendedor
+                    await handleProductMerma(
+                      productToReduce.id,
+                      '',  // No usar cafeteriaVendorId, sino simplemente enviar una cadena vacía
+                      productToReduce.tiene_parametros ? 0 : quantityToReduce,
+                      parametrosReduccion
+                    );
+                    
+                    // Actualizar inmediatamente la interfaz para cafetería
+                    if (activeSection === 'cafeteria') {
+                      const updatedProducts = await getProductosCafeteria();
+                      setCafeteriaProductos(updatedProducts);
+                      setProductosVendedor(updatedProducts);
+                    }
+                  } else if (selectedDestination === 'almacen') {
+                    // Devolver al almacén usando la función específica para cafetería
+                    await handleReduceCafeteriaProduct(
+                      productToReduce.id,
+                      productToReduce.tiene_parametros ? 0 : quantityToReduce,
+                      parametrosReduccion
+                    );
+                  }
+
+                  setShowDestinationDialog(false);
+                  setSelectedDestination(null);
+                  setProductToReduce(null);
+                  setQuantityToReduce(0);
+                  setParameterQuantities({});
+
+                  toast({
+                    title: "Éxito",
+                    description: `Producto ${selectedDestination === 'merma' ? 'enviado a merma' : 'reducido'} correctamente.`,
+                  });
+                } catch (error) {
+                  console.error('Error al procesar la operación:', error);
+                  toast({
+                    title: "Error",
+                    description: `No se pudo ${selectedDestination === 'merma' ? 'enviar a merma' : 'reducir'} el producto.`,
+                    variant: "destructive",
+                  });
+                } finally {
+                  setIsLoading(false);
+                }
+              }}
+              disabled={
+                isLoading ||
+                !selectedDestination ||
+                (productToReduce?.tiene_parametros
+                  ? !Object.values(parameterQuantities).some(qty => qty > 0)
+                  : quantityToReduce <= 0)
+              }
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Procesando...
+                </>
+              ) : (
+                'Confirmar'
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 } 

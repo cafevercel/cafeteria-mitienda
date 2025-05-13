@@ -4,7 +4,7 @@ import { query } from '@/lib/db';
 export async function GET(request: NextRequest) {
 
   try {
-    const result = await query('SELECT id, nombre, telefono, rol FROM usuarios WHERE rol = $1', ['Vendedor']);
+    const result = await query('SELECT id, nombre, telefono, rol, activo FROM usuarios WHERE rol = $1', ['Vendedor']);
     return NextResponse.json(result.rows);
   } catch (error) {
     console.error('Error al obtener vendedores:', error);
@@ -20,24 +20,49 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: 'ID no proporcionado' }, { status: 400 });
   }
 
-  const { nombre, telefono, password } = await request.json();
-
   try {
-    const queryParams = [nombre, telefono];
+    // Obtener los datos actuales del usuario antes de actualizarlos
+    const userResult = await query('SELECT nombre, telefono FROM usuarios WHERE id = $1', [id]);
+    
+    if (userResult.rowCount === 0) {
+      return NextResponse.json({ error: 'Vendedor no encontrado' }, { status: 404 });
+    }
+    
+    const currentUser = userResult.rows[0];
+    
+    // Obtener los nuevos valores o usar los actuales si no se proporcionan
+    const { nombre, telefono, password, activo } = await request.json();
+    
+    // Si solo se está actualizando el estado activo y no se proporcionan otros campos,
+    // usamos los valores actuales para los campos obligatorios
+    const nombreToUpdate = nombre !== undefined ? nombre : currentUser.nombre;
+    const telefonoToUpdate = telefono !== undefined ? telefono : currentUser.telefono;
+    
+    // Construir la consulta
+    const queryParams = [nombreToUpdate, telefonoToUpdate];
     let queryString = 'UPDATE usuarios SET nombre = $1, telefono = $2';
+    
+    // Si se proporciona el estado "activo", lo incluimos en la actualización
+    if (activo !== undefined) {
+      queryString += ', activo = $' + (queryParams.length + 1);
+      queryParams.push(activo);
+    }
 
     if (password) {
-      queryString += ', password = $3';
+      queryString += ', password = $' + (queryParams.length + 1);
       queryParams.push(password);
     }
 
-    queryString += ' WHERE id = $' + (queryParams.length + 1) + ' RETURNING id, nombre, telefono, rol';
+    queryString += ' WHERE id = $' + (queryParams.length + 1) + ' RETURNING id, nombre, telefono, rol, activo';
     queryParams.push(id);
+
+    console.log('Query string:', queryString);
+    console.log('Query params:', queryParams);
 
     const result = await query(queryString, queryParams);
 
     if (result.rowCount === 0) {
-      return NextResponse.json({ error: 'Vendedor no encontrado' }, { status: 404 });
+      return NextResponse.json({ error: 'Error al actualizar vendedor' }, { status: 500 });
     }
 
     return NextResponse.json(result.rows[0]);

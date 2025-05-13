@@ -209,7 +209,10 @@ export default function ProductDialog({
       setParameterQuantities({});
       setTotalDeliveryQuantity(0);
       setSimpleDeliveryQuantity(0);
-      setMode('view');
+      
+      // Cerrar el diálogo después de la entrega exitosa
+      onClose();
+      
       toast({
         title: "Éxito",
         description: "Producto entregado correctamente.",

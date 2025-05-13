@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { login } from "../../services/auth"
-
+import Image from 'next/image'
 
 export default function LoginPage() {
   const [nombre, setNombre] = useState('')
@@ -44,16 +44,31 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-100">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle>Iniciar Sesión</CardTitle>
-          <CardDescription>Ingresa tus credenciales para acceder al sistema</CardDescription>
+    <div className="flex items-center justify-center min-h-screen bg-orange-50">
+      <Card className="w-full max-w-md shadow-lg border-orange-200">
+        <CardHeader className="space-y-2 text-center">
+          <div className="mx-auto mb-2">
+            <Image 
+              src="/logo-placeholder.png" 
+              alt="Logo" 
+              width={100} 
+              height={100}
+              className="mx-auto"
+              onError={(e) => {
+                // Si la imagen da error, usar un fallback
+                (e.target as HTMLImageElement).style.display = 'none'
+              }}
+            />
+          </div>
+          <CardTitle className="text-2xl font-bold text-orange-800">Iniciar Sesión</CardTitle>
+          <CardDescription className="text-orange-600">
+            Ingresa tus credenciales para acceder al sistema
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <label htmlFor="nombre" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+              <label htmlFor="nombre" className="text-sm font-medium leading-none text-orange-700 peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
                 Nombre de Usuario
               </label>
               <Input
@@ -64,10 +79,11 @@ export default function LoginPage() {
                 required
                 placeholder="Ingresa tu nombre de usuario"
                 disabled={isLoading}
+                className="border-orange-200 focus:border-orange-400 focus:ring-orange-400"
               />
             </div>
             <div className="space-y-2">
-              <label htmlFor="password" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+              <label htmlFor="password" className="text-sm font-medium leading-none text-orange-700 peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
                 Contraseña
               </label>
               <Input
@@ -78,16 +94,17 @@ export default function LoginPage() {
                 required
                 placeholder="Ingresa tu contraseña"
                 disabled={isLoading}
+                className="border-orange-200 focus:border-orange-400 focus:ring-orange-400"
               />
             </div>
             {error && <p className="text-red-500 text-sm">{error}</p>}
-            <Button type="submit" className="w-full" disabled={isLoading}>
+            <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={isLoading}>
               {isLoading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
             </Button>
           </form>
         </CardContent>
         <CardFooter className="flex justify-center">
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-orange-600">
             ¿No tienes una cuenta? Contacta al administrador
           </p>
         </CardFooter>
