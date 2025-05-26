@@ -319,7 +319,7 @@ const useVendedorData = (vendedorId: string) => {
       const productosMap = new Map<string, Producto>();
       
       // Crear un mapa de productos por ID para búsqueda rápida
-      productos.forEach(producto => {
+      productos.forEach((producto: Producto) => {
         productosMap.set(producto.id, producto);
       });
       
@@ -333,8 +333,8 @@ const useVendedorData = (vendedorId: string) => {
           // Usar el porcentaje de ganancia del producto
           return {
             ...venta,
-            porcentajeGanancia: producto.porcentajeGanancia,
-            porcentaje_ganancia: producto.porcentaje_ganancia
+            porcentajeGanancia: producto.porcentajeGanancia !== undefined ? String(producto.porcentajeGanancia) : undefined,
+            porcentaje_ganancia: producto.porcentajeGanancia !== undefined ? String(producto.porcentajeGanancia) : undefined
           };
         }
         return venta;
@@ -780,8 +780,12 @@ const ProductoCard = ({ producto, vendedorId }: { producto: Producto, vendedorId
     return precio * (porcentaje / 100);
   };
 
-  // Convertir porcentajeGanancia de string a número
-  const porcentajeGanancia = producto.porcentajeGanancia ? parseFloat(producto.porcentajeGanancia) : 0;
+  // Convertir porcentajeGanancia a número (si ya es un número, lo usamos directamente)
+  const porcentajeGanancia = producto.porcentajeGanancia 
+    ? (typeof producto.porcentajeGanancia === 'string' 
+        ? parseFloat(producto.porcentajeGanancia) 
+        : producto.porcentajeGanancia) 
+    : 0;
 
   // Función para agrupar ventas por día
   const agruparVentasPorDia = useCallback((ventas: Venta[]) => {
