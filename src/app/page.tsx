@@ -16,8 +16,8 @@ const LogoImage = () => {
     <Image 
       src="/logo-placeholder.png" 
       alt="Logo" 
-      width={150} 
-      height={150}
+      width={400} 
+      height={400}
       className="mb-6"
       onError={() => setImageError(true)}
     />
@@ -28,7 +28,7 @@ export default function Home() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-8 bg-orange-50">
       <div className="max-w-4xl w-full bg-white rounded-lg shadow-lg p-8 border border-orange-200">
-        <h1 className="text-4xl font-bold mb-4 text-center text-orange-800">Sistema de Gestión de Cafetería</h1>
+        <h1 className="text-4xl font-bold mb-4 text-center text-orange-800">Sistema de Gestión de Mercado</h1>
         <p className="text-center mb-8 text-orange-700">
           Plataforma para controlar inventario, ventas y gestión de productos
         </p>
@@ -45,7 +45,7 @@ export default function Home() {
         </div>
         
         <div className="mt-12 text-center text-orange-600 text-sm">
-          © {new Date().getFullYear()} Sistema Cafetería
+          © {new Date().getFullYear()} Sistema Mercado
         </div>
       </div>
     </main>

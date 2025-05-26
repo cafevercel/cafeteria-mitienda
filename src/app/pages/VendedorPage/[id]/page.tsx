@@ -34,6 +34,7 @@ interface Producto {
   foto: string | null;
   tiene_parametros: boolean;
   parametros?: ProductoParametro[];
+  porcentajeGanancia?: number; // Nuevo campo
 }
 
 interface ProductoParametro {
@@ -41,10 +42,6 @@ interface ProductoParametro {
   cantidad: number;
 }
 
-interface ProductoCardProps {
-  producto: Producto;
-  vendedorId: string; // Añadir esta prop
-}
 
 interface ProductoVenta extends Producto {
   cantidadVendida: number;
@@ -90,6 +87,8 @@ interface Venta {
   vendedor_nombre?: string;
   fecha: string;
   parametros?: ProductoParametro[];
+  porcentajeGanancia?: string;
+  porcentaje_ganancia?: string;
 }
 
 interface VentaDia {
@@ -315,12 +314,38 @@ const useVendedorData = (vendedorId: string) => {
 
   const fetchVentasRegistro = useCallback(async () => {
     try {
-      // Llamar solo a getVentasMes para obtener todas las ventas
+      // Obtener todos los productos para tener acceso a los porcentajes de ganancia
+      const productos = await getProductosCompartidos();
+      const productosMap = new Map<string, Producto>();
+      
+      // Crear un mapa de productos por ID para búsqueda rápida
+      productos.forEach(producto => {
+        productosMap.set(producto.id, producto);
+      });
+      
+      // Llamar a getVentasMes para obtener todas las ventas
       const ventasMesData: Venta[] = await getVentasMes(vendedorId);
-      setVentasRegistro(ventasMesData);
-      setVentasAgrupadas(agruparVentas(ventasMesData));
-      setVentasSemanales(agruparVentasPorSemana(ventasMesData));
-      setVentasDiarias(agruparVentasPorDia(ventasMesData));
+      
+      // Enriquecer las ventas con los porcentajes de ganancia de los productos
+      const ventasEnriquecidas = ventasMesData.map(venta => {
+        const producto = productosMap.get(venta.producto);
+        if (producto) {
+          // Usar el porcentaje de ganancia del producto
+          return {
+            ...venta,
+            porcentajeGanancia: producto.porcentajeGanancia,
+            porcentaje_ganancia: producto.porcentaje_ganancia
+          };
+        }
+        return venta;
+      });
+      
+      console.log('Ventas enriquecidas con porcentajes de ganancia:', ventasEnriquecidas);
+      
+      setVentasRegistro(ventasEnriquecidas);
+      setVentasAgrupadas(agruparVentas(ventasEnriquecidas));
+      setVentasSemanales(agruparVentasPorSemana(ventasEnriquecidas));
+      setVentasDiarias(agruparVentasPorDia(ventasEnriquecidas));
     } catch (error) {
       console.error('Error al obtener registro de ventas:', error);
       if (error instanceof Error) {
@@ -413,10 +438,10 @@ const VentaDiaDesplegable = ({ venta, busqueda }: { venta: VentaDia, busqueda: s
   // Filtrar las ventas basadas en la búsqueda
   const ventasFiltradas = busqueda
     ? venta.ventas.filter(v =>
-        v.producto_nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-        formatDate(v.fecha).toLowerCase().includes(busqueda.toLowerCase()) ||
-        v.total.toString().includes(busqueda)
-      )
+      v.producto_nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
+      formatDate(v.fecha).toLowerCase().includes(busqueda.toLowerCase()) ||
+      v.total.toString().includes(busqueda)
+    )
     : venta.ventas;
 
   // Calcular el total solo de las ventas filtradas
@@ -424,6 +449,32 @@ const VentaDiaDesplegable = ({ venta, busqueda }: { venta: VentaDia, busqueda: s
     return ventasFiltradas.reduce((total, v) => {
       const ventaTotal = typeof v.total === 'string' ? parseFloat(v.total) : v.total;
       return total + (ventaTotal || 0);
+    }, 0);
+  };
+
+  // Calcular la ganancia total basada en el porcentaje de ganancia de cada producto
+  const calcularGananciaTotal = () => {
+    return ventasFiltradas.reduce((totalGanancia, v) => {
+      // Obtener el porcentaje de ganancia (puede estar en diferentes propiedades)
+      const porcentajeGanancia = v.porcentajeGanancia || v.porcentaje_ganancia;
+      
+      // Verificar si hay porcentaje de ganancia
+      if (!porcentajeGanancia) {
+        console.log(`Producto: ${v.producto_nombre} porcentajeGanancia: ${v.porcentajeGanancia} porcentaje_ganancia: ${v.porcentaje_ganancia}`);
+        return totalGanancia;
+      }
+
+      // Convertir a número y verificar si es mayor que cero
+      const porcentajeNumerico = parseFloat(String(porcentajeGanancia));
+      if (isNaN(porcentajeNumerico) || porcentajeNumerico === 0) {
+        return totalGanancia;
+      }
+
+      const precioUnitario = typeof v.precio_unitario === 'string' ? parseFloat(v.precio_unitario) : v.precio_unitario;
+      const cantidad = typeof v.cantidad === 'string' ? parseFloat(v.cantidad) : v.cantidad;
+      const gananciaProducto = precioUnitario * (porcentajeNumerico / 100) * cantidad;
+
+      return totalGanancia + gananciaProducto;
     }, 0);
   };
 
@@ -436,6 +487,9 @@ const VentaDiaDesplegable = ({ venta, busqueda }: { venta: VentaDia, busqueda: s
         <span>{formatDate(venta.fecha)}</span>
         <div className="flex items-center">
           <span className="mr-2">${formatPrice(calcularTotalVentasFiltradas())}</span>
+          {calcularGananciaTotal() > 0 && (
+            <span className="mr-2 text-green-600">Ganancia: ${formatPrice(calcularGananciaTotal())}</span>
+          )}
           {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
         </div>
       </div>
@@ -479,6 +533,11 @@ const VentaDiaDesplegable = ({ venta, busqueda }: { venta: VentaDia, busqueda: s
                   <div className="font-medium text-green-600">
                     Total: ${formatPrice(v.total)}
                   </div>
+                  {(v.porcentajeGanancia || v.porcentaje_ganancia) && parseFloat(String(v.porcentajeGanancia || v.porcentaje_ganancia)) > 0 && (
+                    <div className="text-sm text-green-600">
+                      Ganancia: ${formatPrice(v.precio_unitario * (parseFloat(String(v.porcentajeGanancia || v.porcentaje_ganancia)) / 100) * v.cantidad)} ({parseFloat(String(v.porcentajeGanancia || v.porcentaje_ganancia))}%)
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -496,10 +555,10 @@ const VentaSemanaDesplegable = ({ venta, busqueda }: { venta: VentaSemana, busqu
   // Filtrar las ventas basadas en la búsqueda
   const ventasFiltradas = busqueda
     ? venta.ventas.filter(v =>
-        v.producto_nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-        formatDate(v.fecha).toLowerCase().includes(busqueda.toLowerCase()) ||
-        v.total.toString().includes(busqueda)
-      )
+      v.producto_nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
+      formatDate(v.fecha).toLowerCase().includes(busqueda.toLowerCase()) ||
+      v.total.toString().includes(busqueda)
+    )
     : venta.ventas;
 
   // Agrupar las ventas filtradas por día
@@ -523,7 +582,18 @@ const VentaSemanaDesplegable = ({ venta, busqueda }: { venta: VentaSemana, busqu
     return total + (ventaTotal || 0);
   }, 0);
 
-  const gananciaFiltrada = totalFiltrado * 0.08;
+  // Calcular la ganancia basada en el porcentaje de ganancia de cada producto
+  const gananciaFiltrada = ventasFiltradas.reduce((totalGanancia, v) => {
+    // Obtener el porcentaje de ganancia (puede estar en diferentes propiedades)
+    const porcentajeGanancia = v.porcentajeGanancia || v.porcentaje_ganancia;
+    if (!porcentajeGanancia || parseFloat(porcentajeGanancia) === 0) return totalGanancia;
+
+    const precioUnitario = typeof v.precio_unitario === 'string' ? parseFloat(v.precio_unitario) : v.precio_unitario;
+    const cantidad = typeof v.cantidad === 'string' ? parseFloat(v.cantidad) : v.cantidad;
+    const gananciaProducto = precioUnitario * (parseFloat(porcentajeGanancia) / 100) * cantidad;
+
+    return totalGanancia + gananciaProducto;
+  }, 0);
 
   return (
     <div className="border rounded-lg mb-2">
@@ -704,6 +774,15 @@ const ProductoCard = ({ producto, vendedorId }: { producto: Producto, vendedorId
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
 
+
+  const calcularGanancia = (precio: number, porcentaje: number | undefined): number => {
+    if (!porcentaje || porcentaje === 0) return 0;
+    return precio * (porcentaje / 100);
+  };
+
+  // Convertir porcentajeGanancia de string a número
+  const porcentajeGanancia = producto.porcentajeGanancia ? parseFloat(producto.porcentajeGanancia) : 0;
+
   // Función para agrupar ventas por día
   const agruparVentasPorDia = useCallback((ventas: Venta[]) => {
     const ventasDiarias: VentaDia[] = [];
@@ -842,6 +921,12 @@ const ProductoCard = ({ producto, vendedorId }: { producto: Producto, vendedorId
             <p className="text-sm text-gray-600">
               Precio: ${formatPrice(producto.precio)}
             </p>
+            {/* Visualización de ganancia */}
+            {porcentajeGanancia > 0 && (
+              <p className="text-sm font-bold text-green-600">
+                Ganancia: ${formatPrice(calcularGanancia(producto.precio, porcentajeGanancia))} ({porcentajeGanancia}%)
+              </p>
+            )}
             {producto.tiene_parametros ? (
               <p className="text-sm text-gray-600">
                 Cantidad: {calcularCantidadTotal(producto.parametros)}
@@ -892,9 +977,13 @@ const ProductoCard = ({ producto, vendedorId }: { producto: Producto, vendedorId
                       <div className="text-center w-full p-4 bg-white rounded-lg">
                         <h3 className="text-xl font-semibold">{producto.nombre}</h3>
                         <p className="text-gray-600">Precio: ${formatPrice(producto.precio)}</p>
+                        {porcentajeGanancia > 0 && (
+                          <p className="text-green-600 font-medium">
+                            Ganancia: ${formatPrice(calcularGanancia(producto.precio, porcentajeGanancia))} ({porcentajeGanancia}%)
+                          </p>
+                        )}
                         {producto.tiene_parametros ? (
                           <div className="mt-4">
-                            <h4 className="font-medium mb-2">Parámetros:</h4>
                             <div className="space-y-2">
                               {producto.parametros
                                 ?.filter(parametro => parametro.cantidad > 0)
@@ -960,9 +1049,9 @@ const ProductoCard = ({ producto, vendedorId }: { producto: Producto, vendedorId
                             </div>
                             {ventasDiarias.length > 0 ? (
                               ventasDiarias.map((venta) => (
-                                <VentaDiaDesplegable 
-                                  key={venta.fecha} 
-                                  venta={venta} 
+                                <VentaDiaDesplegable
+                                  key={venta.fecha}
+                                  venta={venta}
                                   busqueda={searchTerm}
                                 />
                               ))
@@ -984,8 +1073,8 @@ const ProductoCard = ({ producto, vendedorId }: { producto: Producto, vendedorId
                             </div>
                             {ventasSemanales.length > 0 ? (
                               ventasSemanales.map((venta) => (
-                                <VentaSemanaDesplegable 
-                                  key={`${venta.fechaInicio}-${venta.fechaFin}`} 
+                                <VentaSemanaDesplegable
+                                  key={`${venta.fechaInicio}-${venta.fechaFin}`}
                                   venta={venta}
                                   busqueda={searchTerm}
                                 />
@@ -1168,6 +1257,11 @@ export default function VendedorPage() {
   const [parametrosDialogOpen, setParametrosDialogOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Producto | null>(null);
   const [productosConParametrosEnEspera, setProductosConParametrosEnEspera] = useState<ProductoVenta[]>([]);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [productosEnDialogo, setProductosEnDialogo] = useState<{
+    id: string;
+    cantidad: number;
+  }[]>([]);
 
 
 
@@ -1199,27 +1293,42 @@ export default function VendedorPage() {
 
   const handleProductSelect = (producto: Producto) => {
     if (producto.tiene_parametros) {
-      // Si ya está seleccionado, lo quitamos
+      // La lógica existente para productos con parámetros
       if (selectedProductIds.includes(producto.id)) {
         setSelectedProductIds(prev => prev.filter(id => id !== producto.id));
         setProductosConParametrosEnEspera(prev =>
           prev.filter(p => p.id !== producto.id)
         );
       } else {
-        // Si no está seleccionado, abrimos el diálogo de parámetros
         setSelectedProduct(producto);
         setParametrosDialogOpen(true);
       }
     } else {
-      // Lógica existente para productos sin parámetros
-      setSelectedProductIds(prev =>
-        prev.includes(producto.id)
-          ? prev.filter(id => id !== producto.id)
-          : [...prev, producto.id]
-      );
+      // Nueva lógica para productos sin parámetros
+      if (selectedProductIds.includes(producto.id)) {
+        // Si ya está seleccionado, lo quitamos
+        setSelectedProductIds(prev => prev.filter(id => id !== producto.id));
+        setProductosEnDialogo(prev => prev.filter(p => p.id !== producto.id));
+      } else {
+        // Si no está seleccionado, lo añadimos con cantidad 1
+        setSelectedProductIds(prev => [...prev, producto.id]);
+        setProductosEnDialogo(prev => [...prev, { id: producto.id, cantidad: 1 }]);
+      }
     }
   };
 
+  const ajustarCantidadEnDialogo = (id: string, incremento: number) => {
+    setProductosEnDialogo(prev => prev.map(p => {
+      if (p.id === id) {
+        // Encontrar el producto para obtener la cantidad máxima disponible
+        const producto = productosDisponibles.find(prod => prod.id === id);
+        const cantidadMaxima = producto ? producto.cantidad : 1;
+        // Ajustar la cantidad sin exceder los límites
+        return { ...p, cantidad: Math.max(1, Math.min(p.cantidad + incremento, cantidadMaxima)) };
+      }
+      return p;
+    }));
+  };
 
   const handleParametrosSubmit = (parametros: ProductoParametro[]) => {
     if (!selectedProduct) return;
@@ -1246,19 +1355,20 @@ export default function VendedorPage() {
   };
 
 
-
-
   const handleConfirmSelection = () => {
-    // Productos sin parámetros
+    // Productos sin parámetros con sus cantidades ajustadas
     const newSelectedProducts = productosDisponibles
       .filter(producto =>
         selectedProductIds.includes(producto.id) &&
         !producto.tiene_parametros
       )
-      .map(producto => ({
-        ...producto,
-        cantidadVendida: 1
-      }));
+      .map(producto => {
+        const productoEnDialogo = productosEnDialogo.find(p => p.id === producto.id);
+        return {
+          ...producto,
+          cantidadVendida: productoEnDialogo ? productoEnDialogo.cantidad : 1
+        };
+      });
 
     // Combinar productos normales y productos con parámetros
     setProductosSeleccionados(prev => [
@@ -1269,6 +1379,7 @@ export default function VendedorPage() {
 
     // Reiniciar las selecciones
     setSelectedProductIds([]);
+    setProductosEnDialogo([]);
     setProductosConParametrosEnEspera([]);
     setIsDialogOpen(false);
   };
@@ -1301,8 +1412,8 @@ export default function VendedorPage() {
   )
 
   const cambiarSeccion = (seccion: 'productos' | 'ventas' | 'registro') => {
-    setSeccion(seccion)
-    setMenuAbierto(false)
+    setSeccion(seccion);
+    setSheetOpen(false); // Cerrar explícitamente el Sheet
   }
 
   if (isLoading) {
@@ -1324,7 +1435,7 @@ export default function VendedorPage() {
         <div className="container mx-auto flex items-center justify-between">
           <h1 className="text-2xl font-bold text-orange-800">Panel de Vendedor</h1>
           <div className="flex items-center space-x-4">
-            <Sheet>
+            <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
               <SheetTrigger asChild>
                 <Button variant="outline" size="icon" className="border-orange-300 hover:bg-orange-100">
                   <MenuIcon className="h-5 w-5 text-orange-600" />
@@ -1486,11 +1597,45 @@ export default function VendedorPage() {
                                   {producto.nombre}
                                 </label>
                                 <p className="text-sm text-gray-500">
-                                  Cantidad: {producto.tiene_parametros
+                                  Cantidad disponible: {producto.tiene_parametros
                                     ? calcularCantidadTotal(producto)
                                     : producto.cantidad}
                                 </p>
                                 <p className="text-sm text-gray-500">Precio: ${formatPrice(producto.precio)}</p>
+
+                                {/* Selector de cantidad para productos sin parámetros */}
+                                {!producto.tiene_parametros && selectedProductIds.includes(producto.id) && (
+                                  <div className="flex items-center space-x-2 mt-2">
+                                    <Button
+                                      variant="outline"
+                                      size="icon"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        ajustarCantidadEnDialogo(producto.id, -1);
+                                      }}
+                                      className="h-6 w-6"
+                                    >
+                                      <Minus className="h-3 w-3" />
+                                    </Button>
+                                    <span>
+                                      {productosEnDialogo.find(p => p.id === producto.id)?.cantidad || 1}
+                                    </span>
+                                    <Button
+                                      variant="outline"
+                                      size="icon"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        ajustarCantidadEnDialogo(producto.id, 1);
+                                      }}
+                                      className="h-6 w-6"
+                                      disabled={
+                                        (productosEnDialogo.find(p => p.id === producto.id)?.cantidad || 1) >= producto.cantidad
+                                      }
+                                    >
+                                      <Plus className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                )}
 
                                 {/* Mostrar los parámetros si ya están configurados */}
                                 {producto.tiene_parametros && selectedProductIds.includes(producto.id) && (
@@ -1498,7 +1643,7 @@ export default function VendedorPage() {
                                     {productosConParametrosEnEspera
                                       .find(p => p.id === producto.id)
                                       ?.parametrosVenta
-                                      ?.filter(param => param.cantidad > 0) // Filtrar solo parámetros con cantidad > 0
+                                      ?.filter(param => param.cantidad > 0)
                                       ?.map(param => (
                                         <div key={param.nombre} className="flex justify-between">
                                           <span>{param.nombre}:</span>
@@ -1512,6 +1657,7 @@ export default function VendedorPage() {
                           </CardContent>
                         </Card>
                       ))}
+
                     </ScrollArea>
                     <Button onClick={handleConfirmSelection} className="mt-4">
                       Confirmar Selección
@@ -1527,7 +1673,7 @@ export default function VendedorPage() {
                           src={producto.foto || '/placeholder.svg'}
                           fallbackSrc="/placeholder.svg"
                           alt={producto.nombre}
-                          width={40} 
+                          width={40}
                           height={40}
                           className="rounded-md mr-2"
                         />
@@ -1542,26 +1688,8 @@ export default function VendedorPage() {
                               ))}
                             </div>
                           ) : (
-                            <div className="flex items-center space-x-2">
-                              <Button
-                                variant="outline"
-                                size="icon"
-                                onClick={() => handleAjustarCantidad(producto.id, -1)}
-                                className="h-6 w-6"
-                                disabled={producto.cantidadVendida <= 1}
-                              >
-                                <Minus className="h-3 w-3" />
-                              </Button>
-                              <span>{producto.cantidadVendida}</span>
-                              <Button
-                                variant="outline"
-                                size="icon"
-                                onClick={() => handleAjustarCantidad(producto.id, 1)}
-                                className="h-6 w-6"
-                                disabled={producto.cantidadVendida >= producto.cantidad}
-                              >
-                                <Plus className="h-3 w-3" />
-                              </Button>
+                            <div className="text-xs text-gray-600">
+                              Cantidad: {producto.cantidadVendida}
                             </div>
                           )}
                         </div>
@@ -1604,21 +1732,24 @@ export default function VendedorPage() {
                   <div className="mb-4">
                     <h3 className="text-lg font-semibold mb-2">Ventas por Día</h3>
                     {ventasDiarias.length > 0 ? (
-                      ventasDiarias
-                        .filter(venta => 
-                          venta.ventas.some(v => 
-                            v.producto_nombre?.toLowerCase().includes(busqueda.toLowerCase()) ||
-                            formatDate(v.fecha).toLowerCase().includes(busqueda.toLowerCase()) ||
-                            v.total.toString().includes(busqueda)
+                      <>
+                        {/* Lista de ventas por día */}
+                        {ventasDiarias
+                          .filter(venta =>
+                            venta.ventas.some(v =>
+                              v.producto_nombre?.toLowerCase().includes(busqueda.toLowerCase()) ||
+                              formatDate(v.fecha).toLowerCase().includes(busqueda.toLowerCase()) ||
+                              v.total.toString().includes(busqueda)
+                            )
                           )
-                        )
-                        .map((venta) => (
-                          <VentaDiaDesplegable 
-                            key={venta.fecha} 
-                            venta={venta}
-                            busqueda={busqueda}
-                          />
-                        ))
+                          .map((venta) => (
+                            <VentaDiaDesplegable
+                              key={venta.fecha}
+                              venta={venta}
+                              busqueda={busqueda}
+                            />
+                          ))}
+                      </>
                     ) : (
                       <div className="text-center py-4">No hay ventas diarias registradas</div>
                     )}

@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Venta, Vendedor, Transaccion, VentaParametro, TransferProductParams, Gasto, Producto } from '@/types';
+import { Venta, Vendedor, Transaccion, VentaParametro, TransferProductParams, Gasto, Producto, GastoBalance, Balance } from '@/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
 
@@ -23,11 +23,13 @@ interface LocalProducto {
   foto?: string | null;
   tiene_parametros: boolean;
   tieneParametros?: boolean;
+  porcentaje_ganancia?: number; // Usar el nombre con guion bajo
   parametros?: Array<{
     nombre: string;
     cantidad: number;
   }>;
 }
+
 
 /**
  * Este archivo contiene todas las funciones de API para interactuar con el backend.
@@ -138,12 +140,22 @@ export const registerUser = async (userData: Omit<User, 'id'>): Promise<User> =>
 export const getProductosCompartidos = async () => {
   try {
     const response = await api.get('/productos/compartidos');
+    console.log('Respuesta de productos compartidos:', response.data);
+    
+    // Usar una anotación de tipo inline
+    const tieneGanancia = response.data.some((p: { porcentajeGanancia?: number }) => 
+      p.porcentajeGanancia !== undefined
+    );
+    console.log('¿Algún producto tiene porcentajeGanancia?', tieneGanancia);
+    
     return response.data;
   } catch (error) {
     console.error('Error al obtener productos compartidos:', error);
     throw new Error('No se pudieron cargar los productos compartidos. Por favor, intenta de nuevo.');
   }
 };
+
+
 
 export const agregarProducto = async (formData: FormData) => {
   try {
@@ -171,7 +183,7 @@ export const agregarProducto = async (formData: FormData) => {
       }
     }
 
-    // No es necesario modificar esta parte, ya que formData ya incluirá el campo "precioCompra"
+    // No es necesario modificar esta parte, ya que formData ya incluirá el campo "porcentajeGanancia"
     const response = await api.post('/productos', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
@@ -183,6 +195,7 @@ export const agregarProducto = async (formData: FormData) => {
     throw new Error('Error al agregar el producto');
   }
 };
+
 
 export const editarProducto = async (id: string, formData: FormData) => {
   try {
@@ -208,9 +221,10 @@ export const editarProducto = async (id: string, formData: FormData) => {
       }
     }
 
-    // Para depuración - verificar si precio_compra está en el FormData
+    // Para depuración - verificar si porcentaje_ganancia está en el FormData
     console.log('FormData antes de enviar:', {
       precio_compra: formData.get('precio_compra'),
+      porcentaje_ganancia: formData.get('porcentaje_ganancia'),
       nombre: formData.get('nombre'),
       precio: formData.get('precio')
     });
@@ -226,6 +240,7 @@ export const editarProducto = async (id: string, formData: FormData) => {
     throw new Error('Error al editar el producto');
   }
 };
+
 
 export const entregarProducto = async (
   productoId: string,
@@ -470,7 +485,7 @@ export const createMerma = async (
 ) => {
   // Si usuario_id está vacío, usamos un valor especial para que el backend sepa que es merma directa
   const id_usuario = usuario_id.trim() === '' ? 'cafeteria' : usuario_id;
-  
+
   const response = await fetch('/api/merma', {
     method: 'POST',
     headers: {
@@ -543,14 +558,14 @@ export const getVendedorProductos = async (vendedorId: string): Promise<LocalPro
   try {
     // Usamos la ruta de productos compartidos que ya existe
     const response = await api.get(`/productos/compartidos`);
-    
+
     // Aseguramos que la respuesta tenga la estructura correcta
     const productos = response.data.map((producto: any) => ({
       ...producto,
       tieneParametros: producto.tiene_parametros || false,
       tiene_parametros: producto.tiene_parametros || false
     }));
-    
+
     return productos;
   } catch (error) {
     console.error('Error al obtener productos del vendedor:', error);
@@ -622,5 +637,37 @@ export const eliminarGasto = async (gastoId: string): Promise<void> => {
   } catch (error) {
     console.error('Error al eliminar gasto:', error);
     throw new Error('No se pudo eliminar el gasto');
+  }
+};
+
+
+// Añade estas funciones al final de tu archivo api.ts
+
+export const getBalances = async (): Promise<Balance[]> => {
+  try {
+    const response = await api.get('/balances');
+    return response.data;
+  } catch (error) {
+    console.error('Error al obtener balances:', error);
+    throw new Error('No se pudieron obtener los balances');
+  }
+};
+
+export const crearBalance = async (balance: Omit<Balance, 'id'>): Promise<Balance> => {
+  try {
+    const response = await api.post('/balances', balance);
+    return response.data;
+  } catch (error) {
+    console.error('Error al crear balance:', error);
+    throw new Error('No se pudo crear el balance');
+  }
+};
+
+export const eliminarBalance = async (balanceId: string): Promise<void> => {
+  try {
+    await api.delete(`/balances?id=${balanceId}`);
+  } catch (error) {
+    console.error('Error al eliminar balance:', error);
+    throw new Error('No se pudo eliminar el balance');
   }
 };

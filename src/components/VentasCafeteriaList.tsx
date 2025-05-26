@@ -22,6 +22,7 @@ interface InventarioProducto {
   foto?: string | null;
   tieneParametros?: boolean;
   tiene_parametros?: boolean;
+  porcentajeGanancia?: number;
   parametros?: Array<{
     nombre: string;
     cantidad: number;
@@ -31,6 +32,12 @@ interface InventarioProducto {
 // Interfaz extendida para incluir propiedades adicionales en ventas
 interface VentaExtendida extends Venta {
   vendedor_nombre?: string;
+  ganancia_unitaria?: number;
+  ganancia_bruta_unitaria?: number;
+  ganancia_bruta_total?: number;
+  ganancia_porcentaje?: number;
+  ganancia_total?: number;
+  porcentaje_ganancia?: number;
 }
 
 interface VentaDia {
@@ -102,18 +109,18 @@ export default function VentasCafeteriaList({ searchTerm }: VentasCafeteriaListP
   const handleDeleteSale = async (venta: VentaExtendida) => {
     setVentaAEliminar(venta)
   }
-  
+
   const confirmDeleteSale = async () => {
     if (!ventaAEliminar) return
-    
+
     setIsDeleting(true)
     try {
       // Usamos '' como ID de vendedor para representar la cafetería
       await deleteSale(ventaAEliminar.id, ventaAEliminar.vendedor || '')
-      
+
       // Recargamos los datos para reflejar los cambios
       await fetchData()
-      
+
       toast({
         title: "Venta eliminada",
         description: "La venta ha sido eliminada y las cantidades devueltas al inventario",
@@ -147,20 +154,38 @@ export default function VentasCafeteriaList({ searchTerm }: VentasCafeteriaListP
         }
       }
 
-      // Buscar el producto para obtener su precio de compra
+      // Buscar el producto para obtener su precio de compra y porcentaje de ganancia
       const producto = productos.find(p => p.id === venta.producto)
-      
-      // Calcular la ganancia bruta para esta venta (precio de venta - precio de compra)
+
+      // Obtener los valores necesarios para el cálculo
       const precioCompra = producto?.precio_compra || 0
       const precioVenta = parseFloat(venta.precio_unitario.toString())
-      const gananciaUnitaria = precioVenta - precioCompra
+      const porcentajeGanancia = producto?.porcentajeGanancia || 0
+
+      // Calcular la ganancia bruta para esta venta (precio de venta - precio de compra)
+      const gananciaBrutaUnitaria = precioVenta - precioCompra
+
+      // Calcular la ganancia porcentual (se aplica sobre el precio de venta, no sobre la ganancia bruta)
+      let gananciaPorcentaje = 0
+      if (porcentajeGanancia > 0) {
+        gananciaPorcentaje = (precioVenta * porcentajeGanancia) / 100
+      }
+
+      // La ganancia unitaria es la ganancia bruta menos el porcentaje
+      const gananciaUnitaria = gananciaBrutaUnitaria - gananciaPorcentaje
+
+      // La ganancia total es la ganancia unitaria multiplicada por la cantidad
       const gananciaTotal = gananciaUnitaria * venta.cantidad
-      
+
       // Agregar datos a la venta para mostrarlos
       const ventaConGanancia = {
         ...venta,
         ganancia_unitaria: gananciaUnitaria,
-        ganancia_total: gananciaTotal
+        ganancia_bruta_unitaria: gananciaBrutaUnitaria,
+        ganancia_bruta_total: gananciaBrutaUnitaria * venta.cantidad,
+        ganancia_porcentaje: gananciaPorcentaje,
+        ganancia_total: gananciaTotal,
+        porcentaje_ganancia: porcentajeGanancia
       }
 
       ventasPorDia[fechaKey].ventas.push(ventaConGanancia)
@@ -168,7 +193,7 @@ export default function VentasCafeteriaList({ searchTerm }: VentasCafeteriaListP
       ventasPorDia[fechaKey].ganancia += gananciaTotal
     })
 
-    return Object.values(ventasPorDia).sort((a, b) => 
+    return Object.values(ventasPorDia).sort((a, b) =>
       new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
     )
   }
@@ -176,8 +201,8 @@ export default function VentasCafeteriaList({ searchTerm }: VentasCafeteriaListP
   if (isLoading) return <div className="flex justify-center items-center h-full">Cargando ventas...</div>
   if (error) return <div className="text-red-500">{error}</div>
 
-  const filteredVentasDiarias = ventasDiarias.filter(venta => 
-    venta.ventas.some(v => 
+  const filteredVentasDiarias = ventasDiarias.filter(venta =>
+    venta.ventas.some(v =>
       v.producto_nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       v.vendedor_nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       formatDate(v.fecha).toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -192,14 +217,14 @@ export default function VentasCafeteriaList({ searchTerm }: VentasCafeteriaListP
   return (
     <div className="space-y-4">
       {filteredVentasDiarias.map((venta) => (
-        <VentaDiaCard 
-          key={venta.fecha} 
-          venta={venta} 
+        <VentaDiaCard
+          key={venta.fecha}
+          venta={venta}
           searchTerm={searchTerm}
           onDeleteSale={handleDeleteSale}
         />
       ))}
-      
+
       <AlertDialog open={ventaAEliminar !== null} onOpenChange={(open) => !open && setVentaAEliminar(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -210,8 +235,8 @@ export default function VentasCafeteriaList({ searchTerm }: VentasCafeteriaListP
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={confirmDeleteSale} 
+            <AlertDialogAction
+              onClick={confirmDeleteSale}
               className="bg-red-500 hover:bg-red-600 text-white"
               disabled={isDeleting}
             >
@@ -228,28 +253,28 @@ const VentaDiaCard = ({ venta, searchTerm, onDeleteSale }: { venta: VentaDia, se
   const [expandido, setExpandido] = useState(false)
 
   const calcularTotalVentasFiltradas = () => {
-    const ventasFiltradas = venta.ventas.filter(v => 
+    const ventasFiltradas = venta.ventas.filter(v =>
       v.producto_nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       v.vendedor_nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       formatDate(v.fecha).toLowerCase().includes(searchTerm.toLowerCase()) ||
       v.total.toString().includes(searchTerm)
     );
-    
+
     if (ventasFiltradas.length === 0) return 0;
-    
+
     return ventasFiltradas.reduce((sum, v) => sum + parseFloat(v.total.toString()), 0);
   }
 
   const calcularGananciaVentasFiltradas = () => {
-    const ventasFiltradas = venta.ventas.filter(v => 
+    const ventasFiltradas = venta.ventas.filter(v =>
       v.producto_nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       v.vendedor_nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       formatDate(v.fecha).toLowerCase().includes(searchTerm.toLowerCase()) ||
       v.total.toString().includes(searchTerm)
     );
-    
+
     if (ventasFiltradas.length === 0) return 0;
-    
+
     return ventasFiltradas.reduce((sum, v) => sum + (v.ganancia_total || 0), 0);
   }
 
@@ -279,7 +304,7 @@ const VentaDiaCard = ({ venta, searchTerm, onDeleteSale }: { venta: VentaDia, se
         <CardContent className="px-4 pb-4">
           <div className="space-y-2">
             {venta.ventas
-              .filter(v => 
+              .filter(v =>
                 v.producto_nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 v.vendedor_nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 formatDate(v.fecha).toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -322,13 +347,24 @@ const VentaDiaCard = ({ venta, searchTerm, onDeleteSale }: { venta: VentaDia, se
                       </div>
                       <div className="text-right flex flex-col items-end">
                         <p className="text-sm font-semibold">${formatPrice(v.total)}</p>
-                        <p className="text-xs text-green-600">
-                          Ganancia: ${formatPrice(v.ganancia_total)}
-                        </p>
-                        <p className="text-xs text-gray-500">{format(new Date(v.fecha), 'HH:mm')}</p>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
+                        <div className="text-xs">
+                          <p className="text-green-600">
+                            Ganancia: ${formatPrice(v.ganancia_total || 0)}
+                          </p>
+                          {(v.porcentaje_ganancia || 0) > 0 && v.ganancia_bruta_total !== undefined && (
+                            <p className="text-xs text-gray-500">
+                              Neta: ${formatPrice(v.ganancia_bruta_total)}
+                            </p>
+                          )}
+                          {(v.porcentaje_ganancia || 0) > 0 && (
+                            <p className="text-xs text-gray-500">
+                              -{v.porcentaje_ganancia}%
+                            </p>
+                          )}
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           className="text-red-500 hover:bg-red-50 mt-1 h-7 w-7"
                           onClick={(e) => {
                             e.stopPropagation();

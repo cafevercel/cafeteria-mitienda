@@ -8,10 +8,10 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { getAllVentas, getInventario, getGastos, crearGasto, eliminarGasto } from '@/app/services/api'
-import { Venta, Producto, Gasto } from '@/types'
-import { Wallet, Plus, X, Calendar } from 'lucide-react'
+import { Separator } from "@/components/ui/separator"
+import { getAllVentas, getInventario, getGastos, crearBalance, eliminarBalance, getBalances } from '@/app/services/api'
+import { Venta, Producto, Gasto, Balance, GastoBalance } from '@/types'
+import { Wallet, Plus, X, Calendar, ChevronRight, FileText, Trash2 } from 'lucide-react'
 import { toast } from "@/hooks/use-toast"
 
 interface VentaDia {
@@ -45,29 +45,36 @@ const formatPrice = (price: number | string | undefined): string => {
 
 export default function BalanceSection() {
   const [ventasDiarias, setVentasDiarias] = useState<VentaDia[]>([])
-  const [gastos, setGastos] = useState<Gasto[]>([])
-  const [dialogOpen, setDialogOpen] = useState(false)
-  const [nuevoGasto, setNuevoGasto] = useState({ nombre: '', cantidad: '' })
+  const [balances, setBalances] = useState<Balance[]>([])
+  const [crearDialogOpen, setCrearDialogOpen] = useState(false)
+  const [detalleDialogOpen, setDetalleDialogOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState('ganancias')
+  const [balanceSeleccionado, setBalanceSeleccionado] = useState<Balance | null>(null)
+  const [confirmarEliminarDialogOpen, setConfirmarEliminarDialogOpen] = useState(false)
+
+  // Estados para el nuevo balance
+  const [paso, setPaso] = useState(1)
+  const [fechaInicio, setFechaInicio] = useState('')
+  const [fechaFin, setFechaFin] = useState('')
+  const [gastosNuevos, setGastosNuevos] = useState<GastoBalance[]>([{ nombre: '', cantidad: '' }])
 
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true)
       try {
-        // Cargar ventas, productos y gastos
-        const [ventas, inventario, gastosData] = await Promise.all([
+        // Cargar ventas, productos y balances existentes
+        const [ventas, inventario, balancesData] = await Promise.all([
           getAllVentas(),
           getInventario(),
-          getGastos()
+          getBalances()
         ])
-        
+
         // Agrupar ventas por día y calcular ganancias
         const ventasPorDia = calcularVentasDiarias(ventas, inventario)
         setVentasDiarias(ventasPorDia)
-        setGastos(gastosData)
+        setBalances(balancesData)
       } catch (err) {
         setError('Error al cargar los datos')
         console.error(err)
@@ -100,13 +107,23 @@ export default function BalanceSection() {
         }
       }
 
-      // Buscar el producto para obtener su precio de compra
+      // Buscar el producto para obtener su precio de compra y porcentaje de ganancia
       const producto = productos.find(p => p.id === venta.producto)
-      
-      // Calcular la ganancia bruta para esta venta (precio de venta - precio de compra)
+
+      // Obtener el precio de venta y precio de compra
       const precioCompra = producto?.precio_compra || 0
       const precioVenta = parseFloat(venta.precio_unitario.toString())
-      const gananciaUnitaria = precioVenta - precioCompra
+
+      // Calcular la ganancia bruta para esta venta
+      let gananciaUnitaria = precioVenta - precioCompra
+
+      // Aplicar el descuento del porcentaje de ganancia si existe
+      if (producto?.porcentajeGanancia) {
+        // El porcentaje se aplica al precio de venta, no a la ganancia
+        const descuentoPorcentaje = precioVenta * (producto.porcentajeGanancia / 100)
+        gananciaUnitaria = gananciaUnitaria - descuentoPorcentaje
+      }
+
       const gananciaTotal = gananciaUnitaria * venta.cantidad
 
       ventasPorDia[fechaKey].ventas.push(venta)
@@ -114,16 +131,74 @@ export default function BalanceSection() {
       ventasPorDia[fechaKey].ganancia += gananciaTotal
     })
 
-    return Object.values(ventasPorDia).sort((a, b) => 
+    return Object.values(ventasPorDia).sort((a, b) =>
       new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
     )
   }
 
-  const agregarGasto = async () => {
-    if (!nuevoGasto.nombre || !nuevoGasto.cantidad || isNaN(parseFloat(nuevoGasto.cantidad))) {
+  const agregarGastoField = () => {
+    setGastosNuevos([...gastosNuevos, { nombre: '', cantidad: '' }])
+  }
+
+  const eliminarGastoField = (index: number) => {
+    const nuevosGastos = [...gastosNuevos]
+    nuevosGastos.splice(index, 1)
+    setGastosNuevos(nuevosGastos)
+  }
+
+  const actualizarGasto = (index: number, campo: 'nombre' | 'cantidad', valor: string) => {
+    const nuevosGastos = [...gastosNuevos]
+    nuevosGastos[index][campo] = valor
+    setGastosNuevos(nuevosGastos)
+  }
+
+  const calcularGananciaBruta = (fechaInicio: string, fechaFin: string): number => {
+    return ventasDiarias
+      .filter(dia => {
+        const fecha = dia.fecha
+        return fecha >= fechaInicio && fecha <= fechaFin
+      })
+      .reduce((sum, dia) => sum + dia.ganancia, 0)
+  }
+
+  const calcularTotalGastos = (gastos: GastoBalance[]): number => {
+    return gastos.reduce((sum, gasto) => {
+      const cantidad = typeof gasto.cantidad === 'string'
+        ? parseFloat(gasto.cantidad) || 0
+        : gasto.cantidad || 0
+      return sum + cantidad
+    }, 0)
+  }
+
+  const crearNuevoBalance = async () => {
+    // Validaciones
+    if (!fechaInicio || !fechaFin) {
       toast({
         title: "Error",
-        description: "Debe proporcionar un nombre y una cantidad válida",
+        description: "Debe seleccionar fechas de inicio y fin",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (fechaInicio > fechaFin) {
+      toast({
+        title: "Error",
+        description: "La fecha de inicio no puede ser posterior a la fecha fin",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Validar que todos los gastos tengan nombre y cantidad válida
+    const gastosInvalidos = gastosNuevos.some(
+      gasto => !gasto.nombre || !gasto.cantidad || isNaN(parseFloat(gasto.cantidad.toString()))
+    )
+
+    if (gastosInvalidos) {
+      toast({
+        title: "Error",
+        description: "Todos los gastos deben tener nombre y cantidad válida",
         variant: "destructive",
       })
       return
@@ -131,29 +206,47 @@ export default function BalanceSection() {
 
     setIsSubmitting(true)
     try {
-      const gastoData = {
-        nombre: nuevoGasto.nombre,
-        cantidad: parseFloat(nuevoGasto.cantidad),
-        fecha: new Date().toISOString()
+      const gananciaBruta = calcularGananciaBruta(fechaInicio, fechaFin)
+      const totalGastos = calcularTotalGastos(gastosNuevos)
+      const gananciaNeta = gananciaBruta - totalGastos
+
+      const gastosProcesados = gastosNuevos.map(gasto => ({
+        nombre: gasto.nombre,
+        cantidad: parseFloat(gasto.cantidad.toString())
+      }))
+
+      const nuevoBalance = {
+        fechaInicio,
+        fechaFin,
+        gananciaBruta,
+        gastos: gastosProcesados,
+        totalGastos,
+        gananciaNeta,
+        fechaCreacion: new Date().toISOString()
       }
 
-      // Crear gasto en la base de datos
-      const nuevoGastoGuardado = await crearGasto(gastoData)
-      
+      // Guardar en la base de datos
+      const balanceGuardado = await crearBalance(nuevoBalance)
+
       // Actualizar el estado
-      setGastos(prevGastos => [nuevoGastoGuardado, ...prevGastos])
-      setNuevoGasto({ nombre: '', cantidad: '' })
-      setDialogOpen(false)
-      
+      setBalances(prevBalances => [balanceGuardado, ...prevBalances])
+
+      // Resetear el formulario
+      setFechaInicio('')
+      setFechaFin('')
+      setGastosNuevos([{ nombre: '', cantidad: '' }])
+      setPaso(1)
+      setCrearDialogOpen(false)
+
       toast({
         title: "Éxito",
-        description: "Gasto registrado correctamente",
+        description: "Balance creado correctamente",
       })
     } catch (error) {
-      console.error('Error al registrar gasto:', error)
+      console.error('Error al crear balance:', error)
       toast({
         title: "Error",
-        description: "No se pudo registrar el gasto",
+        description: "No se pudo crear el balance",
         variant: "destructive",
       })
     } finally {
@@ -161,175 +254,280 @@ export default function BalanceSection() {
     }
   }
 
-  const eliminarGastoHandler = async (id: string) => {
+  const eliminarBalanceHandler = async () => {
+    if (!balanceSeleccionado) return;
+
     try {
-      await eliminarGasto(id)
-      setGastos(gastos.filter(gasto => gasto.id !== id))
+      await eliminarBalance(balanceSeleccionado.id)
+      setBalances(balances.filter(balance => balance.id !== balanceSeleccionado.id))
+      setBalanceSeleccionado(null)
+      setDetalleDialogOpen(false)
+      setConfirmarEliminarDialogOpen(false)
+
       toast({
         title: "Éxito",
-        description: "Gasto eliminado correctamente",
+        description: "Balance eliminado correctamente",
       })
     } catch (error) {
-      console.error('Error al eliminar gasto:', error)
+      console.error('Error al eliminar balance:', error)
       toast({
         title: "Error",
-        description: "No se pudo eliminar el gasto",
+        description: "No se pudo eliminar el balance",
         variant: "destructive",
       })
     }
   }
 
-  const calcularGananciaNeta = (): number => {
-    const totalGanancias = ventasDiarias.reduce((sum, dia) => sum + dia.ganancia, 0)
-    const totalGastos = gastos.reduce((sum, gasto) => sum + gasto.cantidad, 0)
-    return totalGanancias - totalGastos
+  const abrirDetalleBalance = (balance: Balance) => {
+    setBalanceSeleccionado(balance)
+    setDetalleDialogOpen(true)
+  }
+
+  const cerrarCrearDialog = () => {
+    setCrearDialogOpen(false)
+    setPaso(1)
+    setFechaInicio('')
+    setFechaFin('')
+    setGastosNuevos([{ nombre: '', cantidad: '' }])
   }
 
   if (isLoading) return <div className="flex justify-center items-center h-full">Cargando datos...</div>
   if (error) return <div className="text-red-500">{error}</div>
 
   return (
-    <div className="space-y-4">
-      {/* Tarjeta de Ganancia Neta */}
-      <Card className="mb-6">
+    <div className="space-y-4 relative pb-16">
+      {/* Lista de balances */}
+      <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-xl flex items-center gap-2">
             <Wallet className="h-6 w-6 text-yellow-500" />
-            Ganancia Neta
+            Cálculos de Balance
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className={`text-3xl font-bold ${calcularGananciaNeta() >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-            ${formatPrice(calcularGananciaNeta())}
-          </p>
+          {balances.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <p>No hay cálculos de balance guardados</p>
+              <p className="text-sm mt-2">Crea tu primer balance usando el botón +</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {balances.map(balance => (
+                <div
+                  key={balance.id}
+                  className="flex justify-between items-center border-b pb-2 cursor-pointer hover:bg-gray-50 p-2 rounded"
+                  onClick={() => abrirDetalleBalance(balance)}
+                >
+                  <div>
+                    <p className="font-medium">
+                      Balance {formatDate(balance.fechaInicio)} - {formatDate(balance.fechaFin)}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      Creado el {formatDate(balance.fechaCreacion)}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={balance.gananciaNeta >= 0 ? 'text-green-600' : 'text-red-600'}>
+                      ${formatPrice(balance.gananciaNeta)}
+                    </span>
+                    <ChevronRight className="h-4 w-4 text-gray-400" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Tabs para Ganancias y Gastos */}
-      <Tabs defaultValue="ganancias" onValueChange={setActiveTab} value={activeTab}>
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="ganancias">Ganancias Brutas</TabsTrigger>
-          <TabsTrigger value="gastos">Gastos</TabsTrigger>
-        </TabsList>
+      {/* Botón flotante para crear nuevo balance */}
+      <Button
+        className="rounded-full h-14 w-14 fixed bottom-6 right-6 shadow-lg"
+        onClick={() => setCrearDialogOpen(true)}
+      >
+        <Plus className="h-6 w-6" />
+      </Button>
 
-        {/* Pestaña de Ganancias Brutas */}
-        <TabsContent value="ganancias" className="mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Ganancias por Día</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {ventasDiarias.length === 0 ? (
-                  <p className="text-center py-4 text-gray-500">No hay datos de ventas disponibles</p>
-                ) : (
-                  ventasDiarias.map(dia => (
-                    <div 
-                      key={dia.fecha} 
-                      className="flex justify-between items-center border-b pb-2"
-                    >
-                      <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-gray-500" />
-                        <span className="font-medium">{formatDate(dia.fecha)}</span>
-                      </div>
-                      <span className="text-green-600 font-semibold">${formatPrice(dia.ganancia)}</span>
-                    </div>
-                  ))
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Pestaña de Gastos */}
-        <TabsContent value="gastos" className="mt-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <div className="flex justify-between items-center">
-                <CardTitle className="text-lg">Gastos Registrados</CardTitle>
-                <Button 
-                  onClick={() => setDialogOpen(true)} 
-                  size="sm" 
-                  className="rounded-full h-8 w-8 p-0"
-                >
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {gastos.length === 0 ? (
-                  <p className="text-center py-4 text-gray-500">No hay gastos registrados</p>
-                ) : (
-                  gastos.map(gasto => (
-                    <div 
-                      key={gasto.id} 
-                      className="flex justify-between items-center border-b pb-2"
-                    >
-                      <div>
-                        <p className="font-medium">{gasto.nombre}</p>
-                        <p className="text-xs text-gray-500">{formatDate(gasto.fecha)}</p>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-red-600 font-semibold">-${formatPrice(gasto.cantidad)}</span>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          onClick={() => eliminarGastoHandler(gasto.id)} 
-                          className="h-6 w-6"
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-
-      {/* Dialog para Añadir Gasto */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+      {/* Dialog para ver detalle de balance */}
+      <Dialog open={detalleDialogOpen} onOpenChange={setDetalleDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>Registrar Nuevo Gasto</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5 text-blue-500" />
+              Balance {balanceSeleccionado && formatDate(balanceSeleccionado.fechaInicio)} - {balanceSeleccionado && formatDate(balanceSeleccionado.fechaFin)}
+            </DialogTitle>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="nombre" className="text-right">
-                Nombre
-              </Label>
-              <Input
-                id="nombre"
-                placeholder="Descripción del gasto"
-                value={nuevoGasto.nombre}
-                onChange={(e) => setNuevoGasto({ ...nuevoGasto, nombre: e.target.value })}
-                className="col-span-3"
-              />
+
+          {balanceSeleccionado && (
+            <div className="space-y-4">
+              <div className="flex justify-between items-center border-b pb-2">
+                <span className="font-medium">Ganancia Bruta:</span>
+                <span className="text-green-600 font-semibold">${formatPrice(balanceSeleccionado.gananciaBruta)}</span>
+              </div>
+
+              <div>
+                <h3 className="font-medium mb-2">Gastos:</h3>
+                <div className="space-y-2 pl-2 max-h-[200px] overflow-y-auto">
+                  {balanceSeleccionado.gastos.map((gasto, index) => (
+                    <div key={index} className="flex justify-between items-center">
+                      <span>{gasto.nombre}</span>
+                      <span className="text-red-600">-${formatPrice(gasto.cantidad)}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex justify-between items-center border-t mt-2 pt-2">
+                  <span className="font-medium">Total Gastos:</span>
+                  <span className="text-red-600 font-semibold">-${formatPrice(balanceSeleccionado.totalGastos)}</span>
+                </div>
+              </div>
+
+              <Separator />
+
+              <div className="flex justify-between items-center pt-2">
+                <span className="font-bold text-lg">Ganancia Neta:</span>
+                <span className={`text-2xl font-bold ${balanceSeleccionado.gananciaNeta >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  ${formatPrice(balanceSeleccionado.gananciaNeta)}
+                </span>
+              </div>
+
+              <DialogFooter className="mt-4">
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => setConfirmarEliminarDialogOpen(true)}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" /> Eliminar Balance
+                </Button>
+              </DialogFooter>
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="cantidad" className="text-right">
-                Cantidad
-              </Label>
-              <Input
-                id="cantidad"
-                type="number"
-                placeholder="0.00"
-                value={nuevoGasto.cantidad}
-                onChange={(e) => setNuevoGasto({ ...nuevoGasto, cantidad: e.target.value })}
-                className="col-span-3"
-              />
-            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog para confirmar eliminación */}
+      <Dialog open={confirmarEliminarDialogOpen} onOpenChange={setConfirmarEliminarDialogOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Confirmar eliminación</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p>¿Estás seguro de que deseas eliminar este balance? Esta acción no se puede deshacer.</p>
           </div>
-          <DialogFooter>
-            <Button onClick={agregarGasto} disabled={isSubmitting}>
-              {isSubmitting ? 'Guardando...' : 'Confirmar'}
+          <DialogFooter className="flex justify-between">
+            <Button
+              variant="outline"
+              onClick={() => setConfirmarEliminarDialogOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={eliminarBalanceHandler}
+            >
+              Eliminar
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Dialog para crear balance */}
+      <Dialog open={crearDialogOpen} onOpenChange={cerrarCrearDialog}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Crear Nuevo Balance</DialogTitle>
+          </DialogHeader>
+
+          {paso === 1 && (
+            <div className="space-y-4 py-4">
+              <h3 className="font-medium">Paso 1: Selecciona el período</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="fechaInicio">Fecha Inicio</Label>
+                  <Input
+                    id="fechaInicio"
+                    type="date"
+                    value={fechaInicio}
+                    onChange={(e) => setFechaInicio(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="fechaFin">Fecha Fin</Label>
+                  <Input
+                    id="fechaFin"
+                    type="date"
+                    value={fechaFin}
+                    onChange={(e) => setFechaFin(e.target.value)}
+                  />
+                </div>
+              </div>
+              <DialogFooter className="mt-4">
+                <Button
+                  onClick={() => setPaso(2)}
+                  disabled={!fechaInicio || !fechaFin}
+                >
+                  Siguiente
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+
+          {paso === 2 && (
+            <div className="space-y-4 py-4">
+              <h3 className="font-medium">Paso 2: Registra los gastos</h3>
+
+              <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2">
+                {gastosNuevos.map((gasto, index) => (
+                  <div key={index} className="grid grid-cols-[1fr_auto_auto] gap-2 items-center">
+                    <Input
+                      placeholder="Nombre del gasto"
+                      value={gasto.nombre}
+                      onChange={(e) => actualizarGasto(index, 'nombre', e.target.value)}
+                    />
+                    <Input
+                      type="number"
+                      placeholder="0.00"
+                      className="w-24"
+                      value={gasto.cantidad}
+                      onChange={(e) => actualizarGasto(index, 'cantidad', e.target.value)}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => eliminarGastoField(index)}
+                      disabled={gastosNuevos.length === 1}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={agregarGastoField}
+                className="w-full"
+              >
+                <Plus className="h-4 w-4 mr-2" /> Agregar otro gasto
+              </Button>
+
+              <DialogFooter className="mt-4 flex justify-between">
+                <Button
+                  variant="outline"
+                  onClick={() => setPaso(1)}
+                >
+                  Anterior
+                </Button>
+                <Button
+                  onClick={crearNuevoBalance}
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? 'Guardando...' : 'Crear Balance'}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
-} 
+}

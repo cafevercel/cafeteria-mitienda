@@ -11,6 +11,7 @@ export async function GET() {
         p.precio, 
         p.foto, 
         p.tiene_parametros,
+        p.porcentaje_ganancia,
         up.cantidad
        FROM productos p
        JOIN usuario_productos up ON p.id = up.producto_id`
@@ -39,7 +40,19 @@ export async function GET() {
       })
     );
 
-    return NextResponse.json(productosConParametros);
+    // Transformar el campo porcentaje_ganancia a porcentajeGanancia para mantener consistencia en el frontend
+    const productosFormateados = productosConParametros.map(producto => {
+      // Si existe porcentaje_ganancia, lo copiamos a porcentajeGanancia
+      if (producto.porcentaje_ganancia !== undefined) {
+        return {
+          ...producto,
+          porcentajeGanancia: producto.porcentaje_ganancia
+        };
+      }
+      return producto;
+    });
+
+    return NextResponse.json(productosFormateados);
   } catch (error) {
     console.error('Error al obtener productos compartidos:', error);
     return NextResponse.json({ error: 'Error al obtener productos compartidos' }, { status: 500 });

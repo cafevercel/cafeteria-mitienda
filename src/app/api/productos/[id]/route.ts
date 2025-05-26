@@ -20,7 +20,14 @@ interface ParametroVendedor {
 const obtenerProductoConParametros = async (productoId: string) => {
     const result = await query(`
         SELECT 
-            p.*,
+            p.id,
+            p.nombre,
+            p.precio,
+            p.cantidad,
+            p.foto,
+            p.tiene_parametros,
+            p.precio_compra,
+            p.porcentaje_ganancia as "porcentajeGanancia",
             COALESCE(
                 json_agg(
                     json_build_object(
@@ -39,6 +46,7 @@ const obtenerProductoConParametros = async (productoId: string) => {
     return result.rows[0];
 };
 
+
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
     try {
         const { id } = params;
@@ -52,6 +60,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
         const parametrosRaw = formData.get('parametros') as string;
         const parametros: Parametro[] = parametrosRaw ? JSON.parse(parametrosRaw) : [];
         const precioCompra = formData.get('precio_compra') as string;
+        const porcentajeGanancia = formData.get('porcentajeGanancia') as string;
 
         const currentProduct = await query('SELECT * FROM productos WHERE id = $1', [id]);
 
@@ -66,7 +75,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 
         try {
             const result = await query(
-                'UPDATE productos SET nombre = $1, precio = $2, cantidad = $3, foto = $4, tiene_parametros = $5, precio_compra = $6 WHERE id = $7 RETURNING *',
+                'UPDATE productos SET nombre = $1, precio = $2, cantidad = $3, foto = $4, tiene_parametros = $5, precio_compra = $6, porcentaje_ganancia = $7 WHERE id = $8 RETURNING *',
                 [
                     nombre,
                     Number(precio),
@@ -74,6 +83,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
                     nuevaFotoUrl,
                     tieneParametros,
                     precioCompra ? Number(precioCompra) : currentProduct.rows[0].precio_compra || 0,
+                    porcentajeGanancia ? Number(porcentajeGanancia) : currentProduct.rows[0].porcentaje_ganancia || 0,
                     id
                 ]
             );
@@ -83,12 +93,12 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
                 'SELECT nombre FROM producto_parametros WHERE producto_id = $1',
                 [id]
             );
-            
+
             // Convertir explícitamente los resultados al tipo deseado
             const parametrosAntiguos: ParametroAntiguo[] = parametrosAntiguosResult.rows.map(row => ({
                 nombre: row.nombre as string
             }));
-            
+
             // Crear un mapa para relacionar índices de parámetros antiguos con nuevos
             const mapeoParametros: Record<string, string> = {};
             if (parametrosAntiguos.length > 0 && parametros.length > 0) {
@@ -112,12 +122,12 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
                     );
                 }
             }
-                
-                // Actualizar nombres en transaccion_parametros si hay mapeo de parámetros
-                if (Object.keys(mapeoParametros).length > 0) {
-                    for (const nombreAntiguo in mapeoParametros) {
-                        const nombreNuevo = mapeoParametros[nombreAntiguo];
-                        await query(`
+
+            // Actualizar nombres en transaccion_parametros si hay mapeo de parámetros
+            if (Object.keys(mapeoParametros).length > 0) {
+                for (const nombreAntiguo in mapeoParametros) {
+                    const nombreNuevo = mapeoParametros[nombreAntiguo];
+                    await query(`
                             UPDATE transaccion_parametros 
                             SET nombre = $1 
                             WHERE nombre = $2 
@@ -125,11 +135,11 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
                                 SELECT id FROM transacciones 
                                 WHERE producto = $3
                             )`,
-                            [nombreNuevo, nombreAntiguo, id]
-                        );
-                    }
+                        [nombreNuevo, nombreAntiguo, id]
+                    );
                 }
-                
+            }
+
             // Actualizar parámetros en usuario_producto_parametros
             if (tieneParametros) {
                 // Eliminar parámetros antiguos
@@ -227,8 +237,20 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
                 'DELETE FROM transacciones WHERE producto = $1',
                 [id]
             );
+            
+            // 9. Eliminar venta_parametros antes de eliminar ventas
+            await query(
+                'DELETE FROM venta_parametros WHERE venta_id IN (SELECT id FROM ventas WHERE producto = $1)',
+                [id]
+            );
 
-            // 9. Eliminar el producto
+            // 10. Eliminar registros de ventas relacionados con este producto
+            await query(
+                'DELETE FROM ventas WHERE producto = $1',
+                [id]
+            );
+
+            // 11. Eliminar el producto
             await query(
                 'DELETE FROM productos WHERE id = $1',
                 [id]
@@ -248,16 +270,17 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     }
 }
 
+
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
     try {
         const { id } = params;
 
         const producto = await obtenerProductoConParametros(id);
-        
+
         if (!producto) {
             return NextResponse.json({ error: 'Producto no encontrado' }, { status: 404 });
         }
-        
+
         return NextResponse.json(producto);
     } catch (error) {
         console.error('Error al obtener producto:', error);

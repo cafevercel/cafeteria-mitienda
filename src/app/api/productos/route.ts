@@ -1,28 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { put } from '@vercel/blob';
 import { query } from '@/lib/db';
-
-const obtenerProductoConParametros = async (productoId: string) => {
-    const result = await query(`
-        SELECT 
-            p.*,
-            COALESCE(
-                json_agg(
-                    json_build_object(
-                        'nombre', pp.nombre,
-                        'cantidad', pp.cantidad
-                    )
-                ) FILTER (WHERE pp.id IS NOT NULL),
-                '[]'::json
-            ) as parametros
-        FROM productos p
-        LEFT JOIN producto_parametros pp ON p.id = pp.producto_id
-        WHERE p.id = $1
-        GROUP BY p.id
-    `, [productoId]);
-
-    return result.rows[0];
-};
 
 export async function POST(request: NextRequest) {
     try {
@@ -35,6 +12,7 @@ export async function POST(request: NextRequest) {
         const tieneParametros = formData.get('tieneParametros') === 'true';
         const parametrosRaw = formData.get('parametros') as string;
         const parametros = parametrosRaw ? JSON.parse(parametrosRaw) : [];
+        const porcentajeGanancia = formData.get('porcentajeGanancia') as string;
 
         let fotoUrl = '';
 
@@ -46,8 +24,8 @@ export async function POST(request: NextRequest) {
 
         try {
             const result = await query(
-                'INSERT INTO productos (nombre, precio, precio_compra, cantidad, foto, tiene_parametros) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
-                [nombre, Number(precio), Number(precioCompra), Number(cantidad), fotoUrl, tieneParametros]
+                'INSERT INTO productos (nombre, precio, precio_compra, cantidad, foto, tiene_parametros, porcentaje_ganancia) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
+                [nombre, Number(precio), Number(precioCompra), Number(cantidad), fotoUrl, tieneParametros, Number(porcentajeGanancia) || 0]
             );
 
             const productoId = result.rows[0].id;
@@ -63,8 +41,33 @@ export async function POST(request: NextRequest) {
 
             await query('COMMIT');
 
-            const productoCompleto = await obtenerProductoConParametros(productoId);
-            return NextResponse.json(productoCompleto);
+            // Usar la misma función que en [id]/route.ts para obtener el producto con parámetros
+            const productoCompleto = await query(`
+                SELECT 
+                    p.id,
+                    p.nombre,
+                    p.precio,
+                    p.cantidad,
+                    p.foto,
+                    p.tiene_parametros,
+                    p.precio_compra,
+                    p.porcentaje_ganancia as "porcentajeGanancia",
+                    COALESCE(
+                        json_agg(
+                            json_build_object(
+                                'nombre', pp.nombre,
+                                'cantidad', pp.cantidad
+                            )
+                        ) FILTER (WHERE pp.id IS NOT NULL),
+                        '[]'::json
+                    ) as parametros
+                FROM productos p
+                LEFT JOIN producto_parametros pp ON p.id = pp.producto_id
+                WHERE p.id = $1
+                GROUP BY p.id
+            `, [productoId]);
+            
+            return NextResponse.json(productoCompleto.rows[0]);
         } catch (error) {
             await query('ROLLBACK');
             throw error;
@@ -75,13 +78,18 @@ export async function POST(request: NextRequest) {
     }
 }
 
-
 export async function GET(request: NextRequest) {
     try {
-
         const result = await query(`
             SELECT 
-                p.*,
+                p.id,
+                p.nombre,
+                p.precio,
+                p.cantidad,
+                p.foto,
+                p.tiene_parametros,
+                p.precio_compra,
+                p.porcentaje_ganancia as "porcentajeGanancia",
                 COALESCE(
                     json_agg(
                         json_build_object(
@@ -95,7 +103,6 @@ export async function GET(request: NextRequest) {
             LEFT JOIN producto_parametros pp ON p.id = pp.producto_id
             GROUP BY p.id
         `);
-
 
         return NextResponse.json(result.rows);
     } catch (error) {

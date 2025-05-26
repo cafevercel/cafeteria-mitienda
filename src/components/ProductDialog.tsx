@@ -9,6 +9,7 @@ import { toast } from "@/hooks/use-toast";
 import { Producto, Vendedor, Parametro } from '@/types';
 import { Plus, Minus } from 'lucide-react';
 import { ImageUpload } from '@/components/ImageUpload';
+import { formatearPorcentajeGanancia } from "@/lib/formatters";
 
 interface ProductDialogProps {
   product: Producto;
@@ -41,8 +42,14 @@ export default function ProductDialog({
     tiene_parametros: product.tiene_parametros,
     parametros: product.parametros || [],
     foto: product.foto || '',
-    precio_compra: product.precio_compra || 0, // Aseguramos que precio_compra tenga un valor
+    precio_compra: product.precio_compra || 0,
+    porcentajeGanancia: product.porcentajeGanancia || 0,
   });
+
+  // Nuevo estado para controlar si se muestra el campo de porcentaje de ganancia
+  const [mostrarPorcentajeGanancia, setMostrarPorcentajeGanancia] = useState<boolean>(
+    !!product.porcentajeGanancia
+  );
 
   const [parameterQuantities, setParameterQuantities] = useState<{ [key: string]: number }>({});
   const [totalDeliveryQuantity, setTotalDeliveryQuantity] = useState(0);
@@ -51,15 +58,19 @@ export default function ProductDialog({
 
   // Efecto para sincronizar el estado con el producto recibido
   useEffect(() => {
+    const tienePorcentajeGanancia = product.porcentajeGanancia !== undefined && product.porcentajeGanancia > 0;
+    
     setEditedProduct({
       ...product,
       tieneParametros: product.tiene_parametros,
       tiene_parametros: product.tiene_parametros,
       parametros: product.parametros || [],
       foto: product.foto || '',
-      precio_compra: product.precio_compra || 0, // Aseguramos que precio_compra tenga un valor
+      precio_compra: product.precio_compra || 0,
+      porcentajeGanancia: product.porcentajeGanancia || 0,
     });
     setImageUrl(product.foto || '');
+    setMostrarPorcentajeGanancia(tienePorcentajeGanancia);
   }, [product]);
 
   // Función para calcular la cantidad total disponible
@@ -85,7 +96,9 @@ export default function ProductDialog({
     const { name, value } = e.target;
     setEditedProduct((prev) => ({
       ...prev,
-      [name]: name === 'precio' || name === 'precio_compra' || name === 'cantidad' ? Number(value) : value,
+      [name]: name === 'precio' || name === 'precio_compra' || name === 'cantidad' || name === 'porcentajeGanancia'
+        ? Number(value)
+        : value,
     }));
   }, []);
 
@@ -130,6 +143,15 @@ export default function ProductDialog({
     }));
   }, []);
 
+  // Manejo del cambio en mostrar porcentaje de ganancia
+  const handleMostrarPorcentajeGananciaChange = useCallback((checked: boolean) => {
+    setMostrarPorcentajeGanancia(checked);
+    setEditedProduct(prev => ({
+      ...prev,
+      porcentajeGanancia: checked ? (prev.porcentajeGanancia || 0) : 0
+    }));
+  }, []);
+
   // Guardar cambios en el producto
   const handleEdit = async () => {
     try {
@@ -150,6 +172,7 @@ export default function ProductDialog({
         tieneParametros: editedProduct.tieneParametros || false,
         parametros: editedProduct.tieneParametros ? editedProduct.parametros : [],
         precio_compra: editedProduct.precio_compra || 0,
+        porcentajeGanancia: mostrarPorcentajeGanancia ? (editedProduct.porcentajeGanancia || 0) : 0,
       };
 
       console.log('Producto a guardar:', updatedProduct);
@@ -209,10 +232,10 @@ export default function ProductDialog({
       setParameterQuantities({});
       setTotalDeliveryQuantity(0);
       setSimpleDeliveryQuantity(0);
-      
+
       // Cerrar el diálogo después de la entrega exitosa
       onClose();
-      
+
       toast({
         title: "Éxito",
         description: "Producto entregado correctamente.",
@@ -272,8 +295,10 @@ export default function ProductDialog({
             <EditMode
               editedProduct={editedProduct}
               imageUrl={imageUrl}
+              mostrarPorcentajeGanancia={mostrarPorcentajeGanancia}
               onInputChange={handleInputChange}
               onTieneParametrosChange={handleTieneParametrosChange}
+              onMostrarPorcentajeGananciaChange={handleMostrarPorcentajeGananciaChange}
               onParametroChange={handleParametroChange}
               onAddParametro={addParametro}
               onRemoveParametro={removeParametro}
@@ -293,6 +318,7 @@ export default function ProductDialog({
                 setParameterQuantities({});
                 setTotalDeliveryQuantity(0);
                 setSimpleDeliveryQuantity(0);
+                setMode('view');
               }}
               onDeliver={handleDeliver}
               getTotalCantidad={getTotalCantidad}
@@ -300,6 +326,7 @@ export default function ProductDialog({
           ) : (
             <ViewMode
               product={product}
+              mostrarPorcentajeGanancia={mostrarPorcentajeGanancia}
               onEdit={() => setMode('edit')}
               onDeliver={() => setMode('deliver')}
               onDelete={handleDelete}
@@ -316,8 +343,10 @@ export default function ProductDialog({
 const EditMode = ({
   editedProduct,
   imageUrl,
+  mostrarPorcentajeGanancia,
   onInputChange,
   onTieneParametrosChange,
+  onMostrarPorcentajeGananciaChange,
   onParametroChange,
   onAddParametro,
   onRemoveParametro,
@@ -327,8 +356,10 @@ const EditMode = ({
 }: {
   editedProduct: Producto;
   imageUrl: string;
+  mostrarPorcentajeGanancia: boolean;
   onInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onTieneParametrosChange: (checked: boolean) => void;
+  onMostrarPorcentajeGananciaChange: (checked: boolean) => void;
   onParametroChange: (index: number, field: 'nombre' | 'cantidad', value: string) => void;
   onAddParametro: () => void;
   onRemoveParametro: (index: number) => void;
@@ -369,6 +400,32 @@ const EditMode = ({
           placeholder="Precio de compra"
         />
       </div>
+
+      {/* Checkbox para mostrar/ocultar el campo de porcentaje de ganancia */}
+      <div className="flex items-center space-x-2">
+        <Checkbox
+          id="mostrarPorcentajeGanancia"
+          checked={mostrarPorcentajeGanancia}
+          onCheckedChange={(checked) => onMostrarPorcentajeGananciaChange(checked as boolean)}
+        />
+        <Label htmlFor="mostrarPorcentajeGanancia">Definir % de ganancia</Label>
+      </div>
+
+      {/* Campo de porcentaje de ganancia que solo se muestra si el checkbox está marcado */}
+      {mostrarPorcentajeGanancia && (
+        <div>
+          <Label>% de ganancia</Label>
+          <Input
+            name="porcentajeGanancia"
+            type="number"
+            value={editedProduct.porcentajeGanancia || 0}
+            onChange={onInputChange}
+            placeholder="Porcentaje de ganancia"
+            min="0"
+            max="100"
+          />
+        </div>
+      )}
 
       <div className="flex items-center space-x-2">
         <Checkbox
@@ -428,6 +485,7 @@ const EditMode = ({
         </div>
       )}
 
+      {/* Movido el selector de imagen al final, justo antes de los botones */}
       <div>
         <Label>Imagen del producto</Label>
         <ImageUpload
@@ -437,7 +495,7 @@ const EditMode = ({
         />
       </div>
 
-      <div className="flex justify-between gap-2">
+      <div className="flex justify-between gap-2 mt-4">
         <Button onClick={onSave} className="flex-1">Guardar cambios</Button>
         <Button variant="outline" onClick={onCancel} className="flex-1">
           Cancelar
@@ -473,11 +531,11 @@ const DeliverMode = ({
     <div className="space-y-4">
       <div className="space-y-4">
         <h3 className="text-lg font-semibold">Seleccionar cantidad a entregar</h3>
-        
+
         {product.tiene_parametros && product.parametros ? (
           <div className="space-y-2">
             <p className="text-sm text-gray-500">Disponible total: {getTotalCantidad()}</p>
-            
+
             {product.parametros.map((param) => (
               <div key={param.nombre} className="flex justify-between items-center">
                 <span>{param.nombre} (Disponible: {param.cantidad})</span>
@@ -491,7 +549,7 @@ const DeliverMode = ({
                 />
               </div>
             ))}
-            
+
             <div className="flex justify-between items-center font-semibold">
               <span>Total a entregar:</span>
               <span>{totalDeliveryQuantity}</span>
@@ -520,10 +578,10 @@ const DeliverMode = ({
       <Button variant="outline" onClick={onBack}>
         Cancelar
       </Button>
-      <Button 
+      <Button
         onClick={onDeliver}
         disabled={
-          (product.tiene_parametros ? totalDeliveryQuantity === 0 : simpleDeliveryQuantity === 0) || 
+          (product.tiene_parametros ? totalDeliveryQuantity === 0 : simpleDeliveryQuantity === 0) ||
           (product.tiene_parametros ? totalDeliveryQuantity > getTotalCantidad() : simpleDeliveryQuantity > product.cantidad)
         }
       >
@@ -536,12 +594,14 @@ const DeliverMode = ({
 // Subcomponente para el modo de visualización
 const ViewMode = ({
   product,
+  mostrarPorcentajeGanancia,
   onEdit,
   onDeliver,
   onDelete,
   getTotalCantidad,
 }: {
   product: Producto;
+  mostrarPorcentajeGanancia: boolean;
   onEdit: () => void;
   onDeliver: () => void;
   onDelete: () => void;
@@ -552,6 +612,13 @@ const ViewMode = ({
       <div className="space-y-2">
         <p className="text-lg font-medium">Precio de venta: ${product.precio}</p>
         <p className="text-md text-gray-700">Precio de compra: ${product.precio_compra || 0}</p>
+
+        {/* Solo mostrar el porcentaje de ganancia si está habilitado */}
+        {mostrarPorcentajeGanancia && (product.porcentajeGanancia ?? 0) > 0 && (
+          <p className="text-md text-gray-700">
+            % de ganancia: {formatearPorcentajeGanancia(product.porcentajeGanancia ?? 0, product.precio)}
+          </p>
+        )}
 
         {(product.tiene_parametros || product.tieneParametros) && product.parametros && product.parametros.length > 0 ? (
           <div className="space-y-2">

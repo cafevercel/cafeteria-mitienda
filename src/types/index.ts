@@ -22,7 +22,8 @@ export interface Producto {
   foto?: string | null;
   tiene_parametros: boolean;  // Propiedad del backend
   tieneParametros?: boolean;  // Propiedad del frontend
-  parametros?: Parametro[] 
+  parametros?: Parametro[]
+  porcentajeGanancia?: number; 
 }
 
 export interface VentaParametro {
@@ -116,4 +117,22 @@ export interface TransferProductParams {
   toVendorId: string;
   cantidad: number;
   parametros?: Array<{ nombre: string; cantidad: number }>; 
+}
+
+// Añade estas interfaces al final de tu archivo types/index.ts
+
+export interface GastoBalance {
+  nombre: string;
+  cantidad: number | string;
+}
+
+export interface Balance {
+  id: string;
+  fechaInicio: string;
+  fechaFin: string;
+  gananciaBruta: number;
+  gastos: GastoBalance[];
+  totalGastos: number;
+  gananciaNeta: number;
+  fechaCreacion: string;
 }

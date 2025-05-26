@@ -80,6 +80,7 @@ interface NewProduct {
   cantidad: number;
   foto: string;
   tieneParametros: boolean;
+  porcentajeGanancia: number; // Añadir esta línea
   parametros: Array<{
     nombre: string;
     cantidad: number;
@@ -166,8 +167,10 @@ export default function AlmacenPage() {
     cantidad: 0,
     foto: '',
     tieneParametros: false,
+    porcentajeGanancia: 0, // Añadir esta línea
     parametros: []
-  })
+  });
+
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedProduct, setSelectedProduct] = useState<Producto | null>(null)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -243,11 +246,11 @@ export default function AlmacenPage() {
     const calcularCantidadTotal = (producto: Producto): number => {
       if (producto.tiene_parametros && producto.parametros) {
         // Filtrar parámetros válidos (no numéricos y cantidad > 0)
-        const parametrosValidos = producto.parametros.filter(param => 
+        const parametrosValidos = producto.parametros.filter(param =>
           isNaN(Number(param.nombre)) && // Excluir nombres que son solo números
           param.nombre.trim() !== '' // Excluir nombres vacíos
         );
-        
+
         return parametrosValidos.reduce((total, param) => total + (param.cantidad || 0), 0);
       }
       return producto.cantidad || 0;
@@ -495,12 +498,12 @@ export default function AlmacenPage() {
       }
 
       await entregarProducto(productId, cantidad, parametros);
-      
+
       toast({
         title: "Éxito",
         description: "Producto entregado correctamente",
       });
-      
+
       // Actualizar inventario
       await fetchInventario();
     } catch (error) {
@@ -566,14 +569,14 @@ export default function AlmacenPage() {
             }))
           : undefined;
 
-          try {
-            await entregarProducto(
-              productId,
-              cantidadTotal,
-              parametrosArray
-            );
-          } catch (error) {
-            console.error(`Error en entrega: ${error}`);
+        try {
+          await entregarProducto(
+            productId,
+            cantidadTotal,
+            parametrosArray
+          );
+        } catch (error) {
+          console.error(`Error en entrega: ${error}`);
           toast({
             title: "Error",
             description: `Error al entregar ${producto.nombre}`,
@@ -672,7 +675,7 @@ export default function AlmacenPage() {
         console.error(`Fecha inválida en venta: ${venta.fecha}`);
         return acc;
       }
-      
+
       const fechaStr = format(fecha, 'yyyy-MM-dd');
       if (!acc[fechaStr]) {
         acc[fechaStr] = [];
@@ -700,11 +703,11 @@ export default function AlmacenPage() {
         console.error(`Fecha inválida en venta: ${venta.fecha}`);
         return acc;
       }
-      
+
       const inicioSemana = startOfWeek(fecha, { weekStartsOn: 1 });
       const finSemana = endOfWeek(fecha, { weekStartsOn: 1 });
       const claveWeek = `${format(inicioSemana, 'yyyy-MM-dd')}_${format(finSemana, 'yyyy-MM-dd')}`;
-      
+
       if (!acc[claveWeek]) {
         acc[claveWeek] = {
           fechaInicio: format(inicioSemana, 'yyyy-MM-dd'),
@@ -714,12 +717,12 @@ export default function AlmacenPage() {
           ganancia: 0
         };
       }
-      
+
       acc[claveWeek].ventas.push(venta);
       const ventaTotal = parseFloat(venta.total.toString());
       acc[claveWeek].total += ventaTotal;
       acc[claveWeek].ganancia = parseFloat((acc[claveWeek].total * 0.08).toFixed(2));
-      
+
       return acc;
     }, {});
 
@@ -742,18 +745,18 @@ export default function AlmacenPage() {
   const handleVerVendedor = async (vendedor: Vendedor, initialMode: 'view' | 'edit' | 'ventas' = 'view') => {
     try {
       setIsLoading(true);
-      
+
       // Primero establecemos el modo y el vendedor seleccionado para mostrar algo al usuario
       setModeVendedor(initialMode);
       setVendedorSeleccionado(vendedor);
-      
+
       // Usamos Promise.allSettled para que si alguna falla, las otras continúen
       const [productosResult, ventasResult, transaccionesResult] = await Promise.allSettled([
         getVendedorProductos(vendedor.id),
         getVendedorVentas(vendedor.id),
         getVendedorTransacciones(vendedor.id)
       ]);
-      
+
       // Procesamos los resultados individualmente
       if (productosResult.status === 'fulfilled') {
         // Mapeamos los productos a la estructura esperada
@@ -767,13 +770,13 @@ export default function AlmacenPage() {
           tieneParametros: Boolean(p.tiene_parametros || p.tieneParametros),
           parametros: p.parametros || []
         }));
-        
+
         setProductosVendedor(productosCorregidos);
       } else {
         console.error('Error al obtener productos:', productosResult.reason);
         setProductosVendedor([]); // Array vacío si hay error
       }
-      
+
       if (ventasResult.status === 'fulfilled') {
         const ventas = ventasResult.value;
         setVentasVendedor(ventas);
@@ -785,7 +788,7 @@ export default function AlmacenPage() {
         setVentasDiarias([]);
         setVentasSemanales([]);
       }
-      
+
       if (transaccionesResult.status === 'fulfilled') {
         setTransaccionesVendedor(transaccionesResult.value);
       } else {
@@ -835,12 +838,19 @@ export default function AlmacenPage() {
       if (fileList && fileList.length > 0) {
         setNewProduct({ ...newProduct, [name]: fileList[0] })
       }
-    } else if (type === 'checkbox' && name === 'tieneParametros') {
-      setNewProduct({
-        ...newProduct,
-        tieneParametros: e.target.checked,
-        parametros: e.target.checked ? [{ nombre: '', cantidad: 0 }] : []
-      })
+    } else if (type === 'checkbox') {
+      if (name === 'tieneParametros') {
+        setNewProduct({
+          ...newProduct,
+          tieneParametros: e.target.checked,
+          parametros: e.target.checked ? [{ nombre: '', cantidad: 0 }] : []
+        })
+      } else if (name === 'usaPorcentajeGanancia') {
+        setNewProduct({
+          ...newProduct,
+          porcentajeGanancia: e.target.checked ? 10 : 0
+        })
+      }
     } else {
       setNewProduct({
         ...newProduct,
@@ -865,6 +875,7 @@ export default function AlmacenPage() {
       formData.append('nombre', newProduct.nombre);
       formData.append('precio', newProduct.precio.toString());
       formData.append('precioCompra', newProduct.precioCompra.toString());
+      formData.append('porcentajeGanancia', newProduct.porcentajeGanancia.toString()); // Añadir esta línea
 
       if (newProduct.tieneParametros) {
         formData.append('tieneParametros', 'true');
@@ -887,6 +898,7 @@ export default function AlmacenPage() {
         nombre: '',
         precio: 0,
         precioCompra: 0,
+        porcentajeGanancia: 0, // Añadir esta línea
         cantidad: 0,
         foto: '',
         tieneParametros: false,
@@ -990,12 +1002,9 @@ export default function AlmacenPage() {
       formData.append('precio', editedProduct.precio.toString());
       formData.append('cantidad', editedProduct.cantidad.toString());
       formData.append('tiene_parametros', editedProduct.tiene_parametros.toString());
-
-      // Añadir explícitamente el precio_compra
       formData.append('precio_compra', (editedProduct.precio_compra || 0).toString());
-
-      // Log para depuración
-      console.log('Precio de compra a enviar:', editedProduct.precio_compra);
+      // Añadir el porcentaje de ganancia al FormData
+      formData.append('porcentajeGanancia', (editedProduct.porcentajeGanancia || 0).toString());
 
       if (editedProduct.parametros) {
         formData.append('parametros', JSON.stringify(editedProduct.parametros));
@@ -1023,17 +1032,16 @@ export default function AlmacenPage() {
       });
     }
   };
-
   useEffect(() => {
     const loadCafeteriaData = async () => {
       if (activeSection === 'cafeteria') {
         try {
           // Cambiar getProductosCompartidos por getProductosCafeteria
           const productos = await getProductosCafeteria();
-          
+
           // Debug para ver qué estamos recibiendo
           console.log('Debug - Productos recibidos de getProductosCafeteria:', productos);
-          
+
           if (productos && productos.length > 0) {
             setProductosVendedor(productos);
             setCafeteriaProductos(productos);
@@ -1047,11 +1055,11 @@ export default function AlmacenPage() {
               variant: "default",
             });
           }
-          
+
           // Cargar transacciones
           const transacciones = await getTransaccionesVendedor();
           setTransaccionesVendedor(transacciones);
-          
+
           // Actualizar también el inventario general
           await fetchInventario();
         } catch (error) {
@@ -1077,24 +1085,24 @@ export default function AlmacenPage() {
     try {
       // La función reducirProductoInventario ahora espera solo 3 parámetros
       await reducirProductoInventario(productId, cantidad, parametros);
-      
+
       // Actualizar los datos después de la operación
       const updatedProducts = await getProductosCafeteria();
       setProductosVendedor(updatedProducts);
       setCafeteriaProductos(updatedProducts);
-      
+
       // Actualizar las transacciones
       const transacciones = await getTransaccionesVendedor();
       setTransaccionesVendedor(transacciones);
-      
+
       // Actualizar el inventario general
       await fetchInventario();
-      
+
       toast({
         title: "Éxito",
         description: "Producto reducido correctamente",
       });
-      
+
     } catch (error) {
       console.error('Error al reducir producto:', error);
       toast({
@@ -1137,16 +1145,16 @@ export default function AlmacenPage() {
   // Efecto para cargar los datos del vendedor cuando cambia
   useEffect(() => {
     if (!vendedorSeleccionado) return;
-    
+
     setIsLoading(true);
-    
+
     // Limpiar datos anteriores
     setProductosVendedor([]);
     setVentasVendedor([]);
     setTransaccionesVendedor([]);
     setVentasDiarias([]);
     setVentasSemanales([]);
-    
+
     const loadData = async () => {
       try {
         if (modeVendedor === 'edit') {
@@ -1176,7 +1184,7 @@ export default function AlmacenPage() {
         setIsLoading(false);
       }
     };
-    
+
     loadData();
   }, [vendedorSeleccionado, modeVendedor]);
 
@@ -1226,7 +1234,7 @@ export default function AlmacenPage() {
                 onClick={() => {
                   setActiveSection('cafeteria')
                   setIsMenuOpen(false)
-                  
+
                   if (!cafeteriaProductos.length) {
                     toast({
                       title: "Aviso",
@@ -1584,7 +1592,7 @@ export default function AlmacenPage() {
                     className="w-full h-auto p-4 flex items-center text-left bg-white border border-gray-200 rounded-lg shadow-sm"
                   >
                     <div className="flex items-center space-x-4 flex-grow">
-                      <Checkbox 
+                      <Checkbox
                         id={`vendedor-activo-${vendedor.id}`}
                         checked={vendedor.activo !== false}
                         onCheckedChange={(checked) => {
@@ -1598,9 +1606,9 @@ export default function AlmacenPage() {
                         </div>
                       </div>
                       <div className="flex space-x-2">
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
+                        <Button
+                          variant="outline"
+                          size="sm"
                           onClick={() => {
                             setVendedorSeleccionado(vendedor);
                             setModeVendedor('edit');
@@ -1609,9 +1617,9 @@ export default function AlmacenPage() {
                           <Edit className="h-4 w-4" />
                           <span className="ml-1">Editar</span>
                         </Button>
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
+                        <Button
+                          variant="outline"
+                          size="sm"
                           onClick={() => {
                             setVendedorSeleccionado(vendedor);
                             setModeVendedor('ventas');
@@ -1679,8 +1687,8 @@ export default function AlmacenPage() {
                       onChange={(e) => setSearchTerm(e.target.value)}
                       className="flex-grow"
                     />
-                    <Select 
-                      value={cafeteriaFilterOption} 
+                    <Select
+                      value={cafeteriaFilterOption}
                       onValueChange={(value) => setCafeteriaFilterOption(value as 'todos' | 'pocos' | 'sin-existencias')}
                     >
                       <SelectTrigger className="w-full md:w-auto min-w-[200px]">
@@ -1693,7 +1701,7 @@ export default function AlmacenPage() {
                       </SelectContent>
                     </Select>
                   </div>
-                  
+
                   {/* Tabla de productos en cafetería */}
                   <div className="overflow-x-auto">
                     <table className="w-full divide-y divide-gray-200">
@@ -1749,33 +1757,33 @@ export default function AlmacenPage() {
                             // Calcular la cantidad en cafetería de los productos
                             const cantidadCafeteriaA = a.tiene_parametros && a.parametros
                               ? a.parametros.filter(p => isNaN(Number(p.nombre)) && p.nombre.trim() !== '')
-                                  .reduce((sum, param) => sum + param.cantidad, 0)
+                                .reduce((sum, param) => sum + param.cantidad, 0)
                               : a.cantidad;
-                              
+
                             const cantidadCafeteriaB = b.tiene_parametros && b.parametros
                               ? b.parametros.filter(p => isNaN(Number(p.nombre)) && p.nombre.trim() !== '')
-                                  .reduce((sum, param) => sum + param.cantidad, 0)
+                                .reduce((sum, param) => sum + param.cantidad, 0)
                               : b.cantidad;
-                              
+
                             // Buscar el producto correspondiente en el almacén
                             const productoAlmacenA = inventario.find(p => p.id === a.id);
                             const productoAlmacenB = inventario.find(p => p.id === b.id);
-                            
+
                             // Calcular la cantidad en almacén
-                            const cantidadAlmacenA = productoAlmacenA 
-                              ? (productoAlmacenA.tiene_parametros && productoAlmacenA.parametros 
+                            const cantidadAlmacenA = productoAlmacenA
+                              ? (productoAlmacenA.tiene_parametros && productoAlmacenA.parametros
                                 ? productoAlmacenA.parametros.filter(p => isNaN(Number(p.nombre)) && p.nombre.trim() !== '')
-                                    .reduce((sum, param) => sum + param.cantidad, 0) 
+                                  .reduce((sum, param) => sum + param.cantidad, 0)
                                 : productoAlmacenA.cantidad)
                               : 0;
-                              
-                            const cantidadAlmacenB = productoAlmacenB 
-                              ? (productoAlmacenB.tiene_parametros && productoAlmacenB.parametros 
+
+                            const cantidadAlmacenB = productoAlmacenB
+                              ? (productoAlmacenB.tiene_parametros && productoAlmacenB.parametros
                                 ? productoAlmacenB.parametros.filter(p => isNaN(Number(p.nombre)) && p.nombre.trim() !== '')
-                                    .reduce((sum, param) => sum + param.cantidad, 0) 
+                                  .reduce((sum, param) => sum + param.cantidad, 0)
                                 : productoAlmacenB.cantidad)
                               : 0;
-                            
+
                             // Ordenar según el campo seleccionado
                             switch (cafeteriaSortBy) {
                               case 'nombre':
@@ -1801,27 +1809,27 @@ export default function AlmacenPage() {
                           .map((producto) => {
                             // Encontrar el producto correspondiente en el almacén
                             const productoAlmacen = inventario.find(p => p.id === producto.id);
-                            
+
                             // Calcular la cantidad total en el almacén
-                            const cantidadAlmacen = productoAlmacen 
-                              ? (productoAlmacen.tiene_parametros && productoAlmacen.parametros 
+                            const cantidadAlmacen = productoAlmacen
+                              ? (productoAlmacen.tiene_parametros && productoAlmacen.parametros
                                 ? productoAlmacen.parametros.filter(p => isNaN(Number(p.nombre)) && p.nombre.trim() !== '')
-                                    .reduce((sum, param) => sum + param.cantidad, 0) 
+                                  .reduce((sum, param) => sum + param.cantidad, 0)
                                 : productoAlmacen.cantidad)
                               : 0;
-                            
+
                             // Calcular la cantidad total en cafetería
                             const cantidadCafeteria = producto.tiene_parametros && producto.parametros
                               ? producto.parametros.filter(p => isNaN(Number(p.nombre)) && p.nombre.trim() !== '')
-                                  .reduce((sum, param) => sum + param.cantidad, 0)
+                                .reduce((sum, param) => sum + param.cantidad, 0)
                               : producto.cantidad;
-                            
+
                             // Determinar si es cantidad cero para aplicar el estilo rojo
                             const cantidadCero = cantidadCafeteria === 0;
-                            
+
                             return (
                               <React.Fragment key={producto.id}>
-                                <tr 
+                                <tr
                                   className={`hover:bg-gray-50 ${cantidadCero ? 'bg-red-50' : ''} ${producto.tiene_parametros ? 'cursor-pointer' : ''}`}
                                   onClick={() => {
                                     if (producto.tiene_parametros && producto.parametros && producto.parametros.length > 0) {
@@ -1961,130 +1969,130 @@ export default function AlmacenPage() {
           <DialogHeader>
             <DialogTitle>Entrega Masiva</DialogTitle>
           </DialogHeader>
-            <div className="space-y-4">
-              <Input
-                placeholder="Buscar productos..."
-                value={productSearchTerm}
-                onChange={(e) => setProductSearchTerm(e.target.value)}
-              />
-              <div className="max-h-[55vh] overflow-y-auto space-y-2 pr-2">
-                {filteredInventarioForMassDelivery.map((producto) => (
-                  <div key={producto.id} className="flex flex-col p-3 border rounded-lg bg-white">
-                    <div className="flex items-start gap-3">
-                      <div className="flex items-center h-5">
-                        <Checkbox
-                          id={`product-${producto.id}`}
-                          checked={!!selectedProducts[producto.id]}
-                          onCheckedChange={(checked) => {
-                            if (checked) {
+          <div className="space-y-4">
+            <Input
+              placeholder="Buscar productos..."
+              value={productSearchTerm}
+              onChange={(e) => setProductSearchTerm(e.target.value)}
+            />
+            <div className="max-h-[55vh] overflow-y-auto space-y-2 pr-2">
+              {filteredInventarioForMassDelivery.map((producto) => (
+                <div key={producto.id} className="flex flex-col p-3 border rounded-lg bg-white">
+                  <div className="flex items-start gap-3">
+                    <div className="flex items-center h-5">
+                      <Checkbox
+                        id={`product-${producto.id}`}
+                        checked={!!selectedProducts[producto.id]}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedProducts((prev) => ({
+                              ...prev,
+                              [producto.id]: {
+                                cantidad: 0,
+                                parametros: producto.tiene_parametros ? {} : undefined,
+                              },
+                            }));
+                          } else {
+                            setSelectedProducts((prev) => {
+                              const { [producto.id]: _, ...rest } = prev;
+                              return rest;
+                            });
+                          }
+                        }}
+                      />
+                    </div>
+
+                    <div className="w-16 h-16 relative rounded-md overflow-hidden flex-shrink-0">
+                      <Image
+                        src={producto.foto || '/placeholder.svg'}
+                        alt={producto.nombre}
+                        fill
+                        className="object-cover"
+                      />
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <label htmlFor={`product-${producto.id}`} className="font-medium text-sm block">
+                        {producto.nombre}
+                      </label>
+                      <div className="text-xs text-gray-600 mt-1 space-y-1">
+                        <p>Precio: ${producto.precio}</p>
+                        <p>Disponible: {producto.cantidad}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {selectedProducts[producto.id] && (
+                    <div className="mt-3 pl-8 space-y-3">
+                      {!producto.tiene_parametros ? (
+                        <div className="flex items-center gap-2">
+                          <label className="text-sm text-gray-600 flex-shrink-0">Cantidad:</label>
+                          <Input
+                            type="number"
+                            value={selectedProducts[producto.id]?.cantidad || ''}
+                            onChange={(e) =>
                               setSelectedProducts((prev) => ({
                                 ...prev,
                                 [producto.id]: {
-                                  cantidad: 0,
-                                  parametros: producto.tiene_parametros ? {} : undefined,
+                                  ...prev[producto.id],
+                                  cantidad: parseInt(e.target.value, 10) || 0,
                                 },
-                              }));
-                            } else {
-                              setSelectedProducts((prev) => {
-                                const { [producto.id]: _, ...rest } = prev;
-                                return rest;
-                              });
+                              }))
                             }
-                          }}
-                        />
-                      </div>
-
-                      <div className="w-16 h-16 relative rounded-md overflow-hidden flex-shrink-0">
-                        <Image
-                          src={producto.foto || '/placeholder.svg'}
-                          alt={producto.nombre}
-                          fill
-                          className="object-cover"
-                        />
-                      </div>
-
-                      <div className="flex-1 min-w-0">
-                        <label htmlFor={`product-${producto.id}`} className="font-medium text-sm block">
-                          {producto.nombre}
-                        </label>
-                        <div className="text-xs text-gray-600 mt-1 space-y-1">
-                          <p>Precio: ${producto.precio}</p>
-                          <p>Disponible: {producto.cantidad}</p>
+                            className="w-24 h-8"
+                            min={1}
+                            max={producto.cantidad}
+                          />
                         </div>
-                      </div>
-                    </div>
-
-                    {selectedProducts[producto.id] && (
-                      <div className="mt-3 pl-8 space-y-3">
-                        {!producto.tiene_parametros ? (
-                          <div className="flex items-center gap-2">
-                            <label className="text-sm text-gray-600 flex-shrink-0">Cantidad:</label>
-                            <Input
-                              type="number"
-                              value={selectedProducts[producto.id]?.cantidad || ''}
-                              onChange={(e) =>
-                                setSelectedProducts((prev) => ({
-                                  ...prev,
-                                  [producto.id]: {
-                                    ...prev[producto.id],
-                                    cantidad: parseInt(e.target.value, 10) || 0,
-                                  },
-                                }))
-                              }
-                              className="w-24 h-8"
-                              min={1}
-                              max={producto.cantidad}
-                            />
-                          </div>
-                        ) : (
-                          <div className="space-y-2">
-                            {producto.parametros?.map((parametro) => (
-                              <div key={parametro.nombre} className="flex items-center gap-2">
-                                <label className="text-sm text-gray-600 flex-1">
-                                  {parametro.nombre}:
-                                  <span className="text-xs text-gray-500 ml-1">
-                                    (Máx: {parametro.cantidad})
-                                  </span>
-                                </label>
-                                <Input
-                                  type="number"
-                                  value={selectedProducts[producto.id]?.parametros?.[parametro.nombre] || ''}
-                                  onChange={(e) => {
-                                    const value = parseInt(e.target.value, 10) || 0;
-                                    setSelectedProducts((prev) => ({
-                                      ...prev,
-                                      [producto.id]: {
-                                        ...prev[producto.id],
-                                        parametros: {
-                                          ...prev[producto.id]?.parametros,
-                                          [parametro.nombre]: value,
-                                        },
+                      ) : (
+                        <div className="space-y-2">
+                          {producto.parametros?.map((parametro) => (
+                            <div key={parametro.nombre} className="flex items-center gap-2">
+                              <label className="text-sm text-gray-600 flex-1">
+                                {parametro.nombre}:
+                                <span className="text-xs text-gray-500 ml-1">
+                                  (Máx: {parametro.cantidad})
+                                </span>
+                              </label>
+                              <Input
+                                type="number"
+                                value={selectedProducts[producto.id]?.parametros?.[parametro.nombre] || ''}
+                                onChange={(e) => {
+                                  const value = parseInt(e.target.value, 10) || 0;
+                                  setSelectedProducts((prev) => ({
+                                    ...prev,
+                                    [producto.id]: {
+                                      ...prev[producto.id],
+                                      parametros: {
+                                        ...prev[producto.id]?.parametros,
+                                        [parametro.nombre]: value,
                                       },
-                                    }));
-                                  }}
-                                  className="w-24 h-8"
-                                  min={0}
-                                  max={parametro.cantidad}
-                                />
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            <div className="sticky bottom-0 pt-2 bg-white">
-                <Button
-                  onClick={handleMassDelivery}
-                  disabled={Object.keys(selectedProducts).length === 0}
-                className="w-full"
-                >
-                  Entregar
-                </Button>
-              </div>
+                                    },
+                                  }));
+                                }}
+                                className="w-24 h-8"
+                                min={0}
+                                max={parametro.cantidad}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
+            <div className="sticky bottom-0 pt-2 bg-white">
+              <Button
+                onClick={handleMassDelivery}
+                disabled={Object.keys(selectedProducts).length === 0}
+                className="w-full"
+              >
+                Entregar
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -2149,7 +2157,7 @@ export default function AlmacenPage() {
             <DialogTitle>Agregar Nuevo Producto</DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4 mb-16">
+          <div className="space-y-4">
             <div>
               <label htmlFor="nombre" className="block text-sm font-medium text-gray-700">Nombre</label>
               <Input
@@ -2190,6 +2198,36 @@ export default function AlmacenPage() {
                 placeholder="Precio de compra del producto"
               />
             </div>
+
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="usaPorcentajeGanancia"
+                checked={!!newProduct.porcentajeGanancia}
+                onCheckedChange={(checked) => {
+                  setNewProduct(prev => ({
+                    ...prev,
+                    porcentajeGanancia: checked ? (prev.porcentajeGanancia || 10) : 0
+                  }));
+                }}
+              />
+              <label htmlFor="usaPorcentajeGanancia">Definir % de ganancia</label>
+            </div>
+
+            {!!newProduct.porcentajeGanancia && (
+              <div>
+                <label htmlFor="porcentajeGanancia" className="block text-sm font-medium text-gray-700">% de ganancia</label>
+                <Input
+                  id="porcentajeGanancia"
+                  name="porcentajeGanancia"
+                  type="number"
+                  value={newProduct.porcentajeGanancia}
+                  onChange={handleProductInputChange}
+                  placeholder="Porcentaje de ganancia"
+                  min="0"
+                  max="100"
+                />
+              </div>
+            )}
 
             <div className="flex items-center space-x-2">
               <Checkbox
@@ -2283,12 +2321,14 @@ export default function AlmacenPage() {
                 disabled={false}
               />
             </div>
-          </div>
 
-          {/* Botones fijos en la parte inferior */}
-          <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t">
-            <div className="max-w-[calc(100%-2rem)] mx-auto">
-              <Button onClick={handleAddProduct} className="w-full" disabled={nombreExiste || verificandoNombre}>
+            {/* Botón de agregar justo después del campo de foto */}
+            <div className="pt-4">
+              <Button
+                onClick={handleAddProduct}
+                className="w-full"
+                disabled={nombreExiste || verificandoNombre}
+              >
                 {verificandoNombre ? 'Verificando...' : 'Agregar'}
               </Button>
             </div>
@@ -2353,8 +2393,8 @@ export default function AlmacenPage() {
           initialMode={modeVendedor}
           onProductTransfer={async (productId, fromVendorId, toVendorId, cantidad, parametros) => {
             // Implementación temporal para evitar el error
-            console.log('Transferencia de producto no implementada', { 
-              productId, fromVendorId, toVendorId, cantidad, parametros 
+            console.log('Transferencia de producto no implementada', {
+              productId, fromVendorId, toVendorId, cantidad, parametros
             });
             toast({
               title: "Aviso",
@@ -2491,8 +2531,8 @@ export default function AlmacenPage() {
             </Button>
           </div>
           <div className="flex justify-between pt-4">
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => {
                 setShowDestinationDialog(false)
                 setSelectedDestination(null)
@@ -2524,7 +2564,7 @@ export default function AlmacenPage() {
                       productToReduce.tiene_parametros ? 0 : quantityToReduce,
                       parametrosReduccion
                     );
-                    
+
                     // Actualizar inmediatamente la interfaz para cafetería
                     if (activeSection === 'cafeteria') {
                       const updatedProducts = await getProductosCafeteria();

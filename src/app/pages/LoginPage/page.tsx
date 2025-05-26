@@ -49,10 +49,10 @@ export default function LoginPage() {
         <CardHeader className="space-y-2 text-center">
           <div className="mx-auto mb-2">
             <Image 
-              src="/logo-placeholder.png" 
+              src="/logo.png" 
               alt="Logo" 
-              width={100} 
-              height={100}
+              width={200} 
+              height={200}
               className="mx-auto"
               onError={(e) => {
                 // Si la imagen da error, usar un fallback
