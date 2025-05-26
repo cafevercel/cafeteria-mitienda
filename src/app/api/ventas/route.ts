@@ -101,6 +101,14 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
+  // Desactivar caché para asegurar datos frescos
+  const headers = {
+    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0',
+    'Surrogate-Control': 'no-store'
+  };
+
   const { searchParams } = new URL(request.url);
   const vendedorId = searchParams.get('vendedorId');
   const productoId = searchParams.get('productoId');
@@ -128,10 +136,10 @@ export async function GET(request: NextRequest) {
       );
 
       if (result.rows.length === 0) {
-        return NextResponse.json({ error: 'Venta no encontrada' }, { status: 404 });
+        return NextResponse.json({ error: 'Venta no encontrada' }, { status: 404, headers });
       }
 
-      return NextResponse.json(result.rows[0]);
+      return NextResponse.json(result.rows[0], { headers });
     }
     
     // Consultas para listar ventas
@@ -176,12 +184,12 @@ export async function GET(request: NextRequest) {
          ORDER BY v.fecha DESC`
       );
     } else {
-      return NextResponse.json({ error: 'Se requiere vendedorId, productoId, id o all=true' }, { status: 400 });
+      return NextResponse.json({ error: 'Se requiere vendedorId, productoId, id o all=true' }, { status: 400, headers });
     }
 
-    return NextResponse.json(result.rows);
+    return NextResponse.json(result.rows, { headers });
   } catch (error) {
     console.error('Error al obtener ventas:', error);
-    return NextResponse.json({ error: 'Error al obtener ventas' }, { status: 500 });
+    return NextResponse.json({ error: 'Error al obtener ventas' }, { status: 500, headers });
   }
 }

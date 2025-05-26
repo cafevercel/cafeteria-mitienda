@@ -2,6 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 
 export async function GET() {
+  // Desactivar caché para asegurar datos frescos
+  const headers = {
+    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0',
+    'Surrogate-Control': 'no-store'
+  };
+
   try {
     // Obtener todos los productos con su información básica
     const productosResult = await query(
@@ -52,9 +60,9 @@ export async function GET() {
       return producto;
     });
 
-    return NextResponse.json(productosFormateados);
+    return NextResponse.json(productosFormateados, { headers });
   } catch (error) {
     console.error('Error al obtener productos compartidos:', error);
-    return NextResponse.json({ error: 'Error al obtener productos compartidos' }, { status: 500 });
+    return NextResponse.json({ error: 'Error al obtener productos compartidos' }, { status: 500, headers });
   }
 } 

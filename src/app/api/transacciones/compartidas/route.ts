@@ -2,6 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 
 export async function GET() {
+  // Desactivar caché para asegurar datos frescos
+  const headers = {
+    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0',
+    'Surrogate-Control': 'no-store'
+  };
+
   try {
     const baseQuery = `
       SELECT 
@@ -40,17 +48,17 @@ export async function GET() {
       })
     );
 
-    return NextResponse.json(transaccionesConParametros);
+    return NextResponse.json(transaccionesConParametros, { headers });
   } catch (error) {
     if (error instanceof Error) {
       return NextResponse.json(
         { error: 'Error al obtener transacciones', details: error.message }, 
-        { status: 500 }
+        { status: 500, headers }
       );
     } else {
       return NextResponse.json(
         { error: 'Error desconocido al obtener transacciones' }, 
-        { status: 500 }
+        { status: 500, headers }
       );
     }
   }
