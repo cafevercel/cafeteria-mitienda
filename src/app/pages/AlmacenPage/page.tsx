@@ -688,6 +688,7 @@ export default function AlmacenPage() {
   // Función para calcular ventas diarias
   // Función para calcular ventas diarias
   const calcularVentasDiarias = (ventas: Venta[]) => {
+    console.log('Calculando ventas diarias para:', ventas.length, 'ventas');
     const ventasPorDia = ventas.reduce((acc: Record<string, Venta[]>, venta) => {
       const fecha = parseLocalDate(venta.fecha);
       if (!isValid(fecha)) {
@@ -719,6 +720,7 @@ export default function AlmacenPage() {
   // Función para calcular ventas semanales
   // Función para calcular ventas semanales
   const calcularVentasSemanales = (ventas: Venta[]) => {
+    console.log('Calculando ventas semanales para:', ventas.length, 'ventas');
     const ventasPorSemana = ventas.reduce((acc: Record<string, VentaSemana>, venta) => {
       const fecha = parseLocalDate(venta.fecha);
       if (!isValid(fecha)) {
@@ -766,69 +768,11 @@ export default function AlmacenPage() {
   };
 
   const handleVerVendedor = async (vendedor: Vendedor, initialMode: 'view' | 'edit' | 'ventas' = 'view') => {
-    try {
-      setIsLoading(true);
-
-      // Primero establecemos el modo y el vendedor seleccionado para mostrar algo al usuario
-      setModeVendedor(initialMode);
-      setVendedorSeleccionado(vendedor);
-
-      // Usamos Promise.allSettled para que si alguna falla, las otras continúen
-      const [productosResult, ventasResult, transaccionesResult] = await Promise.allSettled([
-        getVendedorProductos(vendedor.id),
-        getVendedorVentas(vendedor.id),
-        getVendedorTransacciones(vendedor.id)
-      ]);
-
-      // Procesamos los resultados individualmente
-      if (productosResult.status === 'fulfilled') {
-        // Mapeamos los productos a la estructura esperada
-        const productosCorregidos = productosResult.value.map(p => ({
-          id: p.id,
-          nombre: p.nombre,
-          precio: p.precio,
-          cantidad: p.cantidad,
-          foto: p.foto || null,
-          tiene_parametros: Boolean(p.tiene_parametros || p.tieneParametros),
-          tieneParametros: Boolean(p.tiene_parametros || p.tieneParametros),
-          parametros: p.parametros || []
-        }));
-
-        setProductosVendedor(productosCorregidos);
-      } else {
-        console.error('Error al obtener productos:', productosResult.reason);
-        setProductosVendedor([]); // Array vacío si hay error
-      }
-
-      if (ventasResult.status === 'fulfilled') {
-        const ventas = ventasResult.value;
-        setVentasVendedor(ventas);
-        calcularVentasDiarias(ventas);
-        calcularVentasSemanales(ventas);
-      } else {
-        console.error('Error al obtener ventas:', ventasResult.reason);
-        setVentasVendedor([]);
-        setVentasDiarias([]);
-        setVentasSemanales([]);
-      }
-
-      if (transaccionesResult.status === 'fulfilled') {
-        setTransaccionesVendedor(transaccionesResult.value);
-      } else {
-        console.error('Error al obtener transacciones:', transaccionesResult.reason);
-        setTransaccionesVendedor([]); // Array vacío si hay error
-      }
-    } catch (error) {
-      console.error('Error al cargar datos del vendedor:', error);
-      toast({
-        title: "Error",
-        description: "No se pudieron cargar algunos datos del vendedor. La información puede estar incompleta.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
+    // Solo establecer el vendedor y modo, dejar que useEffect maneje la carga
+    setVendedorSeleccionado(vendedor);
+    setModeVendedor(initialMode);
   };
+
 
 
   useEffect(() => {
@@ -1169,19 +1113,18 @@ export default function AlmacenPage() {
   useEffect(() => {
     if (!vendedorSeleccionado) return;
 
-    setIsLoading(true);
-
-    // Limpiar datos anteriores
-    setProductosVendedor([]);
-    setVentasVendedor([]);
-    setTransaccionesVendedor([]);
-    setVentasDiarias([]);
-    setVentasSemanales([]);
-
     const loadData = async () => {
+      setIsLoading(true);
+
+      // Limpiar datos anteriores solo al inicio
+      setProductosVendedor([]);
+      setVentasVendedor([]);
+      setTransaccionesVendedor([]);
+      setVentasDiarias([]);
+      setVentasSemanales([]);
+
       try {
         if (modeVendedor === 'edit') {
-          // Para editar solo necesitamos los productos
           const productos = await getVendedorProductos(vendedorSeleccionado.id);
           setProductosVendedor(productos.map(p => ({
             ...p,
@@ -1190,11 +1133,20 @@ export default function AlmacenPage() {
             foto: p.foto || ''
           })) as any);
         } else if (modeVendedor === 'ventas') {
-          // Para ventas necesitamos las ventas y cálculos relacionados
+          // Cargar ventas y calcular estadísticas
           const ventas = await getVendedorVentas(vendedorSeleccionado.id);
+          console.log('Ventas cargadas:', ventas); // Para debug
+
           setVentasVendedor(ventas);
-          calcularVentasDiarias(ventas);
-          calcularVentasSemanales(ventas);
+
+          // Asegurar que los cálculos se ejecuten después de establecer las ventas
+          if (ventas && ventas.length > 0) {
+            calcularVentasDiarias(ventas);
+            calcularVentasSemanales(ventas);
+          } else {
+            setVentasDiarias([]);
+            setVentasSemanales([]);
+          }
         }
       } catch (error) {
         console.error('Error al cargar datos del vendedor:', error);
@@ -1208,8 +1160,12 @@ export default function AlmacenPage() {
       }
     };
 
-    loadData();
+    // Añadir un pequeño delay para evitar race conditions
+    const timeoutId = setTimeout(loadData, 100);
+
+    return () => clearTimeout(timeoutId);
   }, [vendedorSeleccionado, modeVendedor]);
+
 
   // Agregar una función para alternar la expansión de productos
   const toggleProductExpansion = (productId: string) => {
@@ -1646,11 +1602,13 @@ export default function AlmacenPage() {
                           onClick={() => {
                             setVendedorSeleccionado(vendedor);
                             setModeVendedor('ventas');
+                            // Remover la llamada a handleVerVendedor desde aquí
                           }}
                         >
                           <DollarSign className="h-4 w-4" />
                           <span className="ml-1">Ventas</span>
                         </Button>
+
                       </div>
                     </div>
                   </div>
