@@ -16,7 +16,7 @@ export function WeekPicker({ value, onChange }: WeekPickerProps) {
   const today = new Date()
   const weekStart = startOfWeek(today, { weekStartsOn: 1 })
   const weekEnd = endOfWeek(today, { weekStartsOn: 1 })
-  
+
   const weekDays = eachDayOfInterval({
     start: weekStart,
     end: weekEnd
@@ -24,13 +24,13 @@ export function WeekPicker({ value, onChange }: WeekPickerProps) {
 
   const handleSelect = (date: Date | undefined) => {
     if (date) {
-      // Crear una nueva fecha usando los componentes individuales
+      // Crear fecha en zona horaria local sin conversión UTC
       const year = date.getFullYear()
-      const month = date.getMonth()
-      const day = date.getDate()
-      const selectedDate = new Date(year, month, day, 12) // Establecer hora a mediodía
-      
-      onChange(format(selectedDate, 'yyyy-MM-dd'))
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const day = String(date.getDate()).padStart(2, '0')
+
+      // Enviar como string sin conversión de timezone
+      onChange(`${year}-${month}-${day}`)
       setOpen(false)
     }
   }
@@ -45,14 +45,17 @@ export function WeekPicker({ value, onChange }: WeekPickerProps) {
             !value && "text-muted-foreground"
           )}
         >
-          {value ? format(new Date(value + 'T12:00:00'), "EEEE, d 'de' MMMM", { locale: es }) : 
-            <span>Selecciona un día de esta semana</span>}
+          {value ?
+            // Parsear la fecha como local, no UTC
+            format(new Date(value.split('-').map(Number).join('/')), "EEEE, d 'de' MMMM", { locale: es }) :
+            <span>Selecciona un día de esta semana</span>
+          }
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start">
         <Calendar
           mode="single"
-          selected={value ? new Date(value + 'T12:00:00') : undefined}
+          selected={value ? new Date(value.split('-').map(Number).join('/')) : undefined}
           onSelect={handleSelect}
           disabled={(date) => {
             return !weekDays.some(weekDay => isSameDay(date, weekDay))
