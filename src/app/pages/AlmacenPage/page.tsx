@@ -2485,7 +2485,7 @@ export default function AlmacenPage() {
             </Button>
             <Button
               onClick={() => {
-                if (productToReduce?.parametros && productToReduce.parametros.length > 0) {
+                if (productToReduce?.tiene_parametros && productToReduce.parametros && productToReduce.parametros.length > 0) {
                   const totalQuantity = Object.values(parameterQuantities).reduce((a, b) => a + b, 0)
                   if (totalQuantity > 0) {
                     setQuantityToReduce(totalQuantity)
@@ -2499,7 +2499,7 @@ export default function AlmacenPage() {
               }}
               disabled={
                 isLoading ||
-                (productToReduce?.parametros
+                (productToReduce?.tiene_parametros && productToReduce.parametros && productToReduce.parametros.length > 0
                   ? Object.values(parameterQuantities).reduce((a, b) => a + b, 0) <= 0
                   : quantityToReduce <= 0)
               }
