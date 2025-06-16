@@ -204,7 +204,9 @@ const useVendedorData = (vendedorId: string) => {
   const agruparVentasPorDia = useCallback((ventas: Venta[]) => {
     const ventasDiarias: VentaDia[] = [];
     ventas.forEach((venta) => {
-      const fecha = parseISO(venta.fecha);
+      const dateOnly = venta.fecha.split(' ')[0] || venta.fecha.split('T')[0]
+      const [year, month, day] = dateOnly.split('-').map(Number)
+      const fecha = new Date(year, month - 1, day)
       if (!isValid(fecha)) {
         console.error(`Invalid date in venta: ${venta.fecha}`);
         return;
@@ -223,8 +225,10 @@ const useVendedorData = (vendedorId: string) => {
       }
     });
     return ventasDiarias.sort((a, b) => {
-      const dateA = parseISO(a.fecha);
-      const dateB = parseISO(b.fecha);
+      const [yearA, monthA, dayA] = a.fecha.split('-').map(Number)
+      const [yearB, monthB, dayB] = b.fecha.split('-').map(Number)
+      const dateA = new Date(yearA, monthA - 1, dayA)
+      const dateB = new Date(yearB, monthB - 1, dayB)
       return isValid(dateB) && isValid(dateA) ? dateB.getTime() - dateA.getTime() : 0;
     });
   }, []);
@@ -254,7 +258,9 @@ const useVendedorData = (vendedorId: string) => {
     };
 
     ventas.forEach((venta) => {
-      const ventaDate = parseISO(venta.fecha);
+      const dateOnly = venta.fecha.split(' ')[0] || venta.fecha.split('T')[0]
+      const [year, month, day] = dateOnly.split('-').map(Number)
+      const ventaDate = new Date(year, month - 1, day)
       if (!isValid(ventaDate)) {
         console.error(`Invalid date in venta: ${venta.fecha}`);
         return;
@@ -282,8 +288,10 @@ const useVendedorData = (vendedorId: string) => {
     const ventasSemanales = Array.from(weekMap.values());
 
     return ventasSemanales.sort((a, b) => {
-      const dateA = parseISO(a.fechaInicio);
-      const dateB = parseISO(b.fechaInicio);
+      const [yearA, monthA, dayA] = a.fechaInicio.split('-').map(Number)
+      const [yearB, monthB, dayB] = b.fechaInicio.split('-').map(Number)
+      const dateA = new Date(yearA, monthA - 1, dayA)
+      const dateB = new Date(yearB, monthB - 1, dayB)
       return isValid(dateB) && isValid(dateA) ? dateB.getTime() - dateA.getTime() : 0;
     });
   }, []);
@@ -317,15 +325,15 @@ const useVendedorData = (vendedorId: string) => {
       // Obtener todos los productos para tener acceso a los porcentajes de ganancia
       const productos = await getProductosCompartidos();
       const productosMap = new Map<string, Producto>();
-      
+
       // Crear un mapa de productos por ID para búsqueda rápida
       productos.forEach((producto: Producto) => {
         productosMap.set(producto.id, producto);
       });
-      
+
       // Llamar a getVentasMes para obtener todas las ventas
       const ventasMesData: Venta[] = await getVentasMes(vendedorId);
-      
+
       // Enriquecer las ventas con los porcentajes de ganancia de los productos
       const ventasEnriquecidas = ventasMesData.map(venta => {
         const producto = productosMap.get(venta.producto);
@@ -339,9 +347,9 @@ const useVendedorData = (vendedorId: string) => {
         }
         return venta;
       });
-      
+
       console.log('Ventas enriquecidas con porcentajes de ganancia:', ventasEnriquecidas);
-      
+
       setVentasRegistro(ventasEnriquecidas);
       setVentasAgrupadas(agruparVentas(ventasEnriquecidas));
       setVentasSemanales(agruparVentasPorSemana(ventasEnriquecidas));
@@ -412,7 +420,13 @@ const useVendedorData = (vendedorId: string) => {
 
 const formatDate = (dateString: string): string => {
   try {
-    const date = parseISO(dateString)
+    // Extraer solo la parte de la fecha (sin hora)
+    const dateOnly = dateString.split(' ')[0] || dateString.split('T')[0]
+    const [year, month, day] = dateOnly.split('-').map(Number)
+
+    // Crear fecha en zona horaria local
+    const date = new Date(year, month - 1, day)
+
     if (!isValid(date)) {
       console.error(`Invalid date string: ${dateString}`)
       return 'Fecha inválida'
@@ -423,6 +437,7 @@ const formatDate = (dateString: string): string => {
     return 'Error en fecha'
   }
 }
+
 
 const formatPrice = (price: number | string | undefined): string => {
   if (typeof price === 'undefined') {
@@ -457,7 +472,7 @@ const VentaDiaDesplegable = ({ venta, busqueda }: { venta: VentaDia, busqueda: s
     return ventasFiltradas.reduce((totalGanancia, v) => {
       // Obtener el porcentaje de ganancia (puede estar en diferentes propiedades)
       const porcentajeGanancia = v.porcentajeGanancia || v.porcentaje_ganancia;
-      
+
       // Verificar si hay porcentaje de ganancia
       if (!porcentajeGanancia) {
         console.log(`Producto: ${v.producto_nombre} porcentajeGanancia: ${v.porcentajeGanancia} porcentaje_ganancia: ${v.porcentaje_ganancia}`);
@@ -563,7 +578,9 @@ const VentaSemanaDesplegable = ({ venta, busqueda }: { venta: VentaSemana, busqu
 
   // Agrupar las ventas filtradas por día
   const ventasPorDia = ventasFiltradas.reduce((acc: Record<string, Venta[]>, v) => {
-    const fecha = parseISO(v.fecha);
+    const dateOnly = v.fecha.split(' ')[0] || v.fecha.split('T')[0]
+    const [year, month, day] = dateOnly.split('-').map(Number)
+    const fecha = new Date(year, month - 1, day)
     if (!isValid(fecha)) {
       console.error(`Invalid date in venta: ${v.fecha}`);
       return acc;
@@ -781,17 +798,19 @@ const ProductoCard = ({ producto, vendedorId }: { producto: Producto, vendedorId
   };
 
   // Convertir porcentajeGanancia a número (si ya es un número, lo usamos directamente)
-  const porcentajeGanancia = producto.porcentajeGanancia 
-    ? (typeof producto.porcentajeGanancia === 'string' 
-        ? parseFloat(producto.porcentajeGanancia) 
-        : producto.porcentajeGanancia) 
+  const porcentajeGanancia = producto.porcentajeGanancia
+    ? (typeof producto.porcentajeGanancia === 'string'
+      ? parseFloat(producto.porcentajeGanancia)
+      : producto.porcentajeGanancia)
     : 0;
 
   // Función para agrupar ventas por día
   const agruparVentasPorDia = useCallback((ventas: Venta[]) => {
     const ventasDiarias: VentaDia[] = [];
     ventas.forEach((venta) => {
-      const fecha = parseISO(venta.fecha);
+      const dateOnly = venta.fecha.split(' ')[0] || venta.fecha.split('T')[0]
+      const [year, month, day] = dateOnly.split('-').map(Number)
+      const fecha = new Date(year, month - 1, day)
       if (!isValid(fecha)) {
         console.error(`Invalid date in venta: ${venta.fecha}`);
         return;
@@ -810,8 +829,10 @@ const ProductoCard = ({ producto, vendedorId }: { producto: Producto, vendedorId
       }
     });
     return ventasDiarias.sort((a, b) => {
-      const dateA = parseISO(a.fecha);
-      const dateB = parseISO(b.fecha);
+      const [yearA, monthA, dayA] = a.fecha.split('-').map(Number)
+      const [yearB, monthB, dayB] = b.fecha.split('-').map(Number)
+      const dateA = new Date(yearA, monthA - 1, dayA)
+      const dateB = new Date(yearB, monthB - 1, dayB)
       return isValid(dateB) && isValid(dateA) ? dateB.getTime() - dateA.getTime() : 0;
     });
   }, []);
@@ -827,7 +848,9 @@ const ProductoCard = ({ producto, vendedorId }: { producto: Producto, vendedorId
     };
 
     ventas.forEach((venta) => {
-      const ventaDate = parseISO(venta.fecha);
+      const dateOnly = venta.fecha.split(' ')[0] || venta.fecha.split('T')[0]
+      const [year, month, day] = dateOnly.split('-').map(Number)
+      const ventaDate = new Date(year, month - 1, day)
       if (!isValid(ventaDate)) {
         console.error(`Invalid date in venta: ${venta.fecha}`);
         return;
@@ -853,8 +876,10 @@ const ProductoCard = ({ producto, vendedorId }: { producto: Producto, vendedorId
     });
 
     return Array.from(weekMap.values()).sort((a, b) => {
-      const dateA = parseISO(a.fechaInicio);
-      const dateB = parseISO(b.fechaInicio);
+      const [yearA, monthA, dayA] = a.fechaInicio.split('-').map(Number)
+      const [yearB, monthB, dayB] = b.fechaInicio.split('-').map(Number)
+      const dateA = new Date(yearA, monthA - 1, dayA)
+      const dateB = new Date(yearB, monthB - 1, dayB)
       return isValid(dateB) && isValid(dateA) ? dateB.getTime() - dateA.getTime() : 0;
     });
   }, []);
