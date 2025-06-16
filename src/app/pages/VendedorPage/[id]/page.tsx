@@ -124,6 +124,25 @@ interface ParametrosDialogProps {
   onSubmit: (parametros: ProductoParametro[]) => void;
 }
 
+const parseLocalDate = (dateString: string): Date => {
+  let dateOnly: string;
+
+  if (dateString.includes('T')) {
+    // Formato ISO: "2025-06-18T00:00:00.000Z"
+    dateOnly = dateString.split('T')[0];
+  } else if (dateString.includes(' ')) {
+    // Formato con espacio: "2025-06-18 00:00:00"
+    dateOnly = dateString.split(' ')[0];
+  } else {
+    // Solo fecha: "2025-06-18"
+    dateOnly = dateString;
+  }
+
+  const [year, month, day] = dateOnly.split('-').map(Number);
+  return new Date(year, month - 1, day);
+};
+
+
 const calcularCantidadTotal = (producto: Producto): number => {
   if (producto.tiene_parametros && producto.parametros) {
     return producto.parametros.reduce((total, param) => total + param.cantidad, 0);
@@ -204,9 +223,8 @@ const useVendedorData = (vendedorId: string) => {
   const agruparVentasPorDia = useCallback((ventas: Venta[]) => {
     const ventasDiarias: VentaDia[] = [];
     ventas.forEach((venta) => {
-      const dateOnly = venta.fecha.split(' ')[0] || venta.fecha.split('T')[0]
-      const [year, month, day] = dateOnly.split('-').map(Number)
-      const fecha = new Date(year, month - 1, day)
+      const fecha = parseLocalDate(venta.fecha);
+
       if (!isValid(fecha)) {
         console.error(`Invalid date in venta: ${venta.fecha}`);
         return;
@@ -225,13 +243,12 @@ const useVendedorData = (vendedorId: string) => {
       }
     });
     return ventasDiarias.sort((a, b) => {
-      const [yearA, monthA, dayA] = a.fecha.split('-').map(Number)
-      const [yearB, monthB, dayB] = b.fecha.split('-').map(Number)
-      const dateA = new Date(yearA, monthA - 1, dayA)
-      const dateB = new Date(yearB, monthB - 1, dayB)
+      const dateA = parseLocalDate(a.fecha);
+      const dateB = parseLocalDate(b.fecha);
       return isValid(dateB) && isValid(dateA) ? dateB.getTime() - dateA.getTime() : 0;
     });
   }, []);
+
 
   const agruparVentas = useCallback((ventas: Venta[]) => {
     const ventasAgrupadas = ventas.reduce((acc: VentaAgrupada[], venta) => {
@@ -258,9 +275,8 @@ const useVendedorData = (vendedorId: string) => {
     };
 
     ventas.forEach((venta) => {
-      const dateOnly = venta.fecha.split(' ')[0] || venta.fecha.split('T')[0]
-      const [year, month, day] = dateOnly.split('-').map(Number)
-      const ventaDate = new Date(year, month - 1, day)
+      const ventaDate = parseLocalDate(venta.fecha);
+
       if (!isValid(ventaDate)) {
         console.error(`Invalid date in venta: ${venta.fecha}`);
         return;
@@ -285,16 +301,13 @@ const useVendedorData = (vendedorId: string) => {
       currentWeek.ganancia = parseFloat((currentWeek.total * 0.08).toFixed(2));
     });
 
-    const ventasSemanales = Array.from(weekMap.values());
-
-    return ventasSemanales.sort((a, b) => {
-      const [yearA, monthA, dayA] = a.fechaInicio.split('-').map(Number)
-      const [yearB, monthB, dayB] = b.fechaInicio.split('-').map(Number)
-      const dateA = new Date(yearA, monthA - 1, dayA)
-      const dateB = new Date(yearB, monthB - 1, dayB)
+    return Array.from(weekMap.values()).sort((a, b) => {
+      const dateA = parseLocalDate(a.fechaInicio);
+      const dateB = parseLocalDate(b.fechaInicio);
       return isValid(dateB) && isValid(dateA) ? dateB.getTime() - dateA.getTime() : 0;
     });
   }, []);
+
 
   const fetchProductos = useCallback(async () => {
     try {
@@ -420,23 +433,43 @@ const useVendedorData = (vendedorId: string) => {
 
 const formatDate = (dateString: string): string => {
   try {
-    // Extraer solo la parte de la fecha (sin hora)
-    const dateOnly = dateString.split(' ')[0] || dateString.split('T')[0]
-    const [year, month, day] = dateOnly.split('-').map(Number)
+    // Manejar diferentes formatos de fecha
+    let dateOnly: string;
+
+    if (dateString.includes('T')) {
+      // Formato ISO: "2025-06-18T00:00:00.000Z"
+      dateOnly = dateString.split('T')[0];
+    } else if (dateString.includes(' ')) {
+      // Formato con espacio: "2025-06-18 00:00:00"
+      dateOnly = dateString.split(' ')[0];
+    } else {
+      // Solo fecha: "2025-06-18"
+      dateOnly = dateString;
+    }
+
+    const [year, month, day] = dateOnly.split('-').map(Number);
+
+    // Validar que tenemos números válidos
+    if (isNaN(year) || isNaN(month) || isNaN(day)) {
+      console.error(`Invalid date components: ${dateString}`);
+      return 'Fecha inválida';
+    }
 
     // Crear fecha en zona horaria local
-    const date = new Date(year, month - 1, day)
+    const date = new Date(year, month - 1, day);
 
     if (!isValid(date)) {
-      console.error(`Invalid date string: ${dateString}`)
-      return 'Fecha inválida'
+      console.error(`Invalid date string: ${dateString}`);
+      return 'Fecha inválida';
     }
-    return format(date, 'dd/MM/yyyy', { locale: es })
+
+    return format(date, 'dd/MM/yyyy', { locale: es });
   } catch (error) {
-    console.error(`Error formatting date: ${dateString}`, error)
-    return 'Error en fecha'
+    console.error(`Error formatting date: ${dateString}`, error);
+    return 'Error en fecha';
   }
 }
+
 
 
 const formatPrice = (price: number | string | undefined): string => {
@@ -578,9 +611,8 @@ const VentaSemanaDesplegable = ({ venta, busqueda }: { venta: VentaSemana, busqu
 
   // Agrupar las ventas filtradas por día
   const ventasPorDia = ventasFiltradas.reduce((acc: Record<string, Venta[]>, v) => {
-    const dateOnly = v.fecha.split(' ')[0] || v.fecha.split('T')[0]
-    const [year, month, day] = dateOnly.split('-').map(Number)
-    const fecha = new Date(year, month - 1, day)
+    const fecha = parseLocalDate(v.fecha);
+
     if (!isValid(fecha)) {
       console.error(`Invalid date in venta: ${v.fecha}`);
       return acc;
@@ -592,6 +624,7 @@ const VentaSemanaDesplegable = ({ venta, busqueda }: { venta: VentaSemana, busqu
     acc[fechaStr].push(v);
     return acc;
   }, {});
+
 
   // Calcular el total solo de las ventas filtradas
   const totalFiltrado = ventasFiltradas.reduce((total, v) => {
@@ -848,9 +881,8 @@ const ProductoCard = ({ producto, vendedorId }: { producto: Producto, vendedorId
     };
 
     ventas.forEach((venta) => {
-      const dateOnly = venta.fecha.split(' ')[0] || venta.fecha.split('T')[0]
-      const [year, month, day] = dateOnly.split('-').map(Number)
-      const ventaDate = new Date(year, month - 1, day)
+      const ventaDate = parseLocalDate(venta.fecha);
+
       if (!isValid(ventaDate)) {
         console.error(`Invalid date in venta: ${venta.fecha}`);
         return;
@@ -876,13 +908,12 @@ const ProductoCard = ({ producto, vendedorId }: { producto: Producto, vendedorId
     });
 
     return Array.from(weekMap.values()).sort((a, b) => {
-      const [yearA, monthA, dayA] = a.fechaInicio.split('-').map(Number)
-      const [yearB, monthB, dayB] = b.fechaInicio.split('-').map(Number)
-      const dateA = new Date(yearA, monthA - 1, dayA)
-      const dateB = new Date(yearB, monthB - 1, dayB)
+      const dateA = parseLocalDate(a.fechaInicio);
+      const dateB = parseLocalDate(b.fechaInicio);
       return isValid(dateB) && isValid(dateA) ? dateB.getTime() - dateA.getTime() : 0;
     });
   }, []);
+
 
   const calcularCantidadTotal = (parametros?: ProductoParametro[]): number => {
     if (!parametros) return 0;
