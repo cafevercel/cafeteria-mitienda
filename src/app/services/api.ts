@@ -4,12 +4,7 @@ import { Venta, Vendedor, Transaccion, VentaParametro, TransferProductParams, Ga
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
 
 export const api = axios.create({
-  baseURL: API_URL,
-  headers: {
-    'Cache-Control': 'no-cache, no-store, must-revalidate',
-    'Pragma': 'no-cache',
-    'Expires': '0'
-  }
+  baseURL: API_URL
 });
 
 interface User {
@@ -144,9 +139,7 @@ export const registerUser = async (userData: Omit<User, 'id'>): Promise<User> =>
 
 export const getProductosCompartidos = async () => {
   try {
-    // Añadir timestamp para evitar caché
-    const timestamp = new Date().getTime();
-    const response = await api.get(`/productos/compartidos?_t=${timestamp}`);
+    const response = await api.get('/productos/compartidos');
     console.log('Respuesta de productos compartidos:', response.data);
     
     // Usar una anotación de tipo inline
@@ -325,17 +318,13 @@ export const realizarVenta = async (
 };
 
 export const getVentasMes = async (vendedorId: string): Promise<Venta[]> => {
-  // Añadir timestamp para evitar caché
-  const timestamp = new Date().getTime();
-  const response = await api.get(`/ventas?vendedorId=${vendedorId}&_t=${timestamp}`);
+  const response = await api.get(`/ventas?vendedorId=${vendedorId}`);
   return response.data;
 };
 
 export const getTransaccionesVendedor = async () => {
   try {
-    // Añadir timestamp para evitar caché
-    const timestamp = new Date().getTime();
-    const response = await api.get(`/transacciones/compartidas?_t=${timestamp}`);
+    const response = await api.get('/transacciones/compartidas');
     return response.data;
   } catch (error) {
     console.error('Error al obtener transacciones compartidas:', error);
