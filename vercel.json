@@ -4,9 +4,9 @@
     {
       "src": "/api/(.*)",
       "headers": {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With"
+        "cache-control": "no-cache, no-store, must-revalidate",
+        "pragma": "no-cache",
+        "expires": "0"
       },
       "continue": true
     }

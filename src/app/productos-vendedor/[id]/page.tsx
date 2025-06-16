@@ -19,10 +19,13 @@ export default function ProductosVendedor() {
   const id = params.id as string
 
   useEffect(() => {
+    console.log('params:', params) // Verifica los parámetros
+    console.log('id:', id) // Verifica el id
+
     const fetchProductos = async () => {
       try {
         const response = await getProductosVendedor(id)
-        setProductos(response.data)
+        setProductos(response.data) // Extraer los datos de la respuesta Axios
       } catch (error) {
         console.error('Error al obtener productos:', error)
       }
