@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
-import { format, parseISO, addDays, startOfWeek, endOfWeek, isValid } from "date-fns"
+import { format, addDays, startOfWeek, endOfWeek, isValid } from "date-fns"
 import { es } from 'date-fns/locale'
 import { Calendar as CalendarIcon } from "lucide-react"
 
@@ -37,6 +37,25 @@ interface SalesSectionProps {
   userRole: 'Almacen' | 'Vendedor';
 }
 
+const parseLocalDate = (dateString: string): Date => {
+  let dateOnly: string;
+
+  if (dateString.includes('T')) {
+    // Formato ISO: "2025-06-18T00:00:00.000Z"
+    dateOnly = dateString.split('T')[0];
+  } else if (dateString.includes(' ')) {
+    // Formato con espacio: "2025-06-18 00:00:00"
+    dateOnly = dateString.split(' ')[0];
+  } else {
+    // Solo fecha: "2025-06-18"
+    dateOnly = dateString;
+  }
+
+  const [year, month, day] = dateOnly.split('-').map(Number);
+  return new Date(year, month - 1, day);
+};
+
+
 export default function SalesSection({ userRole }: SalesSectionProps) {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date())
   const [ventasDiarias, setVentasDiarias] = useState<VentaDiaria[]>([])
@@ -48,16 +67,16 @@ export default function SalesSection({ userRole }: SalesSectionProps) {
   const obtenerVentasDelDia = useCallback(async (fecha: Date) => {
     setIsLoading(true)
     setError(null)
-  
+
     try {
       const formattedDate = format(fecha, 'yyyy-MM-dd')
       // Agregar el parámetro role a la URL
       const response = await fetch(`/api/ventas-diarias?fecha=${formattedDate}&role=${userRole}`)
-      
+
       if (!response.ok) {
         throw new Error('Error al obtener las ventas diarias')
       }
-  
+
       const data: VentaDiaria[] = await response.json()
       setVentasDiarias(data)
     } catch (error) {
@@ -70,22 +89,22 @@ export default function SalesSection({ userRole }: SalesSectionProps) {
 
   const agruparVentasPorSemana = useCallback((ventas: VentaSemanal[]) => {
     const weekMap = new Map<string, VentasSemana>()
-    
+
     ventas.forEach((venta) => {
-      const weekStart = parseISO(venta.week_start)
-      const weekEnd = parseISO(venta.week_end)
-      
+      const weekStart = parseLocalDate(venta.week_start)
+      const weekEnd = parseLocalDate(venta.week_end)
+
       if (!isValid(weekStart) || !isValid(weekEnd)) {
         console.error(`Invalid date in venta: ${venta.week_start} - ${venta.week_end}`)
         return
       }
-  
+
       // Asegurarnos que la fecha de fin sea el final del día (23:59:59)
       const weekEndWithTime = new Date(weekEnd)
       weekEndWithTime.setHours(23, 59, 59, 999)
-  
+
       const weekKey = `${format(weekStart, 'yyyy-MM-dd')}_${format(weekEnd, 'yyyy-MM-dd')}`
-      
+
       if (!weekMap.has(weekKey)) {
         weekMap.set(weekKey, {
           fechaInicio: format(weekStart, 'yyyy-MM-dd'),
@@ -93,7 +112,7 @@ export default function SalesSection({ userRole }: SalesSectionProps) {
           ventas: []
         })
       }
-  
+
       const currentWeek = weekMap.get(weekKey)!
       currentWeek.ventas.push({
         ...venta,
@@ -101,39 +120,40 @@ export default function SalesSection({ userRole }: SalesSectionProps) {
         week_end: format(weekEndWithTime, 'yyyy-MM-dd')
       })
     })
-  
+
     return Array.from(weekMap.values()).sort((a, b) => {
-      const dateA = parseISO(a.fechaInicio)
-      const dateB = parseISO(b.fechaInicio)
+      const dateA = parseLocalDate(a.fechaInicio)
+      const dateB = parseLocalDate(b.fechaInicio)
       return isValid(dateB) && isValid(dateA) ? dateB.getTime() - dateA.getTime() : 0
     })
   }, [])
-  
-  
+
+
+
   const obtenerVentasSemanales = useCallback(async () => {
     setIsLoading(true)
     setError(null)
-  
+
     try {
       // Obtener la fecha actual y calcular el inicio y fin de la semana
       const today = new Date()
       const startDate = startOfWeek(today, { weekStartsOn: 1 }) // 1 = Lunes
       const endDate = endOfWeek(today, { weekStartsOn: 1 })
-  
+
       // Agregar los parámetros de fecha a la URL
       const response = await fetch(
         `/api/ventas-semanales?role=${userRole}&startDate=${format(startDate, 'yyyy-MM-dd')}&endDate=${format(endDate, 'yyyy-MM-dd')}`
       )
-      
+
       if (!response.ok) {
         throw new Error('Error al obtener las ventas semanales')
       }
-  
+
       const data: VentaSemanal[] = await response.json()
       const ventasAgrupadasPorSemana = agruparVentasPorSemana(data)
-      
+
       setVentasSemanales(ventasAgrupadasPorSemana)
-      
+
       if (ventasAgrupadasPorSemana.length > 0 && !selectedWeek) {
         setSelectedWeek(`${ventasAgrupadasPorSemana[0].fechaInicio},${ventasAgrupadasPorSemana[0].fechaFin}`)
       }
@@ -144,7 +164,7 @@ export default function SalesSection({ userRole }: SalesSectionProps) {
       setIsLoading(false)
     }
   }, [selectedWeek, agruparVentasPorSemana, userRole])
-  
+
 
   useEffect(() => {
     obtenerVentasSemanales()
@@ -259,14 +279,15 @@ export default function SalesSection({ userRole }: SalesSectionProps) {
                 </SelectTrigger>
                 <SelectContent>
                   {ventasSemanales.map((semana, index) => (
-                    <SelectItem 
-                      key={index} 
+                    <SelectItem
+                      key={index}
                       value={`${semana.fechaInicio},${semana.fechaFin}`}
                     >
-                      {`${format(parseISO(semana.fechaInicio), 'dd/MM/yyyy', { locale: es })} - ${format(parseISO(semana.fechaFin), 'dd/MM/yyyy', { locale: es })}`}
+                      {`${format(parseLocalDate(semana.fechaInicio), 'dd/MM/yyyy', { locale: es })} - ${format(parseLocalDate(semana.fechaFin), 'dd/MM/yyyy', { locale: es })}`}
                     </SelectItem>
                   ))}
                 </SelectContent>
+
               </Select>
               <Button onClick={obtenerVentasSemanales} disabled={isLoading}>
                 {isLoading ? 'Cargando...' : 'Cargar'}
