@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import * as XLSX from 'xlsx';
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
-import { startOfWeek, endOfWeek, format, parseISO, isValid } from 'date-fns';
+import { startOfWeek, endOfWeek, format, isValid } from 'date-fns';
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -86,6 +86,24 @@ interface NewProduct {
     cantidad: number;
   }>;
 }
+
+const parseLocalDate = (dateString: string): Date => {
+  let dateOnly: string;
+
+  if (dateString.includes('T')) {
+    // Formato ISO: "2025-06-18T00:00:00.000Z"
+    dateOnly = dateString.split('T')[0];
+  } else if (dateString.includes(' ')) {
+    // Formato con espacio: "2025-06-18 00:00:00"
+    dateOnly = dateString.split(' ')[0];
+  } else {
+    // Solo fecha: "2025-06-18"
+    dateOnly = dateString;
+  }
+
+  const [year, month, day] = dateOnly.split('-').map(Number);
+  return new Date(year, month - 1, day);
+};
 
 
 const useAlmacenData = () => {
@@ -668,9 +686,10 @@ export default function AlmacenPage() {
   }
 
   // Función para calcular ventas diarias
+  // Función para calcular ventas diarias
   const calcularVentasDiarias = (ventas: Venta[]) => {
     const ventasPorDia = ventas.reduce((acc: Record<string, Venta[]>, venta) => {
-      const fecha = parseISO(venta.fecha);
+      const fecha = parseLocalDate(venta.fecha);
       if (!isValid(fecha)) {
         console.error(`Fecha inválida en venta: ${venta.fecha}`);
         return acc;
@@ -695,10 +714,13 @@ export default function AlmacenPage() {
     setVentasDiarias(ventasDiarias);
   };
 
+
+
+  // Función para calcular ventas semanales
   // Función para calcular ventas semanales
   const calcularVentasSemanales = (ventas: Venta[]) => {
     const ventasPorSemana = ventas.reduce((acc: Record<string, VentaSemana>, venta) => {
-      const fecha = parseISO(venta.fecha);
+      const fecha = parseLocalDate(venta.fecha);
       if (!isValid(fecha)) {
         console.error(`Fecha inválida en venta: ${venta.fecha}`);
         return acc;
@@ -729,6 +751,7 @@ export default function AlmacenPage() {
     const ventasSemanas = Object.values(ventasPorSemana);
     setVentasSemanales(ventasSemanas);
   };
+
 
   // Funciones auxiliares
   const getProductosCompartidos = async () => {
