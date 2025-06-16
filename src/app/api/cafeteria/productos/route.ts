@@ -23,10 +23,10 @@ export async function GET() {
           `SELECT cantidad FROM usuario_productos WHERE producto_id = $1 LIMIT 1`,
           [producto.id]
         );
-        
+
         // Si no existe en usuario_productos, la cantidad es 0
         const cantidad = cantidadResult.rows.length > 0 ? cantidadResult.rows[0].cantidad : 0;
-        
+
         if (producto.tiene_parametros) {
           // Obtener los parámetros
           const parametrosResult = await query(
@@ -44,7 +44,7 @@ export async function GET() {
             parametros: parametrosResult.rows.length > 0 ? parametrosResult.rows : []
           };
         }
-        
+
         return {
           ...producto,
           cantidad
