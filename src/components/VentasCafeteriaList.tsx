@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { format, parseISO, isValid } from 'date-fns'
+import { format, isValid } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -51,9 +51,28 @@ interface VentasCafeteriaListProps {
   searchTerm: string
 }
 
+const parseLocalDate = (dateString: string): Date => {
+  let dateOnly: string;
+
+  if (dateString.includes('T')) {
+    // Formato ISO: "2025-06-18T00:00:00.000Z"
+    dateOnly = dateString.split('T')[0];
+  } else if (dateString.includes(' ')) {
+    // Formato con espacio: "2025-06-18 00:00:00"
+    dateOnly = dateString.split(' ')[0];
+  } else {
+    // Solo fecha: "2025-06-18"
+    dateOnly = dateString;
+  }
+
+  const [year, month, day] = dateOnly.split('-').map(Number);
+  return new Date(year, month - 1, day);
+};
+
+
 const formatDate = (dateString: string): string => {
   try {
-    const date = parseISO(dateString)
+    const date = parseLocalDate(dateString)
     if (!isValid(date)) {
       console.error(`Invalid date string: ${dateString}`)
       return 'Fecha inválida'
@@ -142,7 +161,7 @@ export default function VentasCafeteriaList({ searchTerm }: VentasCafeteriaListP
     const ventasPorDia: { [key: string]: VentaDia } = {}
 
     ventas.forEach(venta => {
-      const fechaObj = new Date(venta.fecha)
+      const fechaObj = parseLocalDate(venta.fecha)
       const fechaKey = format(fechaObj, 'yyyy-MM-dd')
 
       if (!ventasPorDia[fechaKey]) {
@@ -194,9 +213,10 @@ export default function VentasCafeteriaList({ searchTerm }: VentasCafeteriaListP
     })
 
     return Object.values(ventasPorDia).sort((a, b) =>
-      new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
+      parseLocalDate(b.fecha).getTime() - parseLocalDate(a.fecha).getTime()
     )
   }
+
 
   if (isLoading) return <div className="flex justify-center items-center h-full">Cargando ventas...</div>
   if (error) return <div className="text-red-500">{error}</div>
