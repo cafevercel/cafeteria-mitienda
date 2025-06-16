@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { v4 as uuidv4 } from 'uuid';
+import { revalidatePath } from 'next/cache';
 
 // Interfaces para el tipado
 interface GastoBalance {
@@ -42,10 +43,24 @@ export async function GET(request: NextRequest) {
             gastos: balance.gastos || []
         }));
 
-        return NextResponse.json(balances);
+        return NextResponse.json(balances, {
+            headers: {
+                'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0'
+            }
+        });
     } catch (error) {
         console.error('Error al obtener balances:', error);
-        return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
+        return NextResponse.json(
+            { error: 'Error interno del servidor' }, 
+            { 
+                status: 500,
+                headers: {
+                    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate'
+                }
+            }
+        );
     }
 }
 
@@ -112,10 +127,28 @@ export async function POST(request: NextRequest) {
             fechaCreacion || new Date().toISOString()
         ]);
 
-        return NextResponse.json(result.rows[0]);
+        // Revalidar las páginas que muestran balances
+        revalidatePath('/admin/balances');
+        revalidatePath('/balances');
+        revalidatePath('/admin');
+        revalidatePath('/');
+
+        return NextResponse.json(result.rows[0], {
+            headers: {
+                'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate'
+            }
+        });
     } catch (error) {
         console.error('Error al crear balance:', error);
-        return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
+        return NextResponse.json(
+            { error: 'Error interno del servidor' }, 
+            { 
+                status: 500,
+                headers: {
+                    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate'
+                }
+            }
+        );
     }
 }
 
@@ -139,9 +172,30 @@ export async function DELETE(request: NextRequest) {
         // Eliminar el balance
         await query('DELETE FROM balances WHERE id = $1', [id]);
 
-        return NextResponse.json({ message: 'Balance eliminado correctamente' });
+        // Revalidar las páginas que muestran balances
+        revalidatePath('/admin/balances');
+        revalidatePath('/balances');
+        revalidatePath('/admin');
+        revalidatePath('/');
+
+        return NextResponse.json(
+            { message: 'Balance eliminado correctamente' },
+            {
+                headers: {
+                    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate'
+                }
+            }
+        );
     } catch (error) {
         console.error('Error al eliminar balance:', error);
-        return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
+        return NextResponse.json(
+            { error: 'Error interno del servidor' }, 
+            { 
+                status: 500,
+                headers: {
+                    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate'
+                }
+            }
+        );
     }
 }

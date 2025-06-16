@@ -52,9 +52,23 @@ export async function GET() {
       return producto;
     });
 
-    return NextResponse.json(productosFormateados);
+    return NextResponse.json(productosFormateados, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      }
+    });
   } catch (error) {
     console.error('Error al obtener productos compartidos:', error);
-    return NextResponse.json({ error: 'Error al obtener productos compartidos' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Error al obtener productos compartidos' }, 
+      { 
+        status: 500,
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate'
+        }
+      }
+    );
   }
-} 
+}

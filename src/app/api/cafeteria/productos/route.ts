@@ -52,9 +52,24 @@ export async function GET() {
       })
     );
 
-    return NextResponse.json(productosCompletos);
+    // Retornar con headers que eviten el cache agresivo
+    return NextResponse.json(productosCompletos, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      }
+    });
   } catch (error) {
     console.error('Error al obtener productos de cafetería:', error);
-    return NextResponse.json({ error: 'Error al obtener productos de cafetería' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Error al obtener productos de cafetería' }, 
+      { 
+        status: 500,
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate'
+        }
+      }
+    );
   }
-} 
+}
