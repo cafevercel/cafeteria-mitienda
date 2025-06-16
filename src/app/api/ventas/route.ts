@@ -92,7 +92,15 @@ export async function POST(request: NextRequest) {
     }
 
     await query('COMMIT');
-    return NextResponse.json(ventaResult.rows[0]);
+    
+    // Crear respuesta con encabezados anti-caché
+    const response = NextResponse.json(ventaResult.rows[0]);
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    response.headers.set('Pragma', 'no-cache');
+    response.headers.set('Expires', '0');
+    response.headers.set('Surrogate-Control', 'no-store');
+    
+    return response;
   } catch (error) {
     await query('ROLLBACK');
     console.error('Error al crear venta:', error);
@@ -131,7 +139,13 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Venta no encontrada' }, { status: 404 });
       }
 
-      return NextResponse.json(result.rows[0]);
+      const response = NextResponse.json(result.rows[0]);
+      response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      response.headers.set('Pragma', 'no-cache');
+      response.headers.set('Expires', '0');
+      response.headers.set('Surrogate-Control', 'no-store');
+      
+      return response;
     }
     
     // Consultas para listar ventas
@@ -179,7 +193,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Se requiere vendedorId, productoId, id o all=true' }, { status: 400 });
     }
 
-    return NextResponse.json(result.rows);
+    // Crear respuesta con encabezados anti-caché
+    const response = NextResponse.json(result.rows);
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    response.headers.set('Pragma', 'no-cache');
+    response.headers.set('Expires', '0');
+    response.headers.set('Surrogate-Control', 'no-store');
+    
+    return response;
   } catch (error) {
     console.error('Error al obtener ventas:', error);
     return NextResponse.json({ error: 'Error al obtener ventas' }, { status: 500 });

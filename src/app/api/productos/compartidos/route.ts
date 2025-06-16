@@ -3,58 +3,40 @@ import { query } from '@/lib/db';
 
 export async function GET() {
   try {
-    // Obtener todos los productos con su información básica
-    const productosResult = await query(
-      `SELECT 
-        p.id, 
-        p.nombre, 
-        p.precio, 
-        p.foto, 
+    const result = await query(`
+      SELECT 
+        p.id,
+        p.nombre,
+        p.precio,
+        p.cantidad,
+        p.foto,
         p.tiene_parametros,
-        p.porcentaje_ganancia,
-        up.cantidad
-       FROM productos p
-       JOIN usuario_productos up ON p.id = up.producto_id`
-    );
+        p.precio_compra,
+        p.porcentaje_ganancia as "porcentajeGanancia",
+        COALESCE(
+          json_agg(
+            json_build_object(
+              'nombre', pp.nombre,
+              'cantidad', pp.cantidad
+            )
+          ) FILTER (WHERE pp.id IS NOT NULL),
+          '[]'::json
+        ) as parametros
+      FROM productos p
+      LEFT JOIN producto_parametros pp ON p.id = pp.producto_id
+      GROUP BY p.id
+    `);
 
-    // Para cada producto, obtener sus parámetros si los tiene
-    const productosConParametros = await Promise.all(
-      productosResult.rows.map(async (producto) => {
-        if (producto.tiene_parametros) {
-          // Obtener los parámetros
-          const parametrosResult = await query(
-            `SELECT 
-              nombre,
-              cantidad
-             FROM usuario_producto_parametros
-             WHERE producto_id = $1`,
-            [producto.id]
-          );
-
-          return {
-            ...producto,
-            parametros: parametrosResult.rows
-          };
-        }
-        return producto;
-      })
-    );
-
-    // Transformar el campo porcentaje_ganancia a porcentajeGanancia para mantener consistencia en el frontend
-    const productosFormateados = productosConParametros.map(producto => {
-      // Si existe porcentaje_ganancia, lo copiamos a porcentajeGanancia
-      if (producto.porcentaje_ganancia !== undefined) {
-        return {
-          ...producto,
-          porcentajeGanancia: producto.porcentaje_ganancia
-        };
-      }
-      return producto;
-    });
-
-    return NextResponse.json(productosFormateados);
+    // Crear respuesta con encabezados anti-caché
+    const response = NextResponse.json(result.rows);
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    response.headers.set('Pragma', 'no-cache');
+    response.headers.set('Expires', '0');
+    response.headers.set('Surrogate-Control', 'no-store');
+    
+    return response;
   } catch (error) {
     console.error('Error al obtener productos compartidos:', error);
     return NextResponse.json({ error: 'Error al obtener productos compartidos' }, { status: 500 });
   }
-} 
+}

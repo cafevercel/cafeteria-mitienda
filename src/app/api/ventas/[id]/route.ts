@@ -63,7 +63,14 @@ export async function DELETE(
     
     await query('COMMIT');
 
-    return NextResponse.json({ message: 'Venta eliminada con éxito' });
+    // Crear respuesta con encabezados anti-caché
+    const response = NextResponse.json({ message: 'Venta eliminada con éxito' });
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    response.headers.set('Pragma', 'no-cache');
+    response.headers.set('Expires', '0');
+    response.headers.set('Surrogate-Control', 'no-store');
+    
+    return response;
   } catch (error) {
     console.error('Error al eliminar venta:', error);
     await query('ROLLBACK');

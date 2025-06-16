@@ -1,18 +1,17 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { format, parseISO, isValid } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react'
 import { OptimizedImage } from '@/components/OptimizedImage'
-import { getAllVentas, getInventario, deleteSale } from '@/app/services/api'
 import { Venta } from '@/types'
-import { toast } from "@/hooks/use-toast"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
+import { useVentas, useInventario, useDeleteSale } from '@/hooks/useQueries'
 
-// Interfaz extendida para el inventario
+// Interfaces (mantener las mismas que tenías)
 interface InventarioProducto {
   id: string;
   nombre: string;
@@ -29,7 +28,6 @@ interface InventarioProducto {
   }>;
 }
 
-// Interfaz extendida para incluir propiedades adicionales en ventas
 interface VentaExtendida extends Venta {
   vendedor_nombre?: string;
   ganancia_unitaria?: number;
@@ -73,133 +71,96 @@ const formatPrice = (price: number | string | undefined): string => {
   return isNaN(numPrice) ? '0.00' : numPrice.toFixed(2);
 }
 
-export default function VentasCafeteriaList({ searchTerm }: VentasCafeteriaListProps) {
-  const [allVentas, setAllVentas] = useState<VentaExtendida[]>([])
-  const [ventasDiarias, setVentasDiarias] = useState<VentaDia[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [productos, setProductos] = useState<InventarioProducto[]>([])
-  const [ventaAEliminar, setVentaAEliminar] = useState<VentaExtendida | null>(null)
-  const [isDeleting, setIsDeleting] = useState(false)
+// Mover la función calcularVentasDiarias antes de usarla
+const calcularVentasDiarias = (ventas: VentaExtendida[], productos: InventarioProducto[]): VentaDia[] => {
+  const ventasPorDia: { [key: string]: VentaDia } = {}
 
-  const fetchData = async () => {
-    setIsLoading(true)
-    try {
-      const [ventas, inventario] = await Promise.all([
-        getAllVentas(),
-        getInventario()
-      ])
-      setAllVentas(ventas as VentaExtendida[])
-      setProductos(inventario)
-      // Agrupar por días
-      const ventasPorDia = calcularVentasDiarias(ventas as VentaExtendida[], inventario)
-      setVentasDiarias(ventasPorDia)
-    } catch (err) {
-      setError('Error al cargar las ventas')
-      console.error(err)
-    } finally {
-      setIsLoading(false)
+  ventas.forEach(venta => {
+    const fechaObj = new Date(venta.fecha)
+    const fechaKey = format(fechaObj, 'yyyy-MM-dd')
+
+    if (!ventasPorDia[fechaKey]) {
+      ventasPorDia[fechaKey] = {
+        fecha: fechaKey,
+        ventas: [],
+        total: 0,
+        ganancia: 0
+      }
     }
-  }
 
-  useEffect(() => {
-    fetchData()
-  }, [])
+    // Buscar el producto para obtener su precio de compra y porcentaje de ganancia
+    const producto = productos.find(p => p.id === venta.producto)
+
+    // Obtener los valores necesarios para el cálculo
+    const precioCompra = producto?.precio_compra || 0
+    const precioVenta = parseFloat(venta.precio_unitario.toString())
+    const porcentajeGanancia = producto?.porcentajeGanancia || 0
+
+    // Calcular la ganancia bruta para esta venta (precio de venta - precio de compra)
+    const gananciaBrutaUnitaria = precioVenta - precioCompra
+
+    // Calcular la ganancia porcentual (se aplica sobre el precio de venta, no sobre la ganancia bruta)
+    let gananciaPorcentaje = 0
+    if (porcentajeGanancia > 0) {
+      gananciaPorcentaje = (precioVenta * porcentajeGanancia) / 100
+    }
+
+    // La ganancia unitaria es la ganancia bruta menos el porcentaje
+    const gananciaUnitaria = gananciaBrutaUnitaria - gananciaPorcentaje
+
+    // La ganancia total es la ganancia unitaria multiplicada por la cantidad
+    const gananciaTotal = gananciaUnitaria * venta.cantidad
+
+    // Agregar datos a la venta para mostrarlos
+    const ventaConGanancia = {
+      ...venta,
+      ganancia_unitaria: gananciaUnitaria,
+      ganancia_bruta_unitaria: gananciaBrutaUnitaria,
+      ganancia_bruta_total: gananciaBrutaUnitaria * venta.cantidad,
+      ganancia_porcentaje: gananciaPorcentaje,
+      ganancia_total: gananciaTotal,
+      porcentaje_ganancia: porcentajeGanancia
+    }
+
+    ventasPorDia[fechaKey].ventas.push(ventaConGanancia)
+    ventasPorDia[fechaKey].total += parseFloat(venta.total.toString())
+    ventasPorDia[fechaKey].ganancia += gananciaTotal
+  })
+
+  return Object.values(ventasPorDia).sort((a, b) =>
+    new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
+  )
+}
+
+export default function VentasCafeteriaList({ searchTerm }: VentasCafeteriaListProps) {
+  // Usar nuestros hooks personalizados
+  const { data: ventas = [], isLoading: isLoadingVentas, error: ventasError } = useVentas();
+  const { data: productos = [], isLoading: isLoadingProductos } = useInventario();
+  const { mutate: deleteSaleMutation, isPending: isDeleting } = useDeleteSale();
+  
+  const [ventaAEliminar, setVentaAEliminar] = useState<VentaExtendida | null>(null);
+  
+  // Calcular ventas diarias cuando los datos estén disponibles
+  const ventasDiarias = calcularVentasDiarias(ventas as VentaExtendida[], productos);
 
   const handleDeleteSale = async (venta: VentaExtendida) => {
-    setVentaAEliminar(venta)
+    setVentaAEliminar(venta);
   }
 
   const confirmDeleteSale = async () => {
-    if (!ventaAEliminar) return
-
-    setIsDeleting(true)
-    try {
-      // Usamos '' como ID de vendedor para representar la cafetería
-      await deleteSale(ventaAEliminar.id, ventaAEliminar.vendedor || '')
-
-      // Recargamos los datos para reflejar los cambios
-      await fetchData()
-
-      toast({
-        title: "Venta eliminada",
-        description: "La venta ha sido eliminada y las cantidades devueltas al inventario",
-      })
-    } catch (error) {
-      console.error('Error al eliminar la venta:', error)
-      toast({
-        title: "Error",
-        description: "No se pudo eliminar la venta",
-        variant: "destructive",
-      })
-    } finally {
-      setIsDeleting(false)
-      setVentaAEliminar(null)
-    }
+    if (!ventaAEliminar) return;
+    
+    // Usar la mutación en lugar de la función directa
+    deleteSaleMutation({ 
+      id: ventaAEliminar.id, 
+      vendedorId: ventaAEliminar.vendedor || '' 
+    });
+    
+    setVentaAEliminar(null);
   }
 
-  const calcularVentasDiarias = (ventas: VentaExtendida[], productos: InventarioProducto[]): VentaDia[] => {
-    const ventasPorDia: { [key: string]: VentaDia } = {}
-
-    ventas.forEach(venta => {
-      const fechaObj = new Date(venta.fecha)
-      const fechaKey = format(fechaObj, 'yyyy-MM-dd')
-
-      if (!ventasPorDia[fechaKey]) {
-        ventasPorDia[fechaKey] = {
-          fecha: fechaKey,
-          ventas: [],
-          total: 0,
-          ganancia: 0
-        }
-      }
-
-      // Buscar el producto para obtener su precio de compra y porcentaje de ganancia
-      const producto = productos.find(p => p.id === venta.producto)
-
-      // Obtener los valores necesarios para el cálculo
-      const precioCompra = producto?.precio_compra || 0
-      const precioVenta = parseFloat(venta.precio_unitario.toString())
-      const porcentajeGanancia = producto?.porcentajeGanancia || 0
-
-      // Calcular la ganancia bruta para esta venta (precio de venta - precio de compra)
-      const gananciaBrutaUnitaria = precioVenta - precioCompra
-
-      // Calcular la ganancia porcentual (se aplica sobre el precio de venta, no sobre la ganancia bruta)
-      let gananciaPorcentaje = 0
-      if (porcentajeGanancia > 0) {
-        gananciaPorcentaje = (precioVenta * porcentajeGanancia) / 100
-      }
-
-      // La ganancia unitaria es la ganancia bruta menos el porcentaje
-      const gananciaUnitaria = gananciaBrutaUnitaria - gananciaPorcentaje
-
-      // La ganancia total es la ganancia unitaria multiplicada por la cantidad
-      const gananciaTotal = gananciaUnitaria * venta.cantidad
-
-      // Agregar datos a la venta para mostrarlos
-      const ventaConGanancia = {
-        ...venta,
-        ganancia_unitaria: gananciaUnitaria,
-        ganancia_bruta_unitaria: gananciaBrutaUnitaria,
-        ganancia_bruta_total: gananciaBrutaUnitaria * venta.cantidad,
-        ganancia_porcentaje: gananciaPorcentaje,
-        ganancia_total: gananciaTotal,
-        porcentaje_ganancia: porcentajeGanancia
-      }
-
-      ventasPorDia[fechaKey].ventas.push(ventaConGanancia)
-      ventasPorDia[fechaKey].total += parseFloat(venta.total.toString())
-      ventasPorDia[fechaKey].ganancia += gananciaTotal
-    })
-
-    return Object.values(ventasPorDia).sort((a, b) =>
-      new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
-    )
-  }
-
-  if (isLoading) return <div className="flex justify-center items-center h-full">Cargando ventas...</div>
-  if (error) return <div className="text-red-500">{error}</div>
+  if (isLoadingVentas || isLoadingProductos) return <div className="flex justify-center items-center h-full">Cargando ventas...</div>
+  if (ventasError) return <div className="text-red-500">Error al cargar las ventas</div>
 
   const filteredVentasDiarias = ventasDiarias.filter(venta =>
     venta.ventas.some(v =>
@@ -249,6 +210,7 @@ export default function VentasCafeteriaList({ searchTerm }: VentasCafeteriaListP
   )
 }
 
+// Mantener el componente VentaDiaCard igual que antes
 const VentaDiaCard = ({ venta, searchTerm, onDeleteSale }: { venta: VentaDia, searchTerm: string, onDeleteSale: (venta: VentaExtendida) => void }) => {
   const [expandido, setExpandido] = useState(false)
 
@@ -383,4 +345,4 @@ const VentaDiaCard = ({ venta, searchTerm, onDeleteSale }: { venta: VentaDia, se
       )}
     </Card>
   )
-} 
+}

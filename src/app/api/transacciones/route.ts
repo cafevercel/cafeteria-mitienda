@@ -138,11 +138,17 @@ export async function POST(request: NextRequest) {
 
       await query('COMMIT');
 
-      return NextResponse.json({
+      // Crear respuesta con encabezados anti-caché
+      const response = NextResponse.json({
         message: 'Producto entregado exitosamente',
         transaction: transactionResult.rows[0]
       });
-
+      response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      response.headers.set('Pragma', 'no-cache');
+      response.headers.set('Expires', '0');
+      response.headers.set('Surrogate-Control', 'no-store');
+      
+      return response;
     } catch (error) {
       await query('ROLLBACK');
       throw error;
@@ -214,7 +220,14 @@ export async function GET(request: NextRequest) {
       })
     );
 
-    return NextResponse.json(transaccionesConParametros);
+    // Crear respuesta con encabezados anti-caché
+    const response = NextResponse.json(transaccionesConParametros);
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    response.headers.set('Pragma', 'no-cache');
+    response.headers.set('Expires', '0');
+    response.headers.set('Surrogate-Control', 'no-store');
+    
+    return response;
   } catch (error) {
     if (error instanceof Error) {
       return NextResponse.json(

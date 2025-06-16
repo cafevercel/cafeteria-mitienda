@@ -52,7 +52,14 @@ export async function GET() {
       })
     );
 
-    return NextResponse.json(productosCompletos);
+    // Crear respuesta con encabezados anti-caché
+    const response = NextResponse.json(productosCompletos);
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    response.headers.set('Pragma', 'no-cache');
+    response.headers.set('Expires', '0');
+    response.headers.set('Surrogate-Control', 'no-store');
+    
+    return response;
   } catch (error) {
     console.error('Error al obtener productos de cafetería:', error);
     return NextResponse.json({ error: 'Error al obtener productos de cafetería' }, { status: 500 });
