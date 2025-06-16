@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
-import { revalidatePath } from 'next/cache';
 
 export async function POST(request: NextRequest) {
     try {
@@ -67,35 +66,15 @@ export async function POST(request: NextRequest) {
                 WHERE p.id = $1
                 GROUP BY p.id
             `, [productoId]);
-
-            // Revalidar las páginas que muestran productos
-            revalidatePath('/admin/productos');
-            revalidatePath('/productos');
-            revalidatePath('/admin');
-            revalidatePath('/');
             
-            return NextResponse.json(productoCompleto.rows[0], {
-                headers: {
-                    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-                    'Pragma': 'no-cache',
-                    'Expires': '0'
-                }
-            });
+            return NextResponse.json(productoCompleto.rows[0]);
         } catch (error) {
             await query('ROLLBACK');
             throw error;
         }
     } catch (error) {
         console.error('Error creating product:', error);
-        return NextResponse.json(
-            { error: 'Error interno del servidor' }, 
-            { 
-                status: 500,
-                headers: {
-                    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate'
-                }
-            }
-        );
+        return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
     }
 }
 
@@ -123,26 +102,11 @@ export async function GET(request: NextRequest) {
             FROM productos p
             LEFT JOIN producto_parametros pp ON p.id = pp.producto_id
             GROUP BY p.id
-            ORDER BY p.id DESC
         `);
 
-        return NextResponse.json(result.rows, {
-            headers: {
-                'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-                'Pragma': 'no-cache',
-                'Expires': '0'
-            }
-        });
+        return NextResponse.json(result.rows);
     } catch (error) {
         console.error('Error fetching products:', error);
-        return NextResponse.json(
-            { error: 'Error interno del servidor' }, 
-            { 
-                status: 500,
-                headers: {
-                    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate'
-                }
-            }
-        );
+        return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
     }
 }

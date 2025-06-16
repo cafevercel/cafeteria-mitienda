@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { put } from '@vercel/blob';
-import { revalidatePath } from 'next/cache';
 
 // Definir interfaces para mejorar el tipado
 interface Parametro {
@@ -47,6 +46,7 @@ const obtenerProductoConParametros = async (productoId: string) => {
     return result.rows[0];
 };
 
+
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
     try {
         const { id } = params;
@@ -65,15 +65,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
         const currentProduct = await query('SELECT * FROM productos WHERE id = $1', [id]);
 
         if (currentProduct.rows.length === 0) {
-            return NextResponse.json(
-                { error: 'Producto no encontrado' }, 
-                { 
-                    status: 404,
-                    headers: {
-                        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate'
-                    }
-                }
-            );
+            return NextResponse.json({ error: 'Producto no encontrado' }, { status: 404 });
         }
 
         // Solo actualizar la foto si se proporciona una nueva
@@ -169,22 +161,8 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 
             await query('COMMIT');
 
-            // Revalidar las páginas que muestran productos
-            revalidatePath('/admin/productos');
-            revalidatePath('/productos');
-            revalidatePath('/admin');
-            revalidatePath('/');
-            revalidatePath(`/admin/productos/${id}`);
-
             const productoActualizado = await obtenerProductoConParametros(id);
-            
-            return NextResponse.json(productoActualizado, {
-                headers: {
-                    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-                    'Pragma': 'no-cache',
-                    'Expires': '0'
-                }
-            });
+            return NextResponse.json(productoActualizado);
         } catch (error) {
             await query('ROLLBACK');
             console.error('Error en la transacción:', error);
@@ -195,14 +173,10 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
         return NextResponse.json({
             error: 'Error interno del servidor',
             details: (error as Error).message
-        }, { 
-            status: 500,
-            headers: {
-                'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate'
-            }
-        });
+        }, { status: 500 });
     }
 }
+
 
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
     try {
@@ -219,15 +193,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
 
             if (producto.rows.length === 0) {
                 await query('ROLLBACK');
-                return NextResponse.json(
-                    { error: 'Producto no encontrado' }, 
-                    { 
-                        status: 404,
-                        headers: {
-                            'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate'
-                        }
-                    }
-                );
+                return NextResponse.json({ error: 'Producto no encontrado' }, { status: 404 });
             }
 
             // 2. Eliminar merma_parametros primero
@@ -292,22 +258,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
 
             await query('COMMIT');
 
-            // Revalidar las páginas que muestran productos
-            revalidatePath('/admin/productos');
-            revalidatePath('/productos');
-            revalidatePath('/admin');
-            revalidatePath('/');
-
-            return NextResponse.json(
-                { message: 'Producto eliminado correctamente' },
-                {
-                    headers: {
-                        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-                        'Pragma': 'no-cache',
-                        'Expires': '0'
-                    }
-                }
-            );
+            return NextResponse.json({ message: 'Producto eliminado correctamente' });
         } catch (error) {
             await query('ROLLBACK');
             console.error('Error al eliminar producto:', error);
@@ -315,17 +266,10 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
         }
     } catch (error) {
         console.error('Error al eliminar producto:', error);
-        return NextResponse.json(
-            { error: 'Error interno del servidor' }, 
-            { 
-                status: 500,
-                headers: {
-                    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate'
-                }
-            }
-        );
+        return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
     }
 }
+
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
     try {
@@ -334,34 +278,12 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         const producto = await obtenerProductoConParametros(id);
 
         if (!producto) {
-            return NextResponse.json(
-                { error: 'Producto no encontrado' }, 
-                { 
-                    status: 404,
-                    headers: {
-                        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate'
-                    }
-                }
-            );
+            return NextResponse.json({ error: 'Producto no encontrado' }, { status: 404 });
         }
 
-        return NextResponse.json(producto, {
-            headers: {
-                'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-                'Pragma': 'no-cache',
-                'Expires': '0'
-            }
-        });
+        return NextResponse.json(producto);
     } catch (error) {
         console.error('Error al obtener producto:', error);
-        return NextResponse.json(
-            { error: 'Error interno del servidor' }, 
-            { 
-                status: 500,
-                headers: {
-                    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate'
-                }
-            }
-        );
+        return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
     }
 }
