@@ -36,7 +36,8 @@ import {
   verificarNombreProducto,
   getVendedorProductos,
   getVendedorVentas,
-  getVendedorTransacciones
+  getVendedorTransacciones,
+  getProductosVendedor
 } from '../../services/api'
 import ProductDialog from '@/components/ProductDialog'
 import VendorDialog from '@/components/VendedorDialog'
@@ -985,13 +986,22 @@ export default function AlmacenPage() {
   ) => {
     try {
       await updateProductQuantity(vendorId, productId, newQuantity, parametros);
-      // Actualizar los productos del vendedor después de la actualización
+      // Actualizar el inventario inmediatamente
+      await fetchInventario();
+      // Actualizar los productos del vendedor si está seleccionado
       if (vendedorSeleccionado) {
-        const updatedProducts = await getProductosCompartidos();
+        const updatedProducts = await getProductosVendedor(vendedorSeleccionado.id);
         setProductosVendedor(updatedProducts);
       }
+      // Forzar una actualización del estado
+      setInventario(prev => [...prev]);
     } catch (error) {
       console.error('Error al actualizar la cantidad:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo actualizar la cantidad del producto",
+        variant: "destructive",
+      });
     }
   };
 

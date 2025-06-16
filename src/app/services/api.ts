@@ -671,3 +671,13 @@ export const eliminarBalance = async (balanceId: string): Promise<void> => {
     throw new Error('No se pudo eliminar el balance');
   }
 };
+
+export const getProductosVendedor = async (vendedorId: string): Promise<Producto[]> => {
+  try {
+    const response = await api.get<Producto[]>(`/productos/vendedor/${vendedorId}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching vendor products:', error);
+    throw error;
+  }
+};
