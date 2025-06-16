@@ -1,6 +1,5 @@
 import './styles/globals.css'
 import { Inter } from 'next/font/google'
-import QueryProvider from '@/providers/QueryProvider'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -21,10 +20,7 @@ export default function RootLayout({
         <meta name="theme-color" content="#FFA500" />
       </head>
       <body className={`${inter.className} bg-orange-50 min-h-screen`}>
-        <QueryProvider>
-          {/* Resto de tu layout */}
-          {children}
-        </QueryProvider>
+        {children}
       </body>
     </html>
   )
