@@ -672,10 +672,9 @@ export const eliminarBalance = async (balanceId: string): Promise<void> => {
   }
 };
 
-export const getProductosVendedor = async (vendedorId: string): Promise<Producto[]> => {
+export const getProductosVendedor = async (vendedorId: string) => {
   try {
-    const response = await api.get<Producto[]>(`/productos/vendedor/${vendedorId}`);
-    return response.data;
+    return await api.get<Producto[]>(`/productos/vendedor/${vendedorId}`);
   } catch (error) {
     console.error('Error fetching vendor products:', error);
     throw error;

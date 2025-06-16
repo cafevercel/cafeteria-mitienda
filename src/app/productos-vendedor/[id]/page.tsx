@@ -21,8 +21,8 @@ export default function ProductosVendedor() {
   useEffect(() => {
     const fetchProductos = async () => {
       try {
-        const data = await getProductosVendedor(id)
-        setProductos(data)
+        const response = await getProductosVendedor(id)
+        setProductos(response.data)
       } catch (error) {
         console.error('Error al obtener productos:', error)
       }
