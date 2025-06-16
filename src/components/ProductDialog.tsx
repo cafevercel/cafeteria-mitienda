@@ -10,7 +10,6 @@ import { Producto, Vendedor, Parametro } from '@/types';
 import { Plus, Minus } from 'lucide-react';
 import { ImageUpload } from '@/components/ImageUpload';
 import { formatearPorcentajeGanancia } from "@/lib/formatters";
-import { useEditarProducto, useEntregarProducto } from '@/hooks/useQueries';
 
 interface ProductDialogProps {
   product: Producto;
@@ -35,9 +34,6 @@ export default function ProductDialog({
   onDelete,
   onDeliver,
 }: ProductDialogProps) {
-  // Añadir los hooks de mutación
-  const { mutate: editarProductoMutation, isPending: isEditing } = useEditarProducto();
-  const { mutate: entregarProductoMutation, isPending: isDelivering } = useEntregarProducto();
   const [mode, setMode] = useState<ModeType>('view');
   const [imageUrl, setImageUrl] = useState<string>(product.foto || '');
   const [editedProduct, setEditedProduct] = useState<Producto>({
@@ -63,7 +59,7 @@ export default function ProductDialog({
   // Efecto para sincronizar el estado con el producto recibido
   useEffect(() => {
     const tienePorcentajeGanancia = product.porcentajeGanancia !== undefined && product.porcentajeGanancia > 0;
-
+    
     setEditedProduct({
       ...product,
       tieneParametros: product.tiene_parametros,
@@ -156,9 +152,10 @@ export default function ProductDialog({
     }));
   }, []);
 
-
+  // Guardar cambios en el producto
   const handleEdit = async () => {
     try {
+      // Solo verificamos la imagen si se está intentando subir una nueva
       if (imageUrl !== product.foto && !imageUrl) {
         toast({
           title: "Advertencia",
@@ -170,7 +167,7 @@ export default function ProductDialog({
 
       const updatedProduct: Producto = {
         ...editedProduct,
-        foto: imageUrl || product.foto,
+        foto: imageUrl || product.foto, // Usar la foto existente si no hay nueva
         tiene_parametros: editedProduct.tieneParametros || false,
         tieneParametros: editedProduct.tieneParametros || false,
         parametros: editedProduct.tieneParametros ? editedProduct.parametros : [],
@@ -178,15 +175,14 @@ export default function ProductDialog({
         porcentajeGanancia: mostrarPorcentajeGanancia ? (editedProduct.porcentajeGanancia || 0) : 0,
       };
 
-      // Usar la mutación en lugar de la función directa
-      await editarProductoMutation({
-        producto: updatedProduct,
-        imageUrl: imageUrl !== product.foto ? imageUrl : undefined
-      });
-
+      console.log('Producto a guardar:', updatedProduct);
+      await onEdit(updatedProduct, imageUrl !== product.foto ? imageUrl : undefined);
       setMode('view');
-
-      // No necesitamos el toast aquí porque ya está en el hook
+      toast({
+        title: "Éxito",
+        description: "Producto actualizado correctamente.",
+        variant: "default",
+      });
     } catch (error) {
       console.error('Error en handleEdit:', error);
       toast({
@@ -197,7 +193,7 @@ export default function ProductDialog({
     }
   };
 
-  // Modificar handleDeliver para usar la mutación
+  // Manejo de la entrega del producto
   const handleDeliver = async () => {
     const cantidadAEntregar = product.tiene_parametros ? totalDeliveryQuantity : simpleDeliveryQuantity;
 
@@ -227,12 +223,11 @@ export default function ProductDialog({
         })) :
         [];
 
-      // Usar la mutación en lugar de la función directa
-      await entregarProductoMutation({
-        productoId: product.id,
-        cantidad: cantidadAEntregar,
-        parametros: parametrosEntrega
-      });
+      await onDeliver(
+        product.id,
+        cantidadAEntregar,
+        parametrosEntrega
+      );
 
       setParameterQuantities({});
       setTotalDeliveryQuantity(0);
@@ -241,7 +236,11 @@ export default function ProductDialog({
       // Cerrar el diálogo después de la entrega exitosa
       onClose();
 
-      // No necesitamos el toast aquí porque ya está en el hook
+      toast({
+        title: "Éxito",
+        description: "Producto entregado correctamente.",
+        variant: "default",
+      });
     } catch (error) {
       console.error('Error al entregar producto:', error);
       toast({

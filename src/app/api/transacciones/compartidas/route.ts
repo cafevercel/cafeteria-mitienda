@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    const result = await query(`
+    const baseQuery = `
       SELECT 
         t.id, 
         p.nombre as producto, 
@@ -13,33 +13,45 @@ export async function GET(request: NextRequest) {
         t.hacia, 
         t.fecha, 
         p.precio,
-        p.tiene_parametros,
-        COALESCE(
-          json_agg(
-            json_build_object(
-              'nombre', tp.nombre,
-              'cantidad', tp.cantidad
-            )
-          ) FILTER (WHERE tp.id IS NOT NULL),
-          '[]'::json
-        ) as parametros
+        p.tiene_parametros
       FROM transacciones t 
-      JOIN productos p ON t.producto = p.id
-      LEFT JOIN transaccion_parametros tp ON t.id = tp.transaccion_id
-      GROUP BY t.id, p.nombre, p.precio, p.tiene_parametros
+      JOIN productos p ON t.producto = p.id 
       ORDER BY t.fecha DESC
-    `);
+    `;
 
-    // Crear respuesta con encabezados anti-caché
-    const response = NextResponse.json(result.rows);
-    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-    response.headers.set('Pragma', 'no-cache');
-    response.headers.set('Expires', '0');
-    response.headers.set('Surrogate-Control', 'no-store');
-    
-    return response;
+    const transacciones = await query(baseQuery);
+
+    // Obtener los parámetros para cada transacción
+    const transaccionesConParametros = await Promise.all(
+      transacciones.rows.map(async (transaccion) => {
+        if (transaccion.tiene_parametros) {
+          const parametrosResult = await query(
+            `SELECT nombre, cantidad 
+             FROM transaccion_parametros 
+             WHERE transaccion_id = $1`,
+            [transaccion.id]
+          );
+          return {
+            ...transaccion,
+            parametros: parametrosResult.rows
+          };
+        }
+        return transaccion;
+      })
+    );
+
+    return NextResponse.json(transaccionesConParametros);
   } catch (error) {
-    console.error('Error al obtener transacciones compartidas:', error);
-    return NextResponse.json({ error: 'Error al obtener transacciones' }, { status: 500 });
+    if (error instanceof Error) {
+      return NextResponse.json(
+        { error: 'Error al obtener transacciones', details: error.message }, 
+        { status: 500 }
+      );
+    } else {
+      return NextResponse.json(
+        { error: 'Error desconocido al obtener transacciones' }, 
+        { status: 500 }
+      );
+    }
   }
-}
+} 

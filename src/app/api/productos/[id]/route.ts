@@ -162,15 +162,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
             await query('COMMIT');
 
             const productoActualizado = await obtenerProductoConParametros(id);
-            
-            // Crear respuesta con encabezados anti-caché
-            const response = NextResponse.json(productoActualizado);
-            response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-            response.headers.set('Pragma', 'no-cache');
-            response.headers.set('Expires', '0');
-            response.headers.set('Surrogate-Control', 'no-store');
-            
-            return response;
+            return NextResponse.json(productoActualizado);
         } catch (error) {
             await query('ROLLBACK');
             console.error('Error en la transacción:', error);
@@ -266,14 +258,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
 
             await query('COMMIT');
 
-            // Crear respuesta con encabezados anti-caché
-            const response = NextResponse.json({ message: 'Producto eliminado correctamente' });
-            response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-            response.headers.set('Pragma', 'no-cache');
-            response.headers.set('Expires', '0');
-            response.headers.set('Surrogate-Control', 'no-store');
-            
-            return response;
+            return NextResponse.json({ message: 'Producto eliminado correctamente' });
         } catch (error) {
             await query('ROLLBACK');
             console.error('Error al eliminar producto:', error);
@@ -296,14 +281,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
             return NextResponse.json({ error: 'Producto no encontrado' }, { status: 404 });
         }
 
-        // Crear respuesta con encabezados anti-caché
-        const response = NextResponse.json(producto);
-        response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-        response.headers.set('Pragma', 'no-cache');
-        response.headers.set('Expires', '0');
-        response.headers.set('Surrogate-Control', 'no-store');
-        
-        return response;
+        return NextResponse.json(producto);
     } catch (error) {
         console.error('Error al obtener producto:', error);
         return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });

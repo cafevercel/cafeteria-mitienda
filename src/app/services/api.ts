@@ -7,30 +7,6 @@ export const api = axios.create({
   baseURL: API_URL
 });
 
-// Añadir al principio del archivo, justo después de crear la instancia de axios
-api.interceptors.request.use(config => {
-  // Añadir un parámetro timestamp a todas las peticiones GET
-  if (config.method?.toLowerCase() === 'get') {
-    config.params = {
-      ...config.params,
-      _t: new Date().getTime()
-    };
-  }
-  return config;
-});
-
-// Añadir interceptor de respuesta para verificar si hay problemas de caché
-api.interceptors.response.use(response => {
-  // Verificar si la respuesta tiene encabezados anti-caché
-  if (response.config.method?.toLowerCase() === 'get') {
-    // Asegurarse de que la respuesta no sea cacheada por el navegador
-    if (typeof window !== 'undefined') {
-      console.log('Respuesta recibida para:', response.config.url);
-    }
-  }
-  return response;
-});
-
 interface User {
   id: string;
   nombre: string;

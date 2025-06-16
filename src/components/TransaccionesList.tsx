@@ -6,7 +6,6 @@ import { es } from 'date-fns/locale'
 import { Card } from "@/components/ui/card"
 import { Transaccion, Producto } from '@/types'
 import Image from 'next/image'
-import { useQuery } from '@tanstack/react-query'
 import { getInventario } from '@/app/services/api'
 
 interface TransaccionesListProps {
@@ -29,11 +28,25 @@ const formatDate = (dateString: string): string => {
 }
 
 export default function TransaccionesList({ transacciones, searchTerm, vendedorId }: TransaccionesListProps) {
-  // Usar React Query para obtener productos
-  const { data: productos = [] } = useQuery({
-    queryKey: ['inventario'],
-    queryFn: getInventario,
-  })
+  const [productos, setProductos] = useState<Producto[]>([])
+  
+  useEffect(() => {
+    const fetchProductos = async () => {
+      try {
+        const inventario = await getInventario()
+        // Convertir los productos recibidos al tipo Producto para evitar errores de tipo
+        const productosConvertidos = inventario.map(p => ({
+          ...p,
+          foto: p.foto || null  // Asegurar que foto no sea undefined
+        })) as unknown as Producto[]
+        setProductos(productosConvertidos)
+      } catch (error) {
+        console.error('Error al cargar productos:', error)
+      }
+    }
+    
+    fetchProductos()
+  }, [])
   
   const getProductImage = (productoId: string) => {
     const producto = productos.find(p => p.id === productoId)
@@ -93,4 +106,4 @@ export default function TransaccionesList({ transacciones, searchTerm, vendedorI
       ))}
     </div>
   )
-}
+} 

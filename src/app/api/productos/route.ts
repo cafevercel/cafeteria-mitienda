@@ -67,14 +67,7 @@ export async function POST(request: NextRequest) {
                 GROUP BY p.id
             `, [productoId]);
             
-            // Crear respuesta con encabezados anti-caché
-            const response = NextResponse.json(productoCompleto.rows[0]);
-            response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-            response.headers.set('Pragma', 'no-cache');
-            response.headers.set('Expires', '0');
-            response.headers.set('Surrogate-Control', 'no-store');
-            
-            return response;
+            return NextResponse.json(productoCompleto.rows[0]);
         } catch (error) {
             await query('ROLLBACK');
             throw error;
@@ -111,14 +104,7 @@ export async function GET(request: NextRequest) {
             GROUP BY p.id
         `);
 
-        // Crear respuesta con encabezados anti-caché
-        const response = NextResponse.json(result.rows);
-        response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-        response.headers.set('Pragma', 'no-cache');
-        response.headers.set('Expires', '0');
-        response.headers.set('Surrogate-Control', 'no-store');
-        
-        return response;
+        return NextResponse.json(result.rows);
     } catch (error) {
         console.error('Error fetching products:', error);
         return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
