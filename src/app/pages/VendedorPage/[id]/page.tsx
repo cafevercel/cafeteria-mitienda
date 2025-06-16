@@ -751,11 +751,20 @@ const TransaccionesList = ({
             transactionType === 'Entrega' ? 'border-green-500' :
               'border-blue-500';
 
-        const cantidadTotal = transaccion.parametros
+        // 🔥 AQUÍ ESTÁ EL FIX PRINCIPAL
+        const cantidadTotal = transaccion.parametros && transaccion.parametros.length > 0
           ? transaccion.parametros.reduce((sum, param) => sum + param.cantidad, 0)
-          : transaccion.cantidad;
+          : (transaccion.cantidad || 0); // Añadimos || 0 para manejar valores undefined/null
 
         const isExpanded = expandedTransactions.has(transactionKey);
+
+        // 🔥 DEBUGGING: Añade este console.log temporalmente para verificar los datos
+        console.log('Transacción:', {
+          producto: transaccion.producto,
+          cantidad: transaccion.cantidad,
+          parametros: transaccion.parametros,
+          cantidadTotal: cantidadTotal
+        });
 
         return (
           <div
@@ -763,9 +772,9 @@ const TransaccionesList = ({
             className={`bg-white p-4 rounded-lg shadow border-l-4 ${borderColor}`}
           >
             <div
-              className={`flex items-start ${transaccion.parametros ? 'cursor-pointer' : ''}`}
+              className={`flex items-start ${transaccion.parametros && transaccion.parametros.length > 0 ? 'cursor-pointer' : ''}`}
               onClick={() => {
-                if (transaccion.parametros) {
+                if (transaccion.parametros && transaccion.parametros.length > 0) {
                   toggleExpand(transactionKey);
                 }
               }}
@@ -780,9 +789,12 @@ const TransaccionesList = ({
                 </div>
                 <div className="flex justify-between items-center text-xs text-gray-600">
                   <span>{formatDate(transaccion.fecha)}</span>
-                  <span>Cantidad Total: {cantidadTotal}</span>
+                  {/* 🔥 MEJORA EN LA VISUALIZACIÓN */}
+                  <span>
+                    Cantidad Total: {cantidadTotal > 0 ? cantidadTotal : 'N/A'}
+                  </span>
                 </div>
-                {transaccion.parametros && (
+                {transaccion.parametros && transaccion.parametros.length > 0 && (
                   <div className="flex items-center justify-end mt-1">
                     {isExpanded ? (
                       <ChevronUp className="h-4 w-4 text-gray-500" />
@@ -791,10 +803,10 @@ const TransaccionesList = ({
                     )}
                   </div>
                 )}
-                {isExpanded && transaccion.parametros && (
+                {isExpanded && transaccion.parametros && transaccion.parametros.length > 0 && (
                   <div className="mt-2 space-y-1 pl-4 border-l-2 border-gray-200">
                     {transaccion.parametros
-                      .filter(param => param.cantidad !== 0) // Añadimos este filtro
+                      .filter(param => param.cantidad !== 0)
                       .map((param, index) => (
                         <div key={index} className="flex justify-between text-xs text-gray-600">
                           <span className="font-medium">{param.nombre}:</span>
@@ -813,6 +825,7 @@ const TransaccionesList = ({
     </div>
   );
 };
+
 
 
 
