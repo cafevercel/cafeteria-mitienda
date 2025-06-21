@@ -841,32 +841,33 @@ const ProductoCard = ({ producto, vendedorId }: { producto: Producto, vendedorId
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
 
-
   const calcularGanancia = (precio: number, porcentaje: number | undefined): number => {
     if (!porcentaje || porcentaje === 0) return 0;
     return precio * (porcentaje / 100);
   };
 
-  // Convertir porcentajeGanancia a número (si ya es un número, lo usamos directamente)
+  // Convertir porcentajeGanancia a número
   const porcentajeGanancia = producto.porcentajeGanancia
     ? (typeof producto.porcentajeGanancia === 'string'
       ? parseFloat(producto.porcentajeGanancia)
       : producto.porcentajeGanancia)
     : 0;
 
-  // Función para agrupar ventas por día
+  // 🔥 FUNCIÓN CORREGIDA - Usar la misma lógica que en useVendedorData
   const agruparVentasPorDia = useCallback((ventas: Venta[]) => {
     const ventasDiarias: VentaDia[] = [];
     ventas.forEach((venta) => {
-      const dateOnly = venta.fecha.split(' ')[0] || venta.fecha.split('T')[0]
-      const [year, month, day] = dateOnly.split('-').map(Number)
-      const fecha = new Date(year, month - 1, day)
+      // 🔥 USAR parseLocalDate en lugar de parsing manual
+      const fecha = parseLocalDate(venta.fecha);
+
       if (!isValid(fecha)) {
         console.error(`Invalid date in venta: ${venta.fecha}`);
         return;
       }
+
       const fechaStr = format(fecha, 'yyyy-MM-dd');
       const diaExistente = ventasDiarias.find((d) => d.fecha === fechaStr);
+
       if (diaExistente) {
         diaExistente.ventas.push(venta);
         diaExistente.total += typeof venta.total === 'number' ? venta.total : parseFloat(venta.total) || 0;
@@ -878,16 +879,15 @@ const ProductoCard = ({ producto, vendedorId }: { producto: Producto, vendedorId
         });
       }
     });
+
     return ventasDiarias.sort((a, b) => {
-      const [yearA, monthA, dayA] = a.fecha.split('-').map(Number)
-      const [yearB, monthB, dayB] = b.fecha.split('-').map(Number)
-      const dateA = new Date(yearA, monthA - 1, dayA)
-      const dateB = new Date(yearB, monthB - 1, dayB)
+      const dateA = parseLocalDate(a.fecha);
+      const dateB = parseLocalDate(b.fecha);
       return isValid(dateB) && isValid(dateA) ? dateB.getTime() - dateA.getTime() : 0;
     });
-  }, []);
+  }, []); // 🔥 DEPENDENCIAS VACÍAS porque no depende de props/state
 
-  // Función para agrupar ventas por semana
+  // 🔥 FUNCIÓN CORREGIDA - Usar la misma lógica que en useVendedorData
   const agruparVentasPorSemana = useCallback((ventas: Venta[]) => {
     const weekMap = new Map<string, VentaSemana>();
 
@@ -898,12 +898,14 @@ const ProductoCard = ({ producto, vendedorId }: { producto: Producto, vendedorId
     };
 
     ventas.forEach((venta) => {
+      // 🔥 USAR parseLocalDate
       const ventaDate = parseLocalDate(venta.fecha);
 
       if (!isValid(ventaDate)) {
         console.error(`Invalid date in venta: ${venta.fecha}`);
         return;
       }
+
       const weekKey = getWeekKey(ventaDate);
 
       if (!weekMap.has(weekKey)) {
@@ -929,8 +931,7 @@ const ProductoCard = ({ producto, vendedorId }: { producto: Producto, vendedorId
       const dateB = parseLocalDate(b.fechaInicio);
       return isValid(dateB) && isValid(dateA) ? dateB.getTime() - dateA.getTime() : 0;
     });
-  }, []);
-
+  }, []); // 🔥 DEPENDENCIAS VACÍAS
 
   const calcularCantidadTotal = (parametros?: ProductoParametro[]): number => {
     if (!parametros) return 0;
@@ -950,6 +951,7 @@ const ProductoCard = ({ producto, vendedorId }: { producto: Producto, vendedorId
         getVentasProducto(producto.id, startDate, endDate, vendedorId)
       ]);
 
+      console.log('📊 Datos de ventas obtenidos:', ventasData); // 🔥 DEBUG
       setTransacciones(transaccionesData);
       setVentas(ventasData);
     } catch (error) {
@@ -965,8 +967,20 @@ const ProductoCard = ({ producto, vendedorId }: { producto: Producto, vendedorId
     fetchProductData()
   }
 
-  const ventasDiarias = useMemo(() => agruparVentasPorDia(ventas), [ventas, agruparVentasPorDia]);
-  const ventasSemanales = useMemo(() => agruparVentasPorSemana(ventas), [ventas, agruparVentasPorSemana]);
+  // 🔥 MEMOIZACIÓN CORREGIDA
+  const ventasDiarias = useMemo(() => {
+    console.log('🔄 Agrupando ventas por día:', ventas); // 🔥 DEBUG
+    const resultado = agruparVentasPorDia(ventas);
+    console.log('📅 Ventas diarias agrupadas:', resultado); // 🔥 DEBUG
+    return resultado;
+  }, [ventas, agruparVentasPorDia]);
+
+  const ventasSemanales = useMemo(() => {
+    console.log('🔄 Agrupando ventas por semana:', ventas); // 🔥 DEBUG
+    const resultado = agruparVentasPorSemana(ventas);
+    console.log('📊 Ventas semanales agrupadas:', resultado); // 🔥 DEBUG
+    return resultado;
+  }, [ventas, agruparVentasPorSemana]);
 
   return (
     <>
@@ -1109,10 +1123,6 @@ const ProductoCard = ({ producto, vendedorId }: { producto: Producto, vendedorId
                   <TabsContent value="ventas" className="h-full overflow-auto mt-0 border-0">
                     <div className="space-y-4">
                       <Tabs defaultValue="por-dia">
-                        <TabsList>
-                          <TabsTrigger value="por-dia">Por día</TabsTrigger>
-                          <TabsTrigger value="por-semana">Por semana</TabsTrigger>
-                        </TabsList>
                         <TabsContent value="por-dia">
                           <div className="space-y-4">
                             <div className="relative mb-4">
@@ -1133,7 +1143,14 @@ const ProductoCard = ({ producto, vendedorId }: { producto: Producto, vendedorId
                                 />
                               ))
                             ) : (
-                              <div className="text-center py-4">No hay ventas registradas</div>
+                              <div className="text-center py-4">
+                                <p>No hay ventas registradas para este producto</p>
+                                {ventas.length > 0 && (
+                                  <p className="text-xs text-gray-500 mt-2">
+                                    ({ventas.length} ventas sin procesar - revisar formato de fechas)
+                                  </p>
+                                )}
+                              </div>
                             )}
                           </div>
                         </TabsContent>
@@ -1157,7 +1174,14 @@ const ProductoCard = ({ producto, vendedorId }: { producto: Producto, vendedorId
                                 />
                               ))
                             ) : (
-                              <div className="text-center py-4">No hay ventas registradas</div>
+                              <div className="text-center py-4">
+                                <p>No hay ventas registradas para este producto</p>
+                                {ventas.length > 0 && (
+                                  <p className="text-xs text-gray-500 mt-2">
+                                    ({ventas.length} ventas sin procesar - revisar formato de fechas)
+                                  </p>
+                                )}
+                              </div>
                             )}
                           </div>
                         </TabsContent>
