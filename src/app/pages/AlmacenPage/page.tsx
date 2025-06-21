@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Menu, ArrowUpDown, Plus, Truck, UserPlus, FileSpreadsheet, Trash2, X, Minus, Loader2, MoreVertical, Eye, Edit, DollarSign, Search } from "lucide-react"
+import { Menu, ArrowUpDown, Plus, Truck, UserPlus, FileSpreadsheet, Trash2, X, Minus, Loader2, MoreVertical, Eye, Edit, DollarSign, Search, TrendingUp, Calendar } from "lucide-react"
 import {
   getVendedores,
   getCurrentUser,
@@ -228,6 +228,60 @@ export default function AlmacenPage() {
   const [cafeteriaSortBy, setCafeteriaSortBy] = useState<'nombre' | 'precio' | 'cantidadCaf' | 'cantidadAlm'>('nombre')
   const [cafeteriaSortOrder, setCafeteriaSortOrder] = useState<'asc' | 'desc'>('asc')
   const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set());
+  // Agregar estos estados al inicio del componente
+  const [showVentasModal, setShowVentasModal] = useState(false)
+  const [ventasVendedorSimple, setVentasVendedorSimple] = useState<Venta[]>([])
+  const [vendedorVentasSeleccionado, setVendedorVentasSeleccionado] = useState<Vendedor | null>(null)
+  const [loadingVentas, setLoadingVentas] = useState(false)
+  const [expandedVentasDays, setExpandedVentasDays] = useState<Set<string>>(new Set());
+  const [expandedVentasProducts, setExpandedVentasProducts] = useState<Set<string>>(new Set());
+
+  // Función simplificada para mostrar ventas
+  const handleMostrarVentas = async (vendedor: Vendedor) => {
+    try {
+      setLoadingVentas(true)
+      setVendedorVentasSeleccionado(vendedor)
+
+      // Hacer solo la petición de ventas
+      const ventas = await getVendedorVentas(vendedor.id)
+      setVentasVendedorSimple(ventas)
+      setShowVentasModal(true)
+
+    } catch (error) {
+      console.error('Error al cargar ventas:', error)
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar las ventas del vendedor",
+        variant: "destructive",
+      })
+    } finally {
+      setLoadingVentas(false)
+    }
+  }
+
+  const toggleVentasDay = (fecha: string) => {
+    setExpandedVentasDays(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(fecha)) {
+        newSet.delete(fecha);
+      } else {
+        newSet.add(fecha);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleVentasProduct = (ventaId: string) => {
+    setExpandedVentasProducts(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(ventaId)) {
+        newSet.delete(ventaId);
+      } else {
+        newSet.add(ventaId);
+      }
+      return newSet;
+    });
+  };
 
   const isProductoAgotado = (producto: Producto): boolean => {
     if (producto.tiene_parametros && producto.parametros) {
@@ -1634,11 +1688,17 @@ export default function AlmacenPage() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleVerVendedor(vendedor, 'ventas')}
+                          onClick={() => handleMostrarVentas(vendedor)}
+                          disabled={loadingVentas}
                         >
-                          <DollarSign className="h-4 w-4" />
+                          {loadingVentas ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <DollarSign className="h-4 w-4" />
+                          )}
                           <span className="ml-1">Ventas</span>
                         </Button>
+
                       </div>
                     </div>
                   </div>
@@ -2632,6 +2692,172 @@ export default function AlmacenPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+
+      {/* Modal de ventas simplificado */}
+      <Dialog open={showVentasModal} onOpenChange={setShowVentasModal}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              Ventas de {vendedorVentasSeleccionado?.nombre}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {ventasVendedorSimple.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <p className="text-lg font-medium">No hay ventas registradas</p>
+                <p className="text-sm">Este vendedor aún no tiene ventas registradas</p>
+              </div>
+            ) : (
+              <>
+                {/* Total general */}
+                <div className="p-4 border rounded-lg bg-gray-50">
+                  <div className="flex justify-between items-center">
+                    <span className="font-medium">Total de ventas:</span>
+                    <span className="font-bold text-lg">
+                      ${ventasVendedorSimple.reduce((sum, venta) => sum + Number(venta.total), 0).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Ventas agrupadas por día */}
+                <div className="space-y-2">
+                  {Object.entries(
+                    ventasVendedorSimple.reduce((acc, venta) => {
+                      const fecha = new Date(venta.fecha).toLocaleDateString('es-ES', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: '2-digit'
+                      });
+
+                      if (!acc[fecha]) {
+                        acc[fecha] = [];
+                      }
+                      acc[fecha].push(venta);
+                      return acc;
+                    }, {} as Record<string, typeof ventasVendedorSimple>)
+                  )
+                    .sort(([a], [b]) => {
+                      const fechaA = new Date(ventasVendedorSimple.find(v =>
+                        new Date(v.fecha).toLocaleDateString('es-ES', {
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: '2-digit'
+                        }) === a
+                      )?.fecha || '');
+                      const fechaB = new Date(ventasVendedorSimple.find(v =>
+                        new Date(v.fecha).toLocaleDateString('es-ES', {
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: '2-digit'
+                        }) === b
+                      )?.fecha || '');
+                      return fechaB.getTime() - fechaA.getTime();
+                    })
+                    .map(([fecha, ventasDelDia]) => {
+                      const totalDia = ventasDelDia.reduce((sum, venta) => sum + Number(venta.total), 0);
+                      const isExpanded = expandedVentasDays.has(fecha);
+
+                      return (
+                        <div key={fecha} className="border rounded-lg">
+                          <div
+                            className="p-3 cursor-pointer hover:bg-gray-50 transition-colors"
+                            onClick={() => toggleVentasDay(fecha)}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="text-gray-400">
+                                  {isExpanded ? '▼' : '▶'}
+                                </span>
+                                <span className="font-medium">{fecha}</span>
+                              </div>
+                              <span className="font-semibold">
+                                ${totalDia.toFixed(2)}
+                              </span>
+                            </div>
+                          </div>
+
+                          {isExpanded && (
+                            <div className="border-t bg-gray-50">
+                              <div className="p-3 space-y-2">
+                                {ventasDelDia.map((venta) => {
+                                  const isProductExpanded = expandedVentasProducts.has(venta.id);
+                                  const tieneParametros = venta.parametros && venta.parametros.length > 0;
+
+                                  // Buscar el nombre del producto en el inventario
+                                  const producto = inventario.find(p => p.id === venta.producto);
+                                  const nombreProducto = producto ? producto.nombre : venta.producto;
+
+                                  return (
+                                    <div key={venta.id} className="bg-white rounded border">
+                                      <div
+                                        className={`p-3 ${tieneParametros ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+                                        onClick={() => tieneParametros && toggleVentasProduct(venta.id)}
+                                      >
+                                        <div className="flex items-center justify-between">
+                                          <div className="flex items-center gap-2">
+                                            {tieneParametros && (
+                                              <span className="text-gray-400 text-sm">
+                                                {isProductExpanded ? '▼' : '▶'}
+                                              </span>
+                                            )}
+                                            <div>
+                                              <p className="font-medium">{nombreProducto}</p>
+                                              <div className="text-sm text-gray-600">
+                                                <span>Cantidad: {venta.cantidad}</span>
+                                                <span className="ml-3">
+                                                  {new Date(venta.fecha).toLocaleTimeString('es-ES', {
+                                                    hour: '2-digit',
+                                                    minute: '2-digit'
+                                                  })}
+                                                </span>
+                                              </div>
+                                            </div>
+                                          </div>
+                                          <div className="text-right">
+                                            <p className="font-semibold">
+                                              ${Number(venta.total).toFixed(2)}
+                                            </p>
+                                            <p className="text-sm text-gray-500">
+                                              ${(Number(venta.total) / venta.cantidad).toFixed(2)} c/u
+                                            </p>
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      {/* Parámetros desplegables */}
+                                      {tieneParametros && isProductExpanded && (
+                                        <div className="border-t bg-gray-50 p-3">
+                                          <p className="text-sm font-medium text-gray-700 mb-2">Parámetros vendidos:</p>
+                                          <div className="space-y-1">
+                                            {venta.parametros?.map((parametro, paramIndex) => (
+                                              <div key={paramIndex} className="flex justify-between text-sm">
+                                                <span className="text-gray-600">{parametro.nombre}:</span>
+                                                <span className="font-medium">{parametro.cantidad}</span>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                </div>
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+
     </div>
   )
 } 

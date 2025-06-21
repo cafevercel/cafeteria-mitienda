@@ -8,6 +8,12 @@ export interface VentaSemana {
   ganancia: number
 }
 
+export interface VentaDia {
+  fecha: string
+  ventas: Venta[]
+  total: number
+}
+
 export interface Parametro {
   nombre: string;
   cantidad: number;
