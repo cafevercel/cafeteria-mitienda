@@ -19,7 +19,6 @@ import {
   getCurrentUser,
   getInventario,
   registerUser,
-  getProductosCompartidos,
   getProductosCafeteria,
   getVentasVendedor,
   agregarProducto,
