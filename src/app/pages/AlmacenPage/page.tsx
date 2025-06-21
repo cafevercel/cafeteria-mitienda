@@ -1385,36 +1385,35 @@ export default function AlmacenPage() {
 
           <Card className="border-orange-200 shadow-md">
             <CardHeader className="border-b border-orange-100">
-              <div className="flex justify-between items-center">
-                <CardTitle className="text-orange-800">Productos en Almacén</CardTitle>
-                <div className="flex space-x-2">
-                  <Button
-                    variant={activeProductTab === 'inventario' ? "default" : "outline"}
-                    onClick={() => setActiveProductTab('inventario')}
-                    size="sm"
-                    className={activeProductTab === 'inventario' ? "bg-primary text-white" : "border-orange-200 text-orange-700 hover:bg-orange-50"}
-                  >
-                    Inventario
-                  </Button>
-                  <Button
-                    variant={activeProductTab === 'agotados' ? "default" : "outline"}
-                    onClick={() => setActiveProductTab('agotados')}
-                    size="sm"
-                    className={`relative ${activeProductTab === 'agotados' ? "bg-primary text-white" : "border-orange-200 text-orange-700 hover:bg-orange-50"}`}
-                  >
-                    Agotados
-                  </Button>
-                  <Button
-                    variant={activeProductTab === 'merma' ? "default" : "outline"}
-                    onClick={() => setActiveProductTab('merma')}
-                    size="sm"
-                    className={activeProductTab === 'merma' ? "bg-primary text-white" : "border-orange-200 text-orange-700 hover:bg-orange-50"}
-                  >
-                    Merma
-                  </Button>
-                </div>
+              <CardTitle className="text-orange-800 mb-4">Productos en Almacén</CardTitle>
+              <div className="flex flex-wrap gap-2 justify-start">
+                <Button
+                  variant={activeProductTab === 'inventario' ? "default" : "outline"}
+                  onClick={() => setActiveProductTab('inventario')}
+                  size="sm"
+                  className={activeProductTab === 'inventario' ? "bg-primary text-white" : "border-orange-200 text-orange-700 hover:bg-orange-50"}
+                >
+                  Inventario
+                </Button>
+                <Button
+                  variant={activeProductTab === 'agotados' ? "default" : "outline"}
+                  onClick={() => setActiveProductTab('agotados')}
+                  size="sm"
+                  className={`relative ${activeProductTab === 'agotados' ? "bg-primary text-white" : "border-orange-200 text-orange-700 hover:bg-orange-50"}`}
+                >
+                  Agotados
+                </Button>
+                <Button
+                  variant={activeProductTab === 'merma' ? "default" : "outline"}
+                  onClick={() => setActiveProductTab('merma')}
+                  size="sm"
+                  className={activeProductTab === 'merma' ? "bg-primary text-white" : "border-orange-200 text-orange-700 hover:bg-orange-50"}
+                >
+                  Merma
+                </Button>
               </div>
             </CardHeader>
+
             <CardContent>
               {activeProductTab === 'merma' ? (
                 <div className="space-y-4">
@@ -1720,31 +1719,29 @@ export default function AlmacenPage() {
         <div>
           <Card>
             <CardHeader>
-              <div className="flex justify-between items-center">
-                <CardTitle>Productos en Cafetería</CardTitle>
-                <div className="flex space-x-2">
-                  <Button
-                    variant={activeCafeteriaTab === 'productos' ? "default" : "outline"}
-                    onClick={() => setActiveCafeteriaTab('productos')}
-                    size="sm"
-                  >
-                    Productos
-                  </Button>
-                  <Button
-                    variant={activeCafeteriaTab === 'transacciones' ? "default" : "outline"}
-                    onClick={() => setActiveCafeteriaTab('transacciones')}
-                    size="sm"
-                  >
-                    Transacciones
-                  </Button>
-                  <Button
-                    variant={activeCafeteriaTab === 'ventas' ? "default" : "outline"}
-                    onClick={() => setActiveCafeteriaTab('ventas')}
-                    size="sm"
-                  >
-                    Ventas
-                  </Button>
-                </div>
+              <CardTitle className="mb-4">Productos en Cafetería</CardTitle>
+              <div className="flex flex-wrap gap-2 justify-start">
+                <Button
+                  variant={activeCafeteriaTab === 'productos' ? "default" : "outline"}
+                  onClick={() => setActiveCafeteriaTab('productos')}
+                  size="sm"
+                >
+                  Productos
+                </Button>
+                <Button
+                  variant={activeCafeteriaTab === 'transacciones' ? "default" : "outline"}
+                  onClick={() => setActiveCafeteriaTab('transacciones')}
+                  size="sm"
+                >
+                  Transacciones
+                </Button>
+                <Button
+                  variant={activeCafeteriaTab === 'ventas' ? "default" : "outline"}
+                  onClick={() => setActiveCafeteriaTab('ventas')}
+                  size="sm"
+                >
+                  Ventas
+                </Button>
               </div>
             </CardHeader>
             <CardContent>
