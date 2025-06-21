@@ -166,6 +166,7 @@ const useVendedorData = (vendedorId: string) => {
   const [sortBy, setSortBy] = useState<'nombre' | 'cantidad'>('nombre')
   const [productosSeleccionados, setProductosSeleccionados] = useState<ProductoVenta[]>([]);
   const [fecha, setFecha] = useState('');
+  const [isProcessingVenta, setIsProcessingVenta] = useState(false)
 
   const handleEnviarVenta = async () => {
     if (productosSeleccionados.length === 0) {
@@ -181,19 +182,20 @@ const useVendedorData = (vendedorId: string) => {
       return;
     }
 
+    setIsProcessingVenta(true); // 👈 Activar estado de procesando
+
     try {
       console.log('Iniciando proceso de venta');
 
       await Promise.all(productosSeleccionados.map(async producto => {
         try {
-          // Calcular la cantidad total sumando los parámetros
           const cantidadTotal = producto.parametrosVenta
             ? producto.parametrosVenta.reduce((sum, param) => sum + param.cantidad, 0)
             : producto.cantidadVendida;
 
           const response = await realizarVenta(
             producto.id,
-            cantidadTotal, // Usar la cantidad total calculada
+            cantidadTotal,
             fecha,
             producto.parametrosVenta,
             vendedorId
@@ -215,9 +217,10 @@ const useVendedorData = (vendedorId: string) => {
     } catch (error) {
       console.error('Error al realizar la venta:', error);
       setError(error instanceof Error ? error.message : 'Error al realizar la venta');
+    } finally {
+      setIsProcessingVenta(false); // 👈 Desactivar estado de procesando
     }
   };
-
 
 
   const agruparVentasPorDia = useCallback((ventas: Venta[]) => {
@@ -424,6 +427,7 @@ const useVendedorData = (vendedorId: string) => {
     sortBy,
     setSortBy,
     handleEnviarVenta,
+    isProcessingVenta,
     productosSeleccionados,
     setProductosSeleccionados,
     fecha,
@@ -556,28 +560,20 @@ const VentaDiaDesplegable = ({ venta, busqueda }: { venta: VentaDia, busqueda: s
                   />
                   <div className="flex flex-col">
                     <span className="font-medium">{v.producto_nombre}</span>
-
-                    {/* MEJORADO: Mostrar parámetros de manera más clara */}
                     {v.parametros && v.parametros.length > 0 ? (
-                      <div className="mt-1 p-2 bg-white rounded border">
-                        <p className="text-xs font-medium text-gray-700 mb-1">Parámetros vendidos:</p>
+                      <div className="mt-1">
                         {v.parametros.map((param, index) => (
-                          <div key={index} className="flex justify-between text-sm text-gray-600">
-                            <span>• {param.nombre}:</span>
-                            <span className="font-medium">{param.cantidad}</span>
+                          <div key={index} className="text-sm text-gray-600">
+                            • {param.nombre}: {param.cantidad}
                           </div>
                         ))}
-                        <div className="border-t border-gray-200 mt-1 pt-1">
-                          <div className="flex justify-between text-sm font-medium text-gray-700">
-                            <span>Cantidad total vendida:</span>
-                            <span>{v.parametros.reduce((sum, param) => sum + param.cantidad, 0)}</span>
-                          </div>
+                        <div className="text-sm font-medium text-gray-700 mt-1">
+                          Cantidad total: {v.parametros.reduce((sum, param) => sum + param.cantidad, 0)}
                         </div>
                       </div>
                     ) : (
-                      <div className="text-sm text-gray-600 mt-1">
-                        <span>Cantidad vendida: </span>
-                        <span className="font-medium">{v.cantidad}</span>
+                      <div className="text-sm text-gray-600">
+                        Cantidad: {v.cantidad}
                       </div>
                     )}
                   </div>
@@ -1008,25 +1004,10 @@ const ProductoCard = ({ producto, vendedorId }: { producto: Producto, vendedorId
                 Ganancia: ${formatPrice(calcularGanancia(producto.precio, porcentajeGanancia))} ({porcentajeGanancia}%)
               </p>
             )}
-
-            {/* NUEVO: Mostrar parámetros o cantidad normal */}
-            {producto.tiene_parametros && producto.parametros ? (
-              <div className="mt-2">
-                <p className="text-sm text-gray-600 font-medium">Parámetros disponibles:</p>
-                <div className="space-y-1">
-                  {producto.parametros
-                    .filter(param => param.cantidad > 0)
-                    .map((param, index) => (
-                      <div key={index} className="flex justify-between text-xs text-gray-500">
-                        <span>• {param.nombre}:</span>
-                        <span className="font-medium">{param.cantidad}</span>
-                      </div>
-                    ))}
-                </div>
-                <p className="text-sm text-gray-600 mt-1 font-medium">
-                  Total: {calcularCantidadTotal(producto.parametros)}
-                </p>
-              </div>
+            {producto.tiene_parametros ? (
+              <p className="text-sm text-gray-600">
+                Cantidad: {calcularCantidadTotal(producto.parametros)}
+              </p>
             ) : (
               <p className="text-sm text-gray-600">
                 {producto.cantidad > 0 ? `Cantidad: ${producto.cantidad}` : 'Agotado'}
@@ -1338,6 +1319,7 @@ export default function VendedorPage() {
     setSortOrder,
     sortBy,
     setSortBy,
+    isProcessingVenta,
     handleEnviarVenta,
     productosSeleccionados,
     setProductosSeleccionados,
@@ -1688,35 +1670,15 @@ export default function VendedorPage() {
                                 height={40}
                                 className="rounded-md ml-4 mr-4"
                               />
-                              <div className="flex-1">
+                              <div>
                                 <label htmlFor={`product-${producto.id}`} className="font-medium">
                                   {producto.nombre}
                                 </label>
-
-                                {/* NUEVO: Mostrar parámetros disponibles */}
-                                {producto.tiene_parametros && producto.parametros ? (
-                                  <div className="mt-1">
-                                    <p className="text-sm text-gray-500">Parámetros disponibles:</p>
-                                    <div className="space-y-1">
-                                      {producto.parametros
-                                        .filter(param => param.cantidad > 0)
-                                        .map((param, index) => (
-                                          <div key={index} className="flex justify-between text-xs text-gray-400">
-                                            <span>• {param.nombre}:</span>
-                                            <span>{param.cantidad}</span>
-                                          </div>
-                                        ))}
-                                    </div>
-                                    <p className="text-sm text-gray-500 mt-1">
-                                      Total disponible: {calcularCantidadTotal(producto)}
-                                    </p>
-                                  </div>
-                                ) : (
-                                  <p className="text-sm text-gray-500">
-                                    Cantidad disponible: {producto.cantidad}
-                                  </p>
-                                )}
-
+                                <p className="text-sm text-gray-500">
+                                  Cantidad disponible: {producto.tiene_parametros
+                                    ? calcularCantidadTotal(producto)
+                                    : producto.cantidad}
+                                </p>
                                 <p className="text-sm text-gray-500">Precio: ${formatPrice(producto.precio)}</p>
 
                                 {/* Selector de cantidad para productos sin parámetros */}
@@ -1755,16 +1717,15 @@ export default function VendedorPage() {
 
                                 {/* Mostrar los parámetros si ya están configurados */}
                                 {producto.tiene_parametros && selectedProductIds.includes(producto.id) && (
-                                  <div className="mt-2 p-2 bg-green-50 rounded border">
-                                    <p className="text-xs font-medium text-green-700 mb-1">Parámetros seleccionados:</p>
+                                  <div className="mt-2 text-sm text-gray-600">
                                     {productosConParametrosEnEspera
                                       .find(p => p.id === producto.id)
                                       ?.parametrosVenta
                                       ?.filter(param => param.cantidad > 0)
                                       ?.map(param => (
-                                        <div key={param.nombre} className="flex justify-between text-xs text-green-600">
-                                          <span>• {param.nombre}:</span>
-                                          <span className="font-medium">{param.cantidad}</span>
+                                        <div key={param.nombre} className="flex justify-between">
+                                          <span>{param.nombre}:</span>
+                                          <span>{param.cantidad}</span>
                                         </div>
                                       ))}
                                   </div>
@@ -1774,6 +1735,7 @@ export default function VendedorPage() {
                           </CardContent>
                         </Card>
                       ))}
+
                     </ScrollArea>
                     <Button onClick={handleConfirmSelection} className="mt-4">
                       Confirmar Selección
@@ -1783,41 +1745,29 @@ export default function VendedorPage() {
                 <div>
                   <h3 className="font-bold mb-2">Productos Seleccionados:</h3>
                   {productosSeleccionados.map((producto) => (
-                    <div key={producto.id} className="flex justify-between items-center mb-2 p-3 bg-gray-100 rounded-lg">
-                      <div className="flex items-center flex-1">
+                    <div key={producto.id} className="flex justify-between items-center mb-2 p-2 bg-gray-100 rounded">
+                      <div className="flex items-center">
                         <OptimizedImage
                           src={producto.foto || '/placeholder.svg'}
                           fallbackSrc="/placeholder.svg"
                           alt={producto.nombre}
                           width={40}
                           height={40}
-                          className="rounded-md mr-3"
+                          className="rounded-md mr-2"
                         />
-                        <div className="flex-1">
+                        <div>
                           <p className="font-medium">{producto.nombre}</p>
-                          <p className="text-sm text-gray-600">Precio: ${formatPrice(producto.precio)}</p>
-
-                          {/* NUEVO: Mostrar parámetros seleccionados o cantidad normal */}
                           {producto.parametrosVenta && producto.parametrosVenta.length > 0 ? (
-                            <div className="mt-1 p-2 bg-blue-50 rounded border">
-                              <p className="text-xs font-medium text-blue-700 mb-1">Parámetros a vender:</p>
+                            <div className="text-xs text-gray-600">
                               {producto.parametrosVenta.map(param => (
-                                <div key={param.nombre} className="flex justify-between text-xs text-blue-600">
-                                  <span>• {param.nombre}:</span>
-                                  <span className="font-medium">{param.cantidad}</span>
+                                <div key={param.nombre}>
+                                  {param.nombre}: {param.cantidad}
                                 </div>
                               ))}
-                              <div className="border-t border-blue-200 mt-1 pt-1">
-                                <div className="flex justify-between text-xs font-medium text-blue-700">
-                                  <span>Total a vender:</span>
-                                  <span>{producto.parametrosVenta.reduce((sum, param) => sum + param.cantidad, 0)}</span>
-                                </div>
-                              </div>
                             </div>
                           ) : (
-                            <div className="text-xs text-gray-600 mt-1">
-                              <span>Cantidad a vender: </span>
-                              <span className="font-medium">{producto.cantidadVendida}</span>
+                            <div className="text-xs text-gray-600">
+                              Cantidad: {producto.cantidadVendida}
                             </div>
                           )}
                         </div>
@@ -1825,7 +1775,7 @@ export default function VendedorPage() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="text-red-500 hover:text-red-700 hover:bg-red-50 ml-2"
+                        className="text-red-500 hover:text-red-700 hover:bg-red-50"
                         onClick={() => handleAjustarCantidad(producto.id, -producto.cantidadVendida)}
                       >
                         <X className="h-4 w-4" />
@@ -1835,8 +1785,19 @@ export default function VendedorPage() {
 
                   {productosSeleccionados.length > 0 && (
                     <div className="mt-4">
-                      <Button onClick={handleEnviarVenta} className="w-full">
-                        Registrar Venta
+                      <Button
+                        onClick={handleEnviarVenta}
+                        className="w-full"
+                        disabled={isProcessingVenta} // 👈 Deshabilitar cuando está procesando
+                      >
+                        {isProcessingVenta ? ( // 👈 Mostrar texto diferente según el estado
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                            Procesando venta...
+                          </>
+                        ) : (
+                          'Registrar Venta'
+                        )}
                       </Button>
                     </div>
                   )}

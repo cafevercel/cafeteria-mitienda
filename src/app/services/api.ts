@@ -15,6 +15,17 @@ interface User {
   password: string;
 }
 
+interface ProductoBackend {
+  id: string;
+  nombre: string;
+  precio: number;
+  foto?: string;
+  cantidad: number;
+  tieneParametros: boolean;
+  porcentajeGanancia?: number;
+  parametros: Array<{ nombre: string; cantidad: number }>;
+}
+
 interface LocalProducto {
   id: string;
   nombre: string;
@@ -140,22 +151,24 @@ export const registerUser = async (userData: Omit<User, 'id'>): Promise<User> =>
 export const getProductosCompartidos = async () => {
   try {
     const response = await api.get('/productos/compartidos');
-    console.log('Respuesta de productos compartidos:', response.data);
     
-    // Usar una anotación de tipo inline
-    const tieneGanancia = response.data.some((p: { porcentajeGanancia?: number }) => 
-      p.porcentajeGanancia !== undefined
-    );
-    console.log('¿Algún producto tiene porcentajeGanancia?', tieneGanancia);
-    
-    return response.data;
+    // Mapear correctamente los datos para que coincidan con el tipo Producto
+    return response.data.map((producto: any) => ({
+      id: producto.id,
+      nombre: producto.nombre,
+      precio: producto.precio,
+      foto: producto.foto,
+      cantidad: producto.cantidad,
+      tiene_parametros: producto.tieneParametros || producto.tiene_parametros || false,
+      tieneParametros: producto.tieneParametros || producto.tiene_parametros || false,
+      porcentajeGanancia: producto.porcentajeGanancia || 0,
+      parametros: Array.isArray(producto.parametros) ? producto.parametros : []
+    }));
   } catch (error) {
     console.error('Error al obtener productos compartidos:', error);
     throw new Error('No se pudieron cargar los productos compartidos. Por favor, intenta de nuevo.');
   }
 };
-
-
 
 export const agregarProducto = async (formData: FormData) => {
   try {
