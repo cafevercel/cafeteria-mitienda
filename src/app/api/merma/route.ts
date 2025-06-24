@@ -2,9 +2,28 @@ import { NextResponse } from 'next/server';
 import { sql } from '@vercel/postgres';
 import { Parametro, Merma } from '@/types';
 
+// Definir interfaces para mejorar el tipado
+interface ParametroMerma {
+  nombre: string;
+  cantidad: number;
+}
+
 export async function POST(request: Request) {
   try {
-    const { producto_id, usuario_id, cantidad, parametros } = await request.json();
+    const { producto_id, usuario_id, cantidad, parametros }: {
+      producto_id: string;
+      usuario_id?: string;
+      cantidad: number;
+      parametros?: ParametroMerma[];
+    } = await request.json();
+
+    // Validaciones iniciales
+    if (!producto_id) {
+      return NextResponse.json(
+        { error: 'Producto ID es requerido' },
+        { status: 400 }
+      );
+    }
 
     // 1. Obtener información del producto
     const producto = await sql`
@@ -25,8 +44,7 @@ export async function POST(request: Request) {
     const esMermaDirecta = !usuario_id || usuario_id.trim() === '' || esCafeteria;
     
     // Buscar un usuario administrador para asociar con la merma en caso de cafetería
-    // Esto es necesario porque la columna usuario_id no puede ser nula en la base de datos
-    let idUsuarioMerma;
+    let idUsuarioMerma: string;
     let nombreUsuario = 'Cafetería';
     
     if (esMermaDirecta) {
@@ -69,7 +87,94 @@ export async function POST(request: Request) {
       nombreUsuario = usuario.rows[0].nombre;
     }
 
-    // 2. Crear registro en la tabla merma
+    // Determinar la cantidad real a procesar
+    let cantidadReal = cantidad;
+    
+    if (producto.rows[0].tiene_parametros) {
+      // Para productos con parámetros, validar que se proporcionen parámetros
+      if (!parametros || parametros.length === 0) {
+        return NextResponse.json(
+          { error: 'Producto con parámetros requiere especificar parámetros' },
+          { status: 400 }
+        );
+      }
+
+      // Validar que cada parámetro tenga cantidad válida
+      for (const param of parametros) {
+        if (!param.cantidad || param.cantidad <= 0) {
+          return NextResponse.json(
+            { error: `Cantidad inválida para parámetro ${param.nombre}` },
+            { status: 400 }
+          );
+        }
+      }
+
+      // ✅ CORRECCIÓN: Tipado explícito para reduce
+      cantidadReal = parametros.reduce((total: number, param: ParametroMerma) => {
+        return total + (param.cantidad || 0);
+      }, 0);
+
+      // Validar que la cantidad total es mayor a 0
+      if (cantidadReal <= 0) {
+        return NextResponse.json(
+          { error: 'La cantidad total de parámetros debe ser mayor a 0' },
+          { status: 400 }
+        );
+      }
+
+      // Validar stock suficiente antes de procesar (solo para cafetería)
+      if (esCafeteria) {
+        for (const param of parametros) {
+          const stockActual = await sql`
+            SELECT cantidad FROM usuario_producto_parametros
+            WHERE producto_id = ${producto_id} AND nombre = ${param.nombre}
+          `;
+          
+          if (!stockActual.rows[0] || stockActual.rows[0].cantidad < param.cantidad) {
+            return NextResponse.json(
+              { error: `Stock insuficiente para ${param.nombre}. Stock actual: ${stockActual.rows[0]?.cantidad || 0}` },
+              { status: 400 }
+            );
+          }
+        }
+      }
+    } else {
+      // Para productos sin parámetros, validar cantidad
+      if (!cantidadReal || cantidadReal <= 0) {
+        return NextResponse.json(
+          { error: 'La cantidad debe ser mayor a 0' },
+          { status: 400 }
+        );
+      }
+
+      // Validar stock suficiente antes de procesar
+      if (esCafeteria) {
+        const stockActual = await sql`
+          SELECT cantidad FROM usuario_productos
+          WHERE producto_id = ${producto_id}
+        `;
+        
+        if (!stockActual.rows[0] || stockActual.rows[0].cantidad < cantidadReal) {
+          return NextResponse.json(
+            { error: `Stock insuficiente. Stock actual: ${stockActual.rows[0]?.cantidad || 0}` },
+            { status: 400 }
+          );
+        }
+      } else if (esMermaDirecta) {
+        const stockActual = await sql`
+          SELECT cantidad FROM productos WHERE id = ${producto_id}
+        `;
+        
+        if (!stockActual.rows[0] || stockActual.rows[0].cantidad < cantidadReal) {
+          return NextResponse.json(
+            { error: `Stock insuficiente. Stock actual: ${stockActual.rows[0]?.cantidad || 0}` },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
+    // 2. Crear registro en la tabla merma con la cantidad correcta
     const mermaResult = await sql`
       INSERT INTO merma (
         producto_id,
@@ -81,7 +186,7 @@ export async function POST(request: Request) {
       ) VALUES (
         ${producto_id},
         ${producto.rows[0].nombre},
-        ${cantidad},
+        ${cantidadReal},
         NOW(),
         ${idUsuarioMerma},
         ${nombreUsuario}
@@ -103,7 +208,7 @@ export async function POST(request: Request) {
           tipo
         ) VALUES (
           ${producto_id},
-          ${cantidad},
+          ${cantidadReal},
           ${esMermaDirecta ? 'Inventario' : usuario_id},
           'MERMA',
           NOW(),
@@ -163,6 +268,7 @@ export async function POST(request: Request) {
             UPDATE usuario_producto_parametros
             SET cantidad = cantidad - ${param.cantidad}
             WHERE producto_id = ${producto_id}
+            AND usuario_id = ${usuario_id}
             AND nombre = ${param.nombre}
           `;
         }
@@ -179,7 +285,7 @@ export async function POST(request: Request) {
           tipo
         ) VALUES (
           ${producto_id},
-          ${cantidad},
+          ${cantidadReal},
           ${esMermaDirecta ? 'Inventario' : usuario_id},
           'MERMA',
           NOW(),
@@ -191,31 +297,38 @@ export async function POST(request: Request) {
         // Si viene de cafetería, actualizar usuario_productos
         await sql`
           UPDATE usuario_productos 
-          SET cantidad = cantidad - ${cantidad}
+          SET cantidad = cantidad - ${cantidadReal}
           WHERE producto_id = ${producto_id}
         `;
       } else if (esMermaDirecta) {
         // Si es merma directa (no cafetería), actualizar en productos
         await sql`
           UPDATE productos 
-          SET cantidad = cantidad - ${cantidad}
+          SET cantidad = cantidad - ${cantidadReal}
           WHERE id = ${producto_id}
         `;
       } else {
         // Si es de un vendedor específico, actualizar en usuario_productos
         await sql`
           UPDATE usuario_productos 
-          SET cantidad = cantidad - ${cantidad}
+          SET cantidad = cantidad - ${cantidadReal}
           WHERE producto_id = ${producto_id}
+          AND usuario_id = ${usuario_id}
         `;
       }
     }
 
-    return NextResponse.json({ success: true, merma_id: mermaId });
+    return NextResponse.json({ 
+      success: true, 
+      merma_id: mermaId,
+      cantidad_procesada: cantidadReal
+    });
   } catch (error) {
+    // ✅ CORRECCIÓN: Manejo de error tipado
     console.error('Error en merma:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
     return NextResponse.json(
-      { error: 'Error al procesar la merma' },
+      { error: 'Error al procesar la merma: ' + errorMessage },
       { status: 500 }
     );
   }
@@ -272,6 +385,7 @@ export async function GET(request: Request) {
         cantidad: merma.cantidad,
         fecha: merma.fecha,
         usuario_id: merma.usuario_id,
+        usuario_nombre: merma.usuario_nombre,
         producto: {
           id: merma.producto_id,
           nombre: merma.producto_nombre,
@@ -286,13 +400,13 @@ export async function GET(request: Request) {
     return NextResponse.json(mermasFormateadas);
   } catch (error) {
     console.error('Error al obtener mermas:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
     return NextResponse.json(
-      { error: 'Error al obtener mermas' },
+      { error: 'Error al obtener mermas: ' + errorMessage },
       { status: 500 }
     );
   }
 }
-
 
 export async function DELETE(request: Request) {
   try {
@@ -314,7 +428,22 @@ export async function DELETE(request: Request) {
       )
     `;
 
-    // 2. Eliminar los registros de merma
+    // 2. Eliminar los registros de transaccion_parametros relacionados
+    await sql`
+      DELETE FROM transaccion_parametros
+      WHERE transaccion_id IN (
+        SELECT id FROM transacciones 
+        WHERE producto = ${producto_id} AND hacia = 'MERMA'
+      )
+    `;
+
+    // 3. Eliminar los registros de transacciones
+    await sql`
+      DELETE FROM transacciones
+      WHERE producto = ${producto_id} AND hacia = 'MERMA'
+    `;
+
+    // 4. Eliminar los registros de merma
     await sql`
       DELETE FROM merma
       WHERE producto_id = ${producto_id}
@@ -323,11 +452,10 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error al eliminar mermas:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
     return NextResponse.json(
-      { error: 'Error al eliminar mermas' },
+      { error: 'Error al eliminar mermas: ' + errorMessage },
       { status: 500 }
     );
   }
 }
-
-

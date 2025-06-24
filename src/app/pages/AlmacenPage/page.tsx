@@ -387,9 +387,7 @@ export default function AlmacenPage() {
 
   const fetchMermas = useCallback(async () => {
     try {
-      console.log('Fetching mermas...');
       const data = await getMermas();
-      console.log('Mermas received:', data);
       setMermas(data);
     } catch (error) {
       console.error('Error al obtener las mermas:', error);
