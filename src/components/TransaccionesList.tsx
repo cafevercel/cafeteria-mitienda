@@ -1,11 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { format, parseISO, isValid } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { Card } from "@/components/ui/card"
 import { Transaccion, Producto } from '@/types'
-import Image from 'next/image'
 import { getInventario } from '@/app/services/api'
 
 interface TransaccionesListProps {
@@ -34,10 +33,9 @@ export default function TransaccionesList({ transacciones, searchTerm, vendedorI
     const fetchProductos = async () => {
       try {
         const inventario = await getInventario()
-        // Convertir los productos recibidos al tipo Producto para evitar errores de tipo
         const productosConvertidos = inventario.map(p => ({
           ...p,
-          foto: p.foto || null  // Asegurar que foto no sea undefined
+          foto: p.foto || null
         })) as unknown as Producto[]
         setProductos(productosConvertidos)
       } catch (error) {
@@ -47,20 +45,46 @@ export default function TransaccionesList({ transacciones, searchTerm, vendedorI
     
     fetchProductos()
   }, [])
-  
-  const getProductImage = (productoId: string) => {
-    const producto = productos.find(p => p.id === productoId)
-    return producto?.foto || '/product-placeholder.svg'
+
+  // Función para obtener el nombre del producto
+  const getProductName = (productoId: string) => {
+    const producto = productos.find(p => p.id === productoId || p.id.toString() === productoId)
+    return producto?.nombre || productoId // Si no encuentra el producto, muestra el ID
   }
 
-  const filteredTransacciones = transacciones.filter(
-    (transaccion) =>
-      transaccion.tipo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      formatDate(transaccion.fecha).includes(searchTerm)
-  )
+  // Filtrar transacciones con búsqueda mejorada
+  const filteredTransacciones = useMemo(() => {
+    if (!searchTerm.trim()) return transacciones
+
+    return transacciones.filter((transaccion) => {
+      const nombreProducto = getProductName(transaccion.producto)
+      const searchLower = searchTerm.toLowerCase()
+      
+      return (
+        // Buscar por nombre de producto
+        nombreProducto.toLowerCase().includes(searchLower) ||
+        // Buscar por tipo de transacción
+        transaccion.tipo.toLowerCase().includes(searchLower) ||
+        // Buscar por fecha
+        formatDate(transaccion.fecha).includes(searchTerm) ||
+        // Buscar por ID de producto
+        transaccion.producto.toString().toLowerCase().includes(searchLower) ||
+        // Buscar en parámetros si existen
+        (transaccion.parametros && transaccion.parametros.some(param => 
+          param.nombre.toLowerCase().includes(searchLower)
+        ))
+      )
+    })
+  }, [transacciones, searchTerm, productos])
 
   if (filteredTransacciones.length === 0) {
-    return <div className="text-center py-4">No se encontraron transacciones</div>
+    return (
+      <div className="text-center py-8">
+        <p className="text-gray-500">
+          {searchTerm ? 'No se encontraron transacciones que coincidan con la búsqueda' : 'No hay transacciones registradas'}
+        </p>
+      </div>
+    )
   }
 
   return (
@@ -68,12 +92,11 @@ export default function TransaccionesList({ transacciones, searchTerm, vendedorI
       {filteredTransacciones.map((transaccion) => (
         <Card key={transaccion.id} className="p-4">
           <div className="flex items-start gap-4">
-
             <div className="flex-1">
               <div className="flex justify-between items-start">
                 <div>
                   <h3 className="font-medium text-sm">
-                    {transaccion.producto}
+                    {getProductName(transaccion.producto)}
                   </h3>
                   <p className="text-xs text-gray-500">
                     Cantidad: {transaccion.cantidad}
@@ -106,4 +129,4 @@ export default function TransaccionesList({ transacciones, searchTerm, vendedorI
       ))}
     </div>
   )
-} 
+}
