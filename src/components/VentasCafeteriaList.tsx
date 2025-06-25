@@ -5,12 +5,16 @@ import { format, isValid } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronUp, Trash2, Edit } from 'lucide-react'
 import { OptimizedImage } from '@/components/OptimizedImage'
-import { getAllVentas, getInventario, deleteSale } from '@/app/services/api'
-import { Venta } from '@/types'
+import { getAllVentas, getInventario, deleteSale, editarVenta } from '@/app/services/api'
+import { Venta, VentaParametro } from '@/types'
 import { toast } from "@/hooks/use-toast"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 // Interfaz extendida para el inventario
 interface InventarioProducto {
@@ -69,7 +73,6 @@ const parseLocalDate = (dateString: string): Date => {
   return new Date(year, month - 1, day);
 };
 
-
 const formatDate = (dateString: string): string => {
   try {
     const date = parseLocalDate(dateString)
@@ -100,6 +103,16 @@ export default function VentasCafeteriaList({ searchTerm }: VentasCafeteriaListP
   const [productos, setProductos] = useState<InventarioProducto[]>([])
   const [ventaAEliminar, setVentaAEliminar] = useState<VentaExtendida | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+
+  // Estados para edición
+  const [ventaAEditar, setVentaAEditar] = useState<VentaExtendida | null>(null)
+  const [isEditing, setIsEditing] = useState(false)
+  const [editForm, setEditForm] = useState({
+    productoId: '',
+    cantidad: 1,
+    fecha: '',
+    parametros: [] as VentaParametro[]
+  })
 
   const fetchData = async () => {
     setIsLoading(true)
@@ -155,6 +168,96 @@ export default function VentasCafeteriaList({ searchTerm }: VentasCafeteriaListP
       setIsDeleting(false)
       setVentaAEliminar(null)
     }
+  }
+
+  // Función para manejar la edición de ventas
+  const handleEditSale = (venta: VentaExtendida) => {
+    setVentaAEditar(venta)
+
+    // Formatear la fecha para el input date
+    const fechaFormateada = venta.fecha.includes('T')
+      ? venta.fecha.split('T')[0]
+      : venta.fecha.split(' ')[0]
+
+    setEditForm({
+      productoId: venta.producto,
+      cantidad: venta.cantidad,
+      fecha: fechaFormateada,
+      parametros: venta.parametros || []
+    })
+  }
+
+  const confirmEditSale = async () => {
+    if (!ventaAEditar) return
+
+    setIsEditing(true)
+    try {
+      await editarVenta(
+        ventaAEditar.id,
+        editForm.productoId,
+        editForm.cantidad,
+        editForm.fecha,
+        editForm.parametros,
+        ventaAEditar.vendedor || ''
+      )
+
+      // Recargamos los datos para reflejar los cambios
+      await fetchData()
+
+      toast({
+        title: "Venta editada",
+        description: "La venta ha sido editada exitosamente",
+      })
+    } catch (error) {
+      console.error('Error al editar la venta:', error)
+      toast({
+        title: "Error",
+        description: "No se pudo editar la venta",
+        variant: "destructive",
+      })
+    } finally {
+      setIsEditing(false)
+      setVentaAEditar(null)
+    }
+  }
+
+  // Función para actualizar parámetros cuando cambia el producto
+  const handleProductoChange = (productoId: string) => {
+    const producto = productos.find(p => p.id === productoId)
+    const tieneParametros = producto?.tiene_parametros || producto?.tieneParametros
+
+    if (tieneParametros) {
+      const parametrosIniciales = (producto.parametros || []).map(p => ({ nombre: p.nombre, cantidad: 0 }))
+      setEditForm(prev => ({
+        ...prev,
+        productoId,
+        parametros: parametrosIniciales,
+        cantidad: 0 // Inicializar en 0 cuando tiene parámetros
+      }))
+    } else {
+      setEditForm(prev => ({
+        ...prev,
+        productoId,
+        parametros: [],
+        cantidad: 1 // Valor por defecto para productos sin parámetros
+      }))
+    }
+  }
+
+  // Función para actualizar un parámetro específico
+  const updateParametro = (index: number, cantidad: number) => {
+    const nuevosParametros = editForm.parametros.map((param, i) =>
+      i === index ? { ...param, cantidad } : param
+    )
+
+    // Calcular la cantidad total sumando todos los parámetros
+    const cantidadTotal = nuevosParametros.reduce((sum, param) => sum + param.cantidad, 0)
+
+    setEditForm(prev => ({
+      ...prev,
+      parametros: nuevosParametros,
+      cantidad: cantidadTotal
+    }))
   }
 
   const calcularVentasDiarias = (ventas: VentaExtendida[], productos: InventarioProducto[]): VentaDia[] => {
@@ -217,7 +320,6 @@ export default function VentasCafeteriaList({ searchTerm }: VentasCafeteriaListP
     )
   }
 
-
   if (isLoading) return <div className="flex justify-center items-center h-full">Cargando ventas...</div>
   if (error) return <div className="text-red-500">{error}</div>
 
@@ -234,6 +336,8 @@ export default function VentasCafeteriaList({ searchTerm }: VentasCafeteriaListP
     return <div className="text-center py-4">No se encontraron ventas que coincidan con la búsqueda</div>
   }
 
+  const productoSeleccionado = productos.find(p => p.id === editForm.productoId)
+
   return (
     <div className="space-y-4">
       {filteredVentasDiarias.map((venta) => (
@@ -242,9 +346,11 @@ export default function VentasCafeteriaList({ searchTerm }: VentasCafeteriaListP
           venta={venta}
           searchTerm={searchTerm}
           onDeleteSale={handleDeleteSale}
+          onEditSale={handleEditSale}
         />
       ))}
 
+      {/* Dialog para eliminar venta */}
       <AlertDialog open={ventaAEliminar !== null} onOpenChange={(open) => !open && setVentaAEliminar(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -265,11 +371,118 @@ export default function VentasCafeteriaList({ searchTerm }: VentasCafeteriaListP
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Dialog para editar venta */}
+      <Dialog open={ventaAEditar !== null} onOpenChange={(open) => !open && setVentaAEditar(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar Venta</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* Selector de producto */}
+            <div>
+              <Label htmlFor="producto">Producto</Label>
+              <Select value={editForm.productoId} onValueChange={handleProductoChange}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar producto" />
+                </SelectTrigger>
+                <SelectContent>
+                  {productos.map((producto) => (
+                    <SelectItem key={producto.id} value={producto.id}>
+                      {producto.nombre} - ${formatPrice(producto.precio)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Cantidad */}
+            <div>
+              <Label htmlFor="cantidad">Cantidad</Label>
+              <Input
+                id="cantidad"
+                type="number"
+                min="1"
+                value={editForm.cantidad}
+                onChange={(e) => setEditForm(prev => ({ ...prev, cantidad: parseInt(e.target.value) || 1 }))}
+                readOnly={productoSeleccionado?.tiene_parametros || productoSeleccionado?.tieneParametros}
+                className={`${(productoSeleccionado?.tiene_parametros || productoSeleccionado?.tieneParametros) ? 'bg-gray-100' : ''}`}
+              />
+              {(productoSeleccionado?.tiene_parametros || productoSeleccionado?.tieneParametros) && (
+                <p className="text-xs text-gray-500 mt-1">
+                  La cantidad se calcula automáticamente sumando los parámetros
+                </p>
+              )}
+            </div>
+
+
+            {/* Fecha */}
+            <div>
+              <Label htmlFor="fecha">Fecha</Label>
+              <Input
+                id="fecha"
+                type="date"
+                value={editForm.fecha}
+                onChange={(e) => setEditForm(prev => ({ ...prev, fecha: e.target.value }))}
+              />
+            </div>
+
+            {/* Parámetros si el producto los tiene */}
+            {(productoSeleccionado?.tiene_parametros || productoSeleccionado?.tieneParametros) &&
+              productoSeleccionado?.parametros && productoSeleccionado.parametros.length > 0 && (
+                <div>
+                  <Label>Parámetros</Label>
+                  <div className="space-y-2">
+                    {editForm.parametros.map((param, index) => (
+                      <div key={index} className="flex items-center space-x-2">
+                        <Label className="w-20 text-sm">{param.nombre}:</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          value={param.cantidad}
+                          onChange={(e) => updateParametro(index, parseInt(e.target.value) || 0)}
+                          className="flex-1"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setVentaAEditar(null)}
+              disabled={isEditing}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={confirmEditSale}
+              disabled={isEditing}
+            >
+              {isEditing ? 'Guardando...' : 'Guardar Cambios'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
 
-const VentaDiaCard = ({ venta, searchTerm, onDeleteSale }: { venta: VentaDia, searchTerm: string, onDeleteSale: (venta: VentaExtendida) => void }) => {
+const VentaDiaCard = ({
+  venta,
+  searchTerm,
+  onDeleteSale,
+  onEditSale
+}: {
+  venta: VentaDia,
+  searchTerm: string,
+  onDeleteSale: (venta: VentaExtendida) => void,
+  onEditSale: (venta: VentaExtendida) => void
+}) => {
   const [expandido, setExpandido] = useState(false)
 
   const calcularTotalVentasFiltradas = () => {
@@ -382,17 +595,30 @@ const VentaDiaCard = ({ venta, searchTerm, onDeleteSale }: { venta: VentaDia, se
                             </p>
                           )}
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="text-red-500 hover:bg-red-50 mt-1 h-7 w-7"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onDeleteSale(v);
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <div className="flex space-x-1 mt-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-blue-500 hover:bg-blue-50 h-7 w-7"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onEditSale(v);
+                            }}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-red-500 hover:bg-red-50 h-7 w-7"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDeleteSale(v);
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -403,4 +629,4 @@ const VentaDiaCard = ({ venta, searchTerm, onDeleteSale }: { venta: VentaDia, se
       )}
     </Card>
   )
-} 
+}

@@ -151,7 +151,7 @@ export const registerUser = async (userData: Omit<User, 'id'>): Promise<User> =>
 export const getProductosCompartidos = async () => {
   try {
     const response = await api.get('/productos/compartidos');
-    
+
     // Mapear correctamente los datos para que coincidan con el tipo Producto
     return response.data.map((producto: any) => ({
       id: producto.id,
@@ -329,6 +329,40 @@ export const realizarVenta = async (
     throw new Error('Error al realizar la venta');
   }
 };
+
+export const editarVenta = async (
+  ventaId: string,
+  productoId: string,
+  cantidad: number,
+  fecha: string,
+  parametros?: VentaParametro[],
+  vendedorId?: string
+): Promise<Venta> => {
+  if (!vendedorId) {
+    throw new Error('Se requiere ID del vendedor');
+  }
+
+  try {
+    const requestBody = {
+      productoId,
+      cantidad,
+      fecha,
+      parametros,
+      vendedorId
+    };
+    console.log('Enviando datos de edición de venta:', requestBody);
+
+    const response = await api.put(`/ventas/${ventaId}`, requestBody);
+    return response.data;
+  } catch (error) {
+    console.error('Error al editar la venta:', error);
+    if (axios.isAxiosError(error) && error.response) {
+      throw new Error(`Error al editar la venta: ${error.response.data.error || error.response.data.message || 'Ocurrió un error'}`);
+    }
+    throw new Error('Error al editar la venta');
+  }
+};
+
 
 export const getVentasMes = async (vendedorId: string): Promise<Venta[]> => {
   const response = await api.get(`/ventas?vendedorId=${vendedorId}`);
