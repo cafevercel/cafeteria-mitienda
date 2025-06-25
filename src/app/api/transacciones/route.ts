@@ -5,8 +5,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { productoId, cantidad, tipo, parametros } = body;
-    // Eliminamos completamente el vendedorId ya que no se usará
-    
+
     console.log('Request body:', body);
 
     if (!productoId || cantidad === undefined || cantidad === null || !tipo) {
@@ -27,7 +26,7 @@ export async function POST(request: NextRequest) {
 
       const { tiene_parametros, stock_actual } = productoResult.rows[0];
 
-      // Validación de parámetros
+      // ✅ SOLO actualizar stock principal para productos SIN parámetros
       if (tiene_parametros) {
         if (!parametros || !Array.isArray(parametros) || parametros.length === 0) {
           throw new Error('Este producto requiere parámetros. Por favor, especifique los parámetros.');
@@ -43,12 +42,11 @@ export async function POST(request: NextRequest) {
           throw new Error('Stock total insuficiente');
         }
 
-        // Actualizar stock principal
-        await query(
-          'UPDATE productos SET cantidad = cantidad - $1 WHERE id = $2',
-          [cantidadTotalParametros, productoId]
-        );
+        // ✅ Para productos CON parámetros: NO actualizar productos.cantidad
+        // El trigger se encargará cuando actualicemos producto_parametros
+
       } else {
+        // ✅ Para productos SIN parámetros: SÍ actualizar productos.cantidad
         if (stock_actual < cantidad) {
           throw new Error('Stock insuficiente');
         }
@@ -59,7 +57,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Registrar la transacción - ya no pasamos vendedorId
+      // Registrar la transacción
       const transactionResult = await query(
         'INSERT INTO transacciones (producto, cantidad, tipo, desde, hacia, fecha) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
         [productoId, cantidad, tipo, null, null, new Date()]
@@ -85,54 +83,69 @@ export async function POST(request: NextRequest) {
         throw new Error('No se pudo obtener el precio del producto');
       }
 
-      // Verificar si el producto ya existe en usuario_productos
+      // ✅ MANEJAR usuario_productos según el tipo de producto
       const existingProduct = await query(
         'SELECT * FROM usuario_productos WHERE producto_id = $1',
         [productoId]
       );
 
-      if (existingProduct.rows.length > 0) {
-        // Actualizar el registro existente
-        await query(
-          'UPDATE usuario_productos SET cantidad = cantidad + $1, precio = $2 WHERE producto_id = $3',
-          [cantidad, productPrice, productoId]
-        );
+      if (tiene_parametros) {
+        // ✅ Para productos CON parámetros: NO actualizar cantidad directamente
+        if (existingProduct.rows.length === 0) {
+          // Solo crear el registro, el trigger calculará la cantidad
+          await query(
+            'INSERT INTO usuario_productos (producto_id, cantidad, precio) VALUES ($1, $2, $3)',
+            [productoId, 0, productPrice] // Cantidad 0, el trigger la calculará
+          );
+        } else {
+          // Solo actualizar precio, NO cantidad
+          await query(
+            'UPDATE usuario_productos SET precio = $1 WHERE producto_id = $2',
+            [productPrice, productoId]
+          );
+        }
       } else {
-        // Insertar un nuevo registro sin usuario_id
-        await query(
-          'INSERT INTO usuario_productos (producto_id, cantidad, precio) VALUES ($1, $2, $3)',
-          [productoId, cantidad, productPrice]
-        );
+        // ✅ Para productos SIN parámetros: SÍ actualizar cantidad directamente
+        if (existingProduct.rows.length > 0) {
+          await query(
+            'UPDATE usuario_productos SET cantidad = cantidad + $1, precio = $2 WHERE producto_id = $3',
+            [cantidad, productPrice, productoId]
+          );
+        } else {
+          await query(
+            'INSERT INTO usuario_productos (producto_id, cantidad, precio) VALUES ($1, $2, $3)',
+            [productoId, cantidad, productPrice]
+          );
+        }
       }
 
-      // Actualizar parámetros
+      // ✅ Actualizar parámetros (esto disparará el trigger automáticamente)
       if (tiene_parametros && parametros && parametros.length > 0) {
         for (const param of parametros) {
-          // Actualizar stock de parámetros
+          // ✅ Actualizar stock de parámetros en producto_parametros
           await query(
             'UPDATE producto_parametros SET cantidad = cantidad - $1 WHERE producto_id = $2 AND nombre = $3',
             [param.cantidad, productoId, param.nombre]
           );
 
-          // Verificar si el parámetro ya existe para el producto
+          // ✅ Actualizar parámetros de usuario (esto dispara el trigger)
           const existingParam = await query(
             'SELECT * FROM usuario_producto_parametros WHERE producto_id = $1 AND nombre = $2',
             [productoId, param.nombre]
           );
 
           if (existingParam.rows.length > 0) {
-            // Actualizar el parámetro existente
             await query(
               'UPDATE usuario_producto_parametros SET cantidad = cantidad + $1 WHERE producto_id = $2 AND nombre = $3',
               [param.cantidad, productoId, param.nombre]
             );
           } else {
-            // Insertar un nuevo parámetro sin usuario_id
             await query(
               'INSERT INTO usuario_producto_parametros (producto_id, nombre, cantidad) VALUES ($1, $2, $3)',
               [productoId, param.nombre, param.cantidad]
             );
           }
+          // ✅ El trigger automáticamente actualizará usuario_productos.cantidad
         }
       }
 
@@ -155,6 +168,7 @@ export async function POST(request: NextRequest) {
     }
   }
 }
+
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -218,12 +232,12 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     if (error instanceof Error) {
       return NextResponse.json(
-        { error: 'Error al obtener transacciones', details: error.message }, 
+        { error: 'Error al obtener transacciones', details: error.message },
         { status: 500 }
       );
     } else {
       return NextResponse.json(
-        { error: 'Error desconocido al obtener transacciones' }, 
+        { error: 'Error desconocido al obtener transacciones' },
         { status: 500 }
       );
     }

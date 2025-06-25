@@ -3,75 +3,75 @@ import { query } from '@/lib/db';
 
 // Función helper para manejar errores de base de datos
 function handleDatabaseError(error: unknown): NextResponse {
-console.error('Database error:', error);
+  console.error('Database error:', error);
 
-if (error && typeof error === 'object' && 'code' in error) {
-  const dbError = error as { code: string; message?: string };
-  
-  switch (dbError.code) {
-    case 'ECONNREFUSED':
-      return NextResponse.json(
-        { error: 'Error de conexión a la base de datos' }, 
-        { status: 503 }
-      );
-    case '42P01':
-      return NextResponse.json(
-        { error: 'Error de configuración de base de datos' }, 
-        { status: 500 }
-      );
-    case '23505':
-      return NextResponse.json(
-        { error: 'El registro ya existe' }, 
-        { status: 409 }
-      );
-    case '42703':
-      return NextResponse.json(
-        { error: 'Error de estructura de base de datos' }, 
-        { status: 500 }
-      );
-    case '23503': // Foreign key violation
-      return NextResponse.json(
-        { error: 'Referencia inválida' }, 
-        { status: 400 }
-      );
-    default:
-      return NextResponse.json(
-        { error: 'Error de base de datos' }, 
-        { status: 500 }
-      );
+  if (error && typeof error === 'object' && 'code' in error) {
+    const dbError = error as { code: string; message?: string };
+
+    switch (dbError.code) {
+      case 'ECONNREFUSED':
+        return NextResponse.json(
+          { error: 'Error de conexión a la base de datos' },
+          { status: 503 }
+        );
+      case '42P01':
+        return NextResponse.json(
+          { error: 'Error de configuración de base de datos' },
+          { status: 500 }
+        );
+      case '23505':
+        return NextResponse.json(
+          { error: 'El registro ya existe' },
+          { status: 409 }
+        );
+      case '42703':
+        return NextResponse.json(
+          { error: 'Error de estructura de base de datos' },
+          { status: 500 }
+        );
+      case '23503': // Foreign key violation
+        return NextResponse.json(
+          { error: 'Referencia inválida' },
+          { status: 400 }
+        );
+      default:
+        return NextResponse.json(
+          { error: 'Error de base de datos' },
+          { status: 500 }
+        );
+    }
   }
-}
 
-return NextResponse.json(
-  { error: 'Error interno del servidor' }, 
-  { status: 500 }
-);
+  return NextResponse.json(
+    { error: 'Error interno del servidor' },
+    { status: 500 }
+  );
 }
 
 // Validación para parámetros de productos
 function validateParametros(parametros: any[]): { valid: boolean; errors: string[] } {
-const errors: string[] = [];
+  const errors: string[] = [];
 
-if (!Array.isArray(parametros)) {
-  errors.push('Los parámetros deben ser un array');
-  return { valid: false, errors };
-}
-
-parametros.forEach((param, index) => {
-  if (!param.nombre || typeof param.nombre !== 'string') {
-    errors.push(`Parámetro ${index + 1}: nombre es requerido`);
+  if (!Array.isArray(parametros)) {
+    errors.push('Los parámetros deben ser un array');
+    return { valid: false, errors };
   }
-  if (param.cantidad === undefined || typeof param.cantidad !== 'number' || param.cantidad < 0) {
-    errors.push(`Parámetro ${index + 1}: cantidad debe ser un número positivo`);
-  }
-});
 
-return { valid: errors.length === 0, errors };
+  parametros.forEach((param, index) => {
+    if (!param.nombre || typeof param.nombre !== 'string') {
+      errors.push(`Parámetro ${index + 1}: nombre es requerido`);
+    }
+    if (param.cantidad === undefined || typeof param.cantidad !== 'number' || param.cantidad < 0) {
+      errors.push(`Parámetro ${index + 1}: cantidad debe ser un número positivo`);
+    }
+  });
+
+  return { valid: errors.length === 0, errors };
 }
 
 export async function GET() {
-try {
-  const result = await query(`
+  try {
+    const result = await query(`
     SELECT 
       p.id,
       p.nombre,
@@ -96,74 +96,74 @@ try {
     ORDER BY p.nombre
   `);
 
-  if (!result.rows || result.rows.length === 0) {
-    return NextResponse.json({
-      productos: [],
-      mensaje: 'No hay productos compartidos disponibles'
-    });
+    if (!result.rows || result.rows.length === 0) {
+      return NextResponse.json({
+        productos: [],
+        mensaje: 'No hay productos compartidos disponibles'
+      });
+    }
+
+    const productosFormateados = result.rows.map(producto => ({
+      id: producto.id,
+      nombre: producto.nombre,
+      precio: producto.precio,
+      foto: producto.foto,
+      tieneParametros: producto.tiene_parametros,
+      porcentajeGanancia: producto.porcentajeGanancia || 0,
+      cantidad: producto.cantidad,
+      parametros: producto.parametros
+    }));
+
+    return NextResponse.json(productosFormateados);
+
+  } catch (error) {
+    return handleDatabaseError(error);
   }
-
-  const productosFormateados = result.rows.map(producto => ({
-    id: producto.id,
-    nombre: producto.nombre,
-    precio: producto.precio,
-    foto: producto.foto,
-    tieneParametros: producto.tiene_parametros,
-    porcentajeGanancia: producto.porcentajeGanancia || 0,
-    cantidad: producto.cantidad,
-    parametros: producto.parametros
-  }));
-
-  return NextResponse.json(productosFormateados);
-
-} catch (error) {
-  return handleDatabaseError(error);
-}
 }
 
 // Validación para el POST (consulta paginada)
-function validatePostRequest(body: any): { 
-usuarioId: number; 
-limite: number; 
-offset: number; 
-errors: string[] 
+function validatePostRequest(body: any): {
+  usuarioId: number;
+  limite: number;
+  offset: number;
+  errors: string[]
 } {
-const errors: string[] = [];
+  const errors: string[] = [];
 
-const usuarioId = body?.usuarioId;
-if (!usuarioId || typeof usuarioId !== 'number' || usuarioId <= 0) {
-  errors.push('ID de usuario requerido y debe ser un número positivo');
-}
+  const usuarioId = body?.usuarioId;
+  if (!usuarioId || typeof usuarioId !== 'number' || usuarioId <= 0) {
+    errors.push('ID de usuario requerido y debe ser un número positivo');
+  }
 
-let limite = body?.limite || 50;
-if (typeof limite !== 'number' || limite <= 0) {
-  limite = 50;
-}
-if (limite > 100) {
-  errors.push('El límite máximo es 100 productos');
-}
+  let limite = body?.limite || 50;
+  if (typeof limite !== 'number' || limite <= 0) {
+    limite = 50;
+  }
+  if (limite > 100) {
+    errors.push('El límite máximo es 100 productos');
+  }
 
-let offset = body?.offset || 0;
-if (typeof offset !== 'number' || offset < 0) {
-  offset = 0;
-}
+  let offset = body?.offset || 0;
+  if (typeof offset !== 'number' || offset < 0) {
+    offset = 0;
+  }
 
-return { usuarioId, limite, offset, errors };
+  return { usuarioId, limite, offset, errors };
 }
 
 export async function POST(request: NextRequest) {
-try {
-  const body = await request.json();
-  const { usuarioId, limite, offset, errors } = validatePostRequest(body);
+  try {
+    const body = await request.json();
+    const { usuarioId, limite, offset, errors } = validatePostRequest(body);
 
-  if (errors.length > 0) {
-    return NextResponse.json(
-      { error: 'Datos inválidos', details: errors },
-      { status: 400 }
-    );
-  }
+    if (errors.length > 0) {
+      return NextResponse.json(
+        { error: 'Datos inválidos', details: errors },
+        { status: 400 }
+      );
+    }
 
-  const result = await query(`
+    const result = await query(`
     SELECT 
       p.id,
       p.nombre,
@@ -192,148 +192,162 @@ try {
     LIMIT $2 OFFSET $3
   `, [usuarioId, limite, offset]);
 
-  const countResult = await query(`
+    const countResult = await query(`
     SELECT COUNT(DISTINCT p.id) as total
     FROM productos p
     JOIN usuario_productos up ON p.id = up.producto_id
     WHERE up.usuario_id = $1
   `, [usuarioId]);
 
-  const total = parseInt(countResult.rows[0]?.total || '0');
-  const hasMore = offset + limite < total;
+    const total = parseInt(countResult.rows[0]?.total || '0');
+    const hasMore = offset + limite < total;
 
-  const productosFormateados = result.rows.map(producto => ({
-    id: producto.id,
-    nombre: producto.nombre,
-    precio: producto.precio,
-    foto: producto.foto,
-    tieneParametros: producto.tiene_parametros,
-    porcentajeGanancia: producto.porcentajeGanancia || 0,
-    cantidad: producto.cantidad,
-    fechaAgregado: producto.fecha_agregado,
-    parametros: producto.parametros
-  }));
+    const productosFormateados = result.rows.map(producto => ({
+      id: producto.id,
+      nombre: producto.nombre,
+      precio: producto.precio,
+      foto: producto.foto,
+      tieneParametros: producto.tiene_parametros,
+      porcentajeGanancia: producto.porcentajeGanancia || 0,
+      cantidad: producto.cantidad,
+      fechaAgregado: producto.fecha_agregado,
+      parametros: producto.parametros
+    }));
 
-  return NextResponse.json({
-    productos: productosFormateados,
-    paginacion: {
-      total,
-      limite,
-      offset,
-      hasMore,
-      totalPaginas: Math.ceil(total / limite),
-      paginaActual: Math.floor(offset / limite) + 1
+    return NextResponse.json({
+      productos: productosFormateados,
+      paginacion: {
+        total,
+        limite,
+        offset,
+        hasMore,
+        totalPaginas: Math.ceil(total / limite),
+        paginaActual: Math.floor(offset / limite) + 1
+      }
+    });
+
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      return NextResponse.json(
+        { error: 'Formato JSON inválido' },
+        { status: 400 }
+      );
     }
-  });
 
-} catch (error) {
-  if (error instanceof SyntaxError) {
-    return NextResponse.json(
-      { error: 'Formato JSON inválido' },
-      { status: 400 }
-    );
+    return handleDatabaseError(error);
   }
-  
-  return handleDatabaseError(error);
-}
 }
 
 // NUEVO: Agregar producto a usuario con parámetros
 export async function PUT(request: NextRequest) {
-try {
-  const body = await request.json();
-  const { usuarioId, productoId, cantidad, parametros } = body;
-
-  // Validaciones básicas
-  const errors: string[] = [];
-  
-  if (!usuarioId || typeof usuarioId !== 'number' || usuarioId <= 0) {
-    errors.push('ID de usuario requerido y debe ser un número positivo');
-  }
-  
-  if (!productoId || typeof productoId !== 'number' || productoId <= 0) {
-    errors.push('ID de producto requerido y debe ser un número positivo');
-  }
-  
-  if (cantidad === undefined || typeof cantidad !== 'number' || cantidad < 0) {
-    errors.push('Cantidad debe ser un número positivo');
-  }
-
-  // Validar parámetros si existen
-  if (parametros && parametros.length > 0) {
-    const { valid, errors: paramErrors } = validateParametros(parametros);
-    if (!valid) {
-      errors.push(...paramErrors);
-    }
-  }
-
-  if (errors.length > 0) {
-    return NextResponse.json(
-      { error: 'Datos inválidos', details: errors },
-      { status: 400 }
-    );
-  }
-
-  await query('BEGIN');
-
   try {
-    // Verificar si el producto existe
-    const productoExiste = await query(
-      'SELECT id, tiene_parametros FROM productos WHERE id = $1',
-      [productoId]
-    );
+    const body = await request.json();
+    const { usuarioId, productoId, cantidad, parametros } = body;
 
-    if (productoExiste.rows.length === 0) {
-      await query('ROLLBACK');
-      return NextResponse.json(
-        { error: 'Producto no encontrado' },
-        { status: 404 }
-      );
+    // Validaciones básicas
+    const errors: string[] = [];
+
+    if (!usuarioId || typeof usuarioId !== 'number' || usuarioId <= 0) {
+      errors.push('ID de usuario requerido y debe ser un número positivo');
     }
 
-    const tieneParametros = productoExiste.rows[0].tiene_parametros;
-
-    // Verificar si ya existe la relación usuario-producto
-    const relacionExiste = await query(
-      'SELECT id FROM usuario_productos WHERE usuario_id = $1 AND producto_id = $2',
-      [usuarioId, productoId]
-    );
-
-    if (relacionExiste.rows.length > 0) {
-      // Actualizar cantidad existente
-      await query(
-        'UPDATE usuario_productos SET cantidad = $1 WHERE usuario_id = $2 AND producto_id = $3',
-        [cantidad, usuarioId, productoId]
-      );
-    } else {
-      // Crear nueva relación
-      await query(
-        'INSERT INTO usuario_productos (usuario_id, producto_id, cantidad) VALUES ($1, $2, $3)',
-        [usuarioId, productoId, cantidad]
-      );
+    if (!productoId || typeof productoId !== 'number' || productoId <= 0) {
+      errors.push('ID de producto requerido y debe ser un número positivo');
     }
 
-    // Manejar parámetros si el producto los tiene
-    if (tieneParametros && parametros && parametros.length > 0) {
-      // Eliminar parámetros existentes
-      await query(
-        'DELETE FROM usuario_producto_parametros WHERE producto_id = $1',
-        [productoId]
-      );
+    if (cantidad === undefined || typeof cantidad !== 'number' || cantidad < 0) {
+      errors.push('Cantidad debe ser un número positivo');
+    }
 
-      // Insertar nuevos parámetros
-      for (const param of parametros) {
-        await query(
-          'INSERT INTO usuario_producto_parametros (producto_id, nombre, cantidad) VALUES ($1, $2, $3)',
-          [productoId, param.nombre, param.cantidad]
-        );
+    // Validar parámetros si existen
+    if (parametros && parametros.length > 0) {
+      const { valid, errors: paramErrors } = validateParametros(parametros);
+      if (!valid) {
+        errors.push(...paramErrors);
       }
     }
 
-    await query('COMMIT');
+    if (errors.length > 0) {
+      return NextResponse.json(
+        { error: 'Datos inválidos', details: errors },
+        { status: 400 }
+      );
+    }
 
-    // Obtener el producto actualizado con parámetros
-    const productoActualizado = await query(`
+    await query('BEGIN');
+
+    try {
+      // Verificar si el producto existe
+      const productoExiste = await query(
+        'SELECT id, tiene_parametros FROM productos WHERE id = $1',
+        [productoId]
+      );
+
+      if (productoExiste.rows.length === 0) {
+        await query('ROLLBACK');
+        return NextResponse.json(
+          { error: 'Producto no encontrado' },
+          { status: 404 }
+        );
+      }
+
+      const tieneParametros = productoExiste.rows[0].tiene_parametros;
+
+      // Verificar si ya existe la relación usuario-producto
+      // Verificar si ya existe la relación usuario-producto
+      const relacionExiste = await query(
+        'SELECT id FROM usuario_productos WHERE usuario_id = $1 AND producto_id = $2',
+        [usuarioId, productoId]
+      );
+
+      if (tieneParametros) {
+        // Para productos CON parámetros: NO actualizar cantidad directamente
+        if (relacionExiste.rows.length === 0) {
+          // Solo crear la relación - el trigger calculará la cantidad
+          await query(
+            'INSERT INTO usuario_productos (usuario_id, producto_id, cantidad) VALUES ($1, $2, $3)',
+            [usuarioId, productoId, 0] // Cantidad inicial 0, el trigger la calculará
+          );
+        }
+        // Si ya existe la relación, no hacer nada aquí - el trigger se encargará
+      } else {
+        // Para productos SIN parámetros: SÍ actualizar cantidad directamente
+        if (relacionExiste.rows.length > 0) {
+          await query(
+            'UPDATE usuario_productos SET cantidad = $1 WHERE usuario_id = $2 AND producto_id = $3',
+            [cantidad, usuarioId, productoId]
+          );
+        } else {
+          await query(
+            'INSERT INTO usuario_productos (usuario_id, producto_id, cantidad) VALUES ($1, $2, $3)',
+            [usuarioId, productoId, cantidad]
+          );
+        }
+      }
+
+      // Manejar parámetros si el producto los tiene
+      if (tieneParametros && parametros && parametros.length > 0) {
+        // Eliminar parámetros existentes del usuario específico
+        await query(
+          'DELETE FROM usuario_producto_parametros WHERE producto_id = $1 AND usuario_id = $2',
+          [productoId, usuarioId] // ← También necesitas filtrar por usuario
+        );
+
+        // Insertar nuevos parámetros
+        for (const param of parametros) {
+          await query(
+            'INSERT INTO usuario_producto_parametros (producto_id, usuario_id, nombre, cantidad) VALUES ($1, $2, $3, $4)',
+            [productoId, usuarioId, param.nombre, param.cantidad] // ← Incluir usuario_id
+          );
+        }
+        // ✅ El trigger automáticamente calculará usuario_productos.cantidad
+      }
+
+
+      await query('COMMIT');
+
+      // Obtener el producto actualizado con parámetros
+      const productoActualizado = await query(`
       SELECT 
         p.id,
         p.nombre,
@@ -360,94 +374,94 @@ try {
                p.porcentaje_ganancia, up.cantidad, up.fecha_agregado
     `, [usuarioId, productoId]);
 
-    return NextResponse.json({
-      mensaje: 'Producto agregado/actualizado correctamente',
-      producto: productoActualizado.rows[0]
-    });
+      return NextResponse.json({
+        mensaje: 'Producto agregado/actualizado correctamente',
+        producto: productoActualizado.rows[0]
+      });
+
+    } catch (error) {
+      await query('ROLLBACK');
+      throw error;
+    }
 
   } catch (error) {
-    await query('ROLLBACK');
-    throw error;
-  }
+    if (error instanceof SyntaxError) {
+      return NextResponse.json(
+        { error: 'Formato JSON inválido' },
+        { status: 400 }
+      );
+    }
 
-} catch (error) {
-  if (error instanceof SyntaxError) {
-    return NextResponse.json(
-      { error: 'Formato JSON inválido' },
-      { status: 400 }
-    );
+    return handleDatabaseError(error);
   }
-  
-  return handleDatabaseError(error);
-}
 }
 
 // NUEVO: Eliminar producto de usuario
 export async function DELETE(request: NextRequest) {
-try {
-  const body = await request.json();
-  const { usuarioId, productoId } = body;
-
-  // Validaciones
-  const errors: string[] = [];
-  
-  if (!usuarioId || typeof usuarioId !== 'number' || usuarioId <= 0) {
-    errors.push('ID de usuario requerido y debe ser un número positivo');
-  }
-  
-  if (!productoId || typeof productoId !== 'number' || productoId <= 0) {
-    errors.push('ID de producto requerido y debe ser un número positivo');
-  }
-
-  if (errors.length > 0) {
-    return NextResponse.json(
-      { error: 'Datos inválidos', details: errors },
-      { status: 400 }
-    );
-  }
-
-  await query('BEGIN');
-
   try {
-    // Eliminar parámetros del producto
-    await query(
-      'DELETE FROM usuario_producto_parametros WHERE producto_id = $1',
-      [productoId]
-    );
+    const body = await request.json();
+    const { usuarioId, productoId } = body;
 
-    // Eliminar relación usuario-producto
-    const deleteResult = await query(
-      'DELETE FROM usuario_productos WHERE usuario_id = $1 AND producto_id = $2',
-      [usuarioId, productoId]
-    );
+    // Validaciones
+    const errors: string[] = [];
 
-    if (deleteResult.rowCount === 0) {
-      await query('ROLLBACK');
+    if (!usuarioId || typeof usuarioId !== 'number' || usuarioId <= 0) {
+      errors.push('ID de usuario requerido y debe ser un número positivo');
+    }
+
+    if (!productoId || typeof productoId !== 'number' || productoId <= 0) {
+      errors.push('ID de producto requerido y debe ser un número positivo');
+    }
+
+    if (errors.length > 0) {
       return NextResponse.json(
-        { error: 'Producto no encontrado en la lista del usuario' },
-        { status: 404 }
+        { error: 'Datos inválidos', details: errors },
+        { status: 400 }
       );
     }
 
-    await query('COMMIT');
+    await query('BEGIN');
 
-    return NextResponse.json({
-      mensaje: 'Producto eliminado correctamente'
-    });
+    try {
+      // Eliminar parámetros del producto
+      await query(
+        'DELETE FROM usuario_producto_parametros WHERE producto_id = $1',
+        [productoId]
+      );
+
+      // Eliminar relación usuario-producto
+      const deleteResult = await query(
+        'DELETE FROM usuario_productos WHERE usuario_id = $1 AND producto_id = $2',
+        [usuarioId, productoId]
+      );
+
+      if (deleteResult.rowCount === 0) {
+        await query('ROLLBACK');
+        return NextResponse.json(
+          { error: 'Producto no encontrado en la lista del usuario' },
+          { status: 404 }
+        );
+      }
+
+      await query('COMMIT');
+
+      return NextResponse.json({
+        mensaje: 'Producto eliminado correctamente'
+      });
+
+    } catch (error) {
+      await query('ROLLBACK');
+      throw error;
+    }
 
   } catch (error) {
-    await query('ROLLBACK');
-    throw error;
-  }
+    if (error instanceof SyntaxError) {
+      return NextResponse.json(
+        { error: 'Formato JSON inválido' },
+        { status: 400 }
+      );
+    }
 
-} catch (error) {
-  if (error instanceof SyntaxError) {
-    return NextResponse.json(
-      { error: 'Formato JSON inválido' },
-      { status: 400 }
-    );
+    return handleDatabaseError(error);
   }
-  
-  return handleDatabaseError(error);
-}
 }

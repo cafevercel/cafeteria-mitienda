@@ -74,9 +74,25 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 
         try {
             // 1. Actualizar producto principal
-            const result = await query(
-                'UPDATE productos SET nombre = $1, precio = $2, cantidad = $3, foto = $4, tiene_parametros = $5, precio_compra = $6, porcentaje_ganancia = $7 WHERE id = $8 RETURNING *',
-                [
+            let updateQuery: string;
+            let updateParams: any[];
+
+            if (tieneParametros) {
+                // ✅ Para productos CON parámetros: NO actualizar cantidad
+                updateQuery = 'UPDATE productos SET nombre = $1, precio = $2, foto = $3, tiene_parametros = $4, precio_compra = $5, porcentaje_ganancia = $6 WHERE id = $7 RETURNING *';
+                updateParams = [
+                    nombre,
+                    Number(precio),
+                    nuevaFotoUrl,
+                    tieneParametros,
+                    precioCompra ? Number(precioCompra) : currentProduct.rows[0].precio_compra || 0,
+                    porcentajeGanancia ? Number(porcentajeGanancia) : currentProduct.rows[0].porcentaje_ganancia || 0,
+                    id
+                ];
+            } else {
+                // ✅ Para productos SIN parámetros: SÍ actualizar cantidad
+                updateQuery = 'UPDATE productos SET nombre = $1, precio = $2, cantidad = $3, foto = $4, tiene_parametros = $5, precio_compra = $6, porcentaje_ganancia = $7 WHERE id = $8 RETURNING *';
+                updateParams = [
                     nombre,
                     Number(precio),
                     Number(cantidad),
@@ -85,8 +101,10 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
                     precioCompra ? Number(precioCompra) : currentProduct.rows[0].precio_compra || 0,
                     porcentajeGanancia ? Number(porcentajeGanancia) : currentProduct.rows[0].porcentaje_ganancia || 0,
                     id
-                ]
-            );
+                ];
+            }
+
+            const result = await query(updateQuery, updateParams);
 
             // 2. Obtener los parámetros antiguos del producto principal para mapeo
             const parametrosAntiguosResult = await query(

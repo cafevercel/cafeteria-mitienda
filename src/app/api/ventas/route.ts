@@ -41,8 +41,8 @@ export async function POST(request: NextRequest) {
 
         if (!stockParam.rows.length || stockParam.rows[0].cantidad < param.cantidad) {
           await query('ROLLBACK');
-          return NextResponse.json({ 
-            error: `Stock insuficiente para el parámetro ${param.nombre}` 
+          return NextResponse.json({
+            error: `Stock insuficiente para el parámetro ${param.nombre}`
           }, { status: 400 });
         }
       }
@@ -56,16 +56,16 @@ export async function POST(request: NextRequest) {
       `INSERT INTO ventas (producto, cantidad, precio_unitario, total, vendedor, fecha) 
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
       [
-        productoId, 
-        cantidad, 
-        precioUnitario, 
-        precioUnitario * cantidad, 
-        vendedorId, 
+        productoId,
+        cantidad,
+        precioUnitario,
+        precioUnitario * cantidad,
+        vendedorId,
         fechaVenta
       ]
     );
 
-    // Si hay parámetros, insertarlos en la tabla venta_parametros
+    // ✅ SOLUCIÓN: Manejar actualizaciones según el tipo de producto
     if (tiene_parametros && parametros) {
       for (const param of parametros) {
         // Insertar parámetros de la venta
@@ -75,16 +75,21 @@ export async function POST(request: NextRequest) {
           [ventaResult.rows[0].id, param.nombre, param.cantidad]
         );
 
-        // Actualizar stock de parámetros
+        // ✅ SOLUCIÓN: Actualizar parámetros (trigger se encarga del resto)
         await query(
           `UPDATE usuario_producto_parametros 
            SET cantidad = cantidad - $1 
            WHERE producto_id = $2 AND nombre = $3`,
           [param.cantidad, productoId, param.nombre]
         );
+        // ✅ El trigger automáticamente actualizará usuario_productos.cantidad
       }
+
+      // ✅ NO actualizar usuario_productos directamente para productos con parámetros
+      // El trigger ya lo hizo cuando actualizamos usuario_producto_parametros
+
     } else {
-      // Actualizar stock normal
+      // ✅ Para productos SIN parámetros: SÍ actualizar directamente
       await query(
         'UPDATE usuario_productos SET cantidad = cantidad - $1 WHERE producto_id = $2',
         [cantidad, productoId]
@@ -92,14 +97,14 @@ export async function POST(request: NextRequest) {
     }
 
     await query('COMMIT');
-    
+
     // Crear respuesta con encabezados anti-caché
     const response = NextResponse.json(ventaResult.rows[0]);
     response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     response.headers.set('Pragma', 'no-cache');
     response.headers.set('Expires', '0');
     response.headers.set('Surrogate-Control', 'no-store');
-    
+
     return response;
   } catch (error) {
     await query('ROLLBACK');
@@ -117,7 +122,7 @@ export async function GET(request: NextRequest) {
 
   try {
     let result;
-    
+
     if (ventaId) {
       // Obtener venta con sus parámetros
       result = await query(
@@ -144,10 +149,10 @@ export async function GET(request: NextRequest) {
       response.headers.set('Pragma', 'no-cache');
       response.headers.set('Expires', '0');
       response.headers.set('Surrogate-Control', 'no-store');
-      
+
       return response;
     }
-    
+
     // Consultas para listar ventas
     const baseQuery = `
       SELECT v.*, p.nombre as producto_nombre, p.foto as producto_foto, 
@@ -166,7 +171,7 @@ export async function GET(request: NextRequest) {
     if (productoId) {
       const vendedorFilter = vendedorId ? 'AND v.vendedor = $2' : '';
       const params = vendedorId ? [productoId, vendedorId] : [productoId];
-      
+
       result = await query(
         `${baseQuery}
          WHERE v.producto = $1 ${vendedorFilter}
@@ -199,7 +204,7 @@ export async function GET(request: NextRequest) {
     response.headers.set('Pragma', 'no-cache');
     response.headers.set('Expires', '0');
     response.headers.set('Surrogate-Control', 'no-store');
-    
+
     return response;
   } catch (error) {
     console.error('Error al obtener ventas:', error);
