@@ -46,7 +46,6 @@ const obtenerProductoConParametros = async (productoId: string) => {
     return result.rows[0];
 };
 
-
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
     try {
         const { id } = params;
@@ -74,6 +73,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
         await query('BEGIN');
 
         try {
+            // 1. Actualizar producto principal
             const result = await query(
                 'UPDATE productos SET nombre = $1, precio = $2, cantidad = $3, foto = $4, tiene_parametros = $5, precio_compra = $6, porcentaje_ganancia = $7 WHERE id = $8 RETURNING *',
                 [
@@ -123,40 +123,54 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
                 }
             }
 
-            // Actualizar nombres en transaccion_parametros si hay mapeo de parámetros
+            // 5. Actualizar nombres en transaccion_parametros si hay mapeo de parámetros
             if (Object.keys(mapeoParametros).length > 0) {
                 for (const nombreAntiguo in mapeoParametros) {
                     const nombreNuevo = mapeoParametros[nombreAntiguo];
                     await query(`
-                            UPDATE transaccion_parametros 
-                            SET nombre = $1 
-                            WHERE nombre = $2 
-                            AND transaccion_id IN (
-                                SELECT id FROM transacciones 
-                                WHERE producto = $3
-                            )`,
+                        UPDATE transaccion_parametros 
+                        SET nombre = $1 
+                        WHERE nombre = $2 
+                        AND transaccion_id IN (
+                            SELECT id FROM transacciones 
+                            WHERE producto = $3
+                        )`,
                         [nombreNuevo, nombreAntiguo, id]
                     );
                 }
             }
 
-            // Actualizar parámetros en usuario_producto_parametros
-            if (tieneParametros) {
-                // Eliminar parámetros antiguos
+            // 6. Actualizar nombres de parámetros en usuario_producto_parametros (SOLO NOMBRES, NO CANTIDADES)
+            if (Object.keys(mapeoParametros).length > 0) {
+                for (const nombreAntiguo in mapeoParametros) {
+                    const nombreNuevo = mapeoParametros[nombreAntiguo];
+                    await query(`
+                        UPDATE usuario_producto_parametros 
+                        SET nombre = $1 
+                        WHERE nombre = $2 AND producto_id = $3`,
+                        [nombreNuevo, nombreAntiguo, id]
+                    );
+                }
+            }
+
+            // 7. Si se eliminaron parámetros del producto principal, eliminar también de vendedores
+            if (tieneParametros && parametros.length > 0) {
+                // Obtener nombres de parámetros actuales
+                const nombresParametrosActuales = parametros.map(p => p.nombre);
+
+                // Eliminar parámetros de vendedores que ya no existen en el producto principal
+                await query(`
+                    DELETE FROM usuario_producto_parametros 
+                    WHERE producto_id = $1 
+                    AND nombre NOT IN (${nombresParametrosActuales.map((_, i) => `$${i + 2}`).join(', ')})`,
+                    [id, ...nombresParametrosActuales]
+                );
+            } else if (!tieneParametros) {
+                // Si el producto ya no tiene parámetros, eliminar todos los parámetros de vendedores
                 await query(
                     'DELETE FROM usuario_producto_parametros WHERE producto_id = $1',
                     [id]
                 );
-
-                // Insertar parámetros nuevos
-                if (parametros.length > 0) {
-                    for (const param of parametros) {
-                        await query(
-                            'INSERT INTO usuario_producto_parametros (producto_id, nombre, cantidad) VALUES ($1, $2, $3)',
-                            [id, param.nombre, param.cantidad]
-                        );
-                    }
-                }
             }
 
             await query('COMMIT');
@@ -176,6 +190,8 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
         }, { status: 500 });
     }
 }
+
+// ... resto del código (DELETE y GET permanecen igual)
 
 
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
@@ -237,7 +253,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
                 'DELETE FROM transacciones WHERE producto = $1',
                 [id]
             );
-            
+
             // 9. Eliminar venta_parametros antes de eliminar ventas
             await query(
                 'DELETE FROM venta_parametros WHERE venta_id IN (SELECT id FROM ventas WHERE producto = $1)',
