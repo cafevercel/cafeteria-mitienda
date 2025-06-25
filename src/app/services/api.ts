@@ -684,3 +684,17 @@ export const eliminarBalance = async (balanceId: string): Promise<void> => {
     throw new Error('No se pudo eliminar el balance');
   }
 };
+
+export const editarBalance = async (balanceId: string, balance: Omit<Balance, 'id' | 'fechaCreacion'>): Promise<Balance> => {
+  try {
+    const response = await api.put('/balances', {
+      id: balanceId,
+      ...balance
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error al editar balance:', error);
+    throw new Error('No se pudo editar el balance');
+  }
+};
+

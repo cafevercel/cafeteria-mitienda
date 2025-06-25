@@ -9,9 +9,9 @@ import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
-import { getAllVentas, getInventario, getGastos, crearBalance, eliminarBalance, getBalances } from '@/app/services/api'
+import { getAllVentas, getInventario, getGastos, crearBalance, eliminarBalance, getBalances, editarBalance } from '@/app/services/api'
 import { Venta, Producto, Gasto, Balance, GastoBalance } from '@/types'
-import { Wallet, Plus, X, Calendar, ChevronRight, FileText, Trash2 } from 'lucide-react'
+import { Wallet, Plus, X, Calendar, ChevronRight, FileText, Trash2, Edit } from 'lucide-react'
 import { toast } from "@/hooks/use-toast"
 
 interface VentaDia {
@@ -53,6 +53,9 @@ export default function BalanceSection() {
   const [error, setError] = useState<string | null>(null)
   const [balanceSeleccionado, setBalanceSeleccionado] = useState<Balance | null>(null)
   const [confirmarEliminarDialogOpen, setConfirmarEliminarDialogOpen] = useState(false)
+  const [editandoBalance, setEditandoBalance] = useState<Balance | null>(null)
+  const [modoEdicion, setModoEdicion] = useState(false)
+
 
   // Estados para el nuevo balance
   const [paso, setPaso] = useState(1)
@@ -278,17 +281,131 @@ export default function BalanceSection() {
     }
   }
 
+  const iniciarEdicion = (balance: Balance) => {
+    setEditandoBalance(balance)
+    setModoEdicion(true)
+    // Cargar datos del balance en el formulario
+    setFechaInicio(balance.fechaInicio)
+    setFechaFin(balance.fechaFin)
+    setGastosNuevos(balance.gastos.map(g => ({
+      nombre: g.nombre,
+      cantidad: g.cantidad.toString()
+    })))
+    setPaso(1)
+    setDetalleDialogOpen(false) // Cerrar el dialog de detalle
+    setCrearDialogOpen(true) // Abrir el dialog de creación/edición
+  }
+
+  const guardarEdicion = async () => {
+    if (!editandoBalance) return;
+
+    // Usar las mismas validaciones que crearNuevoBalance
+    if (!fechaInicio || !fechaFin) {
+      toast({
+        title: "Error",
+        description: "Debe seleccionar fechas de inicio y fin",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (fechaInicio > fechaFin) {
+      toast({
+        title: "Error",
+        description: "La fecha de inicio no puede ser posterior a la fecha fin",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const gastosInvalidos = gastosNuevos.some(
+      gasto => !gasto.nombre || !gasto.cantidad || isNaN(parseFloat(gasto.cantidad.toString()))
+    )
+
+    if (gastosInvalidos) {
+      toast({
+        title: "Error",
+        description: "Todos los gastos deben tener nombre y cantidad válida",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      const gananciaBruta = calcularGananciaBruta(fechaInicio, fechaFin)
+      const totalGastos = calcularTotalGastos(gastosNuevos)
+      const gananciaNeta = gananciaBruta - totalGastos
+
+      const gastosProcesados = gastosNuevos.map(gasto => ({
+        nombre: gasto.nombre,
+        cantidad: parseFloat(gasto.cantidad.toString())
+      }))
+
+      const balanceActualizado = {
+        fechaInicio,
+        fechaFin,
+        gananciaBruta,
+        gastos: gastosProcesados,
+        totalGastos,
+        gananciaNeta
+      }
+
+      // Llamar a la API de edición
+      const balanceGuardado = await editarBalance(editandoBalance.id, balanceActualizado)
+
+      // Actualizar el estado
+      setBalances(prevBalances =>
+        prevBalances.map(balance =>
+          balance.id === editandoBalance.id ? balanceGuardado : balance
+        )
+      )
+
+      // Resetear el formulario
+      cancelarEdicion()
+
+      toast({
+        title: "Éxito",
+        description: "Balance actualizado correctamente",
+      })
+    } catch (error) {
+      console.error('Error al editar balance:', error)
+      toast({
+        title: "Error",
+        description: "No se pudo actualizar el balance",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const cancelarEdicion = () => {
+    setEditandoBalance(null)
+    setModoEdicion(false)
+    setFechaInicio('')
+    setFechaFin('')
+    setGastosNuevos([{ nombre: '', cantidad: '' }])
+    setPaso(1)
+    setCrearDialogOpen(false)
+  }
+
+
   const abrirDetalleBalance = (balance: Balance) => {
     setBalanceSeleccionado(balance)
     setDetalleDialogOpen(true)
   }
 
   const cerrarCrearDialog = () => {
-    setCrearDialogOpen(false)
-    setPaso(1)
-    setFechaInicio('')
-    setFechaFin('')
-    setGastosNuevos([{ nombre: '', cantidad: '' }])
+    if (modoEdicion) {
+      cancelarEdicion()
+    } else {
+      setCrearDialogOpen(false)
+      setPaso(1)
+      setFechaInicio('')
+      setFechaFin('')
+      setGastosNuevos([{ nombre: '', cantidad: '' }])
+    }
   }
 
   if (isLoading) return <div className="flex justify-center items-center h-full">Cargando datos...</div>
@@ -389,7 +506,14 @@ export default function BalanceSection() {
                 </span>
               </div>
 
-              <DialogFooter className="mt-4">
+              <DialogFooter className="mt-4 flex justify-between">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => iniciarEdicion(balanceSeleccionado)}
+                >
+                  <Edit className="h-4 w-4 mr-2" /> Editar Balance
+                </Button>
                 <Button
                   variant="destructive"
                   size="sm"
@@ -430,15 +554,20 @@ export default function BalanceSection() {
       </Dialog>
 
       {/* Dialog para crear balance */}
-      <Dialog open={crearDialogOpen} onOpenChange={cerrarCrearDialog}>
+      {/* Dialog para crear/editar balance */}
+      <Dialog open={crearDialogOpen} onOpenChange={modoEdicion ? cancelarEdicion : cerrarCrearDialog}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>Crear Nuevo Balance</DialogTitle>
+            <DialogTitle>
+              {modoEdicion ? 'Editar Balance' : 'Crear Nuevo Balance'}
+            </DialogTitle>
           </DialogHeader>
 
           {paso === 1 && (
             <div className="space-y-4 py-4">
-              <h3 className="font-medium">Paso 1: Selecciona el período</h3>
+              <h3 className="font-medium">
+                Paso 1: {modoEdicion ? 'Modifica' : 'Selecciona'} el período
+              </h3>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="fechaInicio">Fecha Inicio</Label>
@@ -459,7 +588,25 @@ export default function BalanceSection() {
                   />
                 </div>
               </div>
+
+              {/* Mostrar ganancia bruta calculada si hay fechas seleccionadas */}
+              {fechaInicio && fechaFin && fechaInicio <= fechaFin && (
+                <div className="mt-4 p-3 bg-green-50 rounded-lg border border-green-200">
+                  <p className="text-sm text-green-700">
+                    <strong>Ganancia Bruta del período:</strong> ${formatPrice(calcularGananciaBruta(fechaInicio, fechaFin))}
+                  </p>
+                </div>
+              )}
+
               <DialogFooter className="mt-4">
+                {modoEdicion && (
+                  <Button
+                    variant="outline"
+                    onClick={cancelarEdicion}
+                  >
+                    Cancelar
+                  </Button>
+                )}
                 <Button
                   onClick={() => setPaso(2)}
                   disabled={!fechaInicio || !fechaFin}
@@ -472,7 +619,9 @@ export default function BalanceSection() {
 
           {paso === 2 && (
             <div className="space-y-4 py-4">
-              <h3 className="font-medium">Paso 2: Registra los gastos</h3>
+              <h3 className="font-medium">
+                Paso 2: {modoEdicion ? 'Modifica' : 'Registra'} los gastos
+              </h3>
 
               <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2">
                 {gastosNuevos.map((gasto, index) => (
@@ -510,6 +659,30 @@ export default function BalanceSection() {
                 <Plus className="h-4 w-4 mr-2" /> Agregar otro gasto
               </Button>
 
+              {/* Mostrar resumen de cálculos */}
+              {fechaInicio && fechaFin && (
+                <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200 space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span>Ganancia Bruta:</span>
+                    <span className="text-green-600 font-medium">
+                      ${formatPrice(calcularGananciaBruta(fechaInicio, fechaFin))}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span>Total Gastos:</span>
+                    <span className="text-red-600 font-medium">
+                      -${formatPrice(calcularTotalGastos(gastosNuevos))}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm font-bold border-t pt-2">
+                    <span>Ganancia Neta:</span>
+                    <span className={calcularGananciaBruta(fechaInicio, fechaFin) - calcularTotalGastos(gastosNuevos) >= 0 ? 'text-green-600' : 'text-red-600'}>
+                      ${formatPrice(calcularGananciaBruta(fechaInicio, fechaFin) - calcularTotalGastos(gastosNuevos))}
+                    </span>
+                  </div>
+                </div>
+              )}
+
               <DialogFooter className="mt-4 flex justify-between">
                 <Button
                   variant="outline"
@@ -517,12 +690,25 @@ export default function BalanceSection() {
                 >
                   Anterior
                 </Button>
-                <Button
-                  onClick={crearNuevoBalance}
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting ? 'Guardando...' : 'Crear Balance'}
-                </Button>
+                <div className="flex gap-2">
+                  {modoEdicion && (
+                    <Button
+                      variant="outline"
+                      onClick={cancelarEdicion}
+                    >
+                      Cancelar
+                    </Button>
+                  )}
+                  <Button
+                    onClick={modoEdicion ? guardarEdicion : crearNuevoBalance}
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting
+                      ? (modoEdicion ? 'Guardando...' : 'Creando...')
+                      : (modoEdicion ? 'Guardar Cambios' : 'Crear Balance')
+                    }
+                  </Button>
+                </div>
               </DialogFooter>
             </div>
           )}
