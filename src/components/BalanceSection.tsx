@@ -665,7 +665,7 @@ export default function BalanceSection() {
                       value={fechaInicio}
                       onChange={(e) => setFechaInicio(normalizarFecha(e.target.value))}
                     />
-
+                    <Label htmlFor="fechaFin">Fecha Fin</Label>
                     <Input
                       id="fechaFin"
                       type="date"
