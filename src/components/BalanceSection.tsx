@@ -43,6 +43,22 @@ const formatPrice = (price: number | string | undefined): string => {
   return isNaN(numPrice) ? '0.00' : numPrice.toFixed(2);
 }
 
+const formatRangoFechas = (fechaInicio: string, fechaFin: string): string => {
+  try {
+    // Si las fechas son iguales, mostrar solo una fecha
+    if (fechaInicio === fechaFin) {
+      return formatDate(fechaInicio)
+    }
+    // Si son diferentes, mostrar el rango
+    return `${formatDate(fechaInicio)} - ${formatDate(fechaFin)}`
+  } catch (error) {
+    console.error('Error al formatear rango de fechas:', error)
+    return 'Fechas inválidas'
+  }
+}
+
+
+
 export default function BalanceSection() {
   const [ventasDiarias, setVentasDiarias] = useState<VentaDia[]>([])
   const [balances, setBalances] = useState<Balance[]>([])
@@ -55,7 +71,8 @@ export default function BalanceSection() {
   const [confirmarEliminarDialogOpen, setConfirmarEliminarDialogOpen] = useState(false)
   const [editandoBalance, setEditandoBalance] = useState<Balance | null>(null)
   const [modoEdicion, setModoEdicion] = useState(false)
-
+  const [tipoSeleccion, setTipoSeleccion] = useState<'periodo' | 'dia'>('periodo')
+  const [fechaSeleccionada, setFechaSeleccionada] = useState('')
 
   // Estados para el nuevo balance
   const [paso, setPaso] = useState(1)
@@ -155,14 +172,22 @@ export default function BalanceSection() {
     setGastosNuevos(nuevosGastos)
   }
 
-  const calcularGananciaBruta = (fechaInicio: string, fechaFin: string): number => {
-    return ventasDiarias
-      .filter(dia => {
-        const fecha = dia.fecha
-        return fecha >= fechaInicio && fecha <= fechaFin
-      })
-      .reduce((sum, dia) => sum + dia.ganancia, 0)
+  const calcularGananciaBruta = (fechaInicio: string, fechaFin: string, tipo: 'periodo' | 'dia' = 'periodo'): number => {
+    if (tipo === 'dia') {
+      // Para un día específico
+      const diaSeleccionado = ventasDiarias.find(dia => dia.fecha === fechaInicio)
+      return diaSeleccionado ? diaSeleccionado.ganancia : 0
+    } else {
+      // Para período (lógica actual)
+      return ventasDiarias
+        .filter(dia => {
+          const fecha = dia.fecha
+          return fecha >= fechaInicio && fecha <= fechaFin
+        })
+        .reduce((sum, dia) => sum + dia.ganancia, 0)
+    }
   }
+
 
   const calcularTotalGastos = (gastos: GastoBalance[]): number => {
     return gastos.reduce((sum, gasto) => {
@@ -209,7 +234,7 @@ export default function BalanceSection() {
 
     setIsSubmitting(true)
     try {
-      const gananciaBruta = calcularGananciaBruta(fechaInicio, fechaFin)
+      const gananciaBruta = calcularGananciaBruta(fechaInicio, fechaFin, tipoSeleccion)
       const totalGastos = calcularTotalGastos(gastosNuevos)
       const gananciaNeta = gananciaBruta - totalGastos
 
@@ -333,7 +358,7 @@ export default function BalanceSection() {
 
     setIsSubmitting(true)
     try {
-      const gananciaBruta = calcularGananciaBruta(fechaInicio, fechaFin)
+      const gananciaBruta = calcularGananciaBruta(fechaInicio, fechaFin, tipoSeleccion)
       const totalGastos = calcularTotalGastos(gastosNuevos)
       const gananciaNeta = gananciaBruta - totalGastos
 
@@ -383,6 +408,8 @@ export default function BalanceSection() {
   const cancelarEdicion = () => {
     setEditandoBalance(null)
     setModoEdicion(false)
+    setTipoSeleccion('periodo') // Agregar esta línea
+    setFechaSeleccionada('') // Agregar esta línea
     setFechaInicio('')
     setFechaFin('')
     setGastosNuevos([{ nombre: '', cantidad: '' }])
@@ -402,6 +429,8 @@ export default function BalanceSection() {
     } else {
       setCrearDialogOpen(false)
       setPaso(1)
+      setTipoSeleccion('periodo') // Agregar esta línea
+      setFechaSeleccionada('') // Agregar esta línea
       setFechaInicio('')
       setFechaFin('')
       setGastosNuevos([{ nombre: '', cantidad: '' }])
@@ -437,8 +466,9 @@ export default function BalanceSection() {
                 >
                   <div>
                     <p className="font-medium">
-                      Balance {formatDate(balance.fechaInicio)} - {formatDate(balance.fechaFin)}
+                      Balance {formatRangoFechas(balance.fechaInicio, balance.fechaFin)}
                     </p>
+
                     <p className="text-xs text-gray-500">
                       Creado el {formatDate(balance.fechaCreacion)}
                     </p>
@@ -470,12 +500,20 @@ export default function BalanceSection() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileText className="h-5 w-5 text-blue-500" />
-              Balance {balanceSeleccionado && formatDate(balanceSeleccionado.fechaInicio)} - {balanceSeleccionado && formatDate(balanceSeleccionado.fechaFin)}
+              Balance {balanceSeleccionado && formatRangoFechas(balanceSeleccionado.fechaInicio, balanceSeleccionado.fechaFin)}
             </DialogTitle>
           </DialogHeader>
 
           {balanceSeleccionado && (
             <div className="space-y-4">
+              <div className="text-sm text-gray-600 border-b pb-2">
+                <span className="font-medium">
+                  {balanceSeleccionado.fechaInicio === balanceSeleccionado.fechaFin
+                    ? `Balance del día ${formatDate(balanceSeleccionado.fechaInicio)}`
+                    : `Balance del período ${formatDate(balanceSeleccionado.fechaInicio)} al ${formatDate(balanceSeleccionado.fechaFin)}`
+                  }
+                </span>
+              </div>
               <div className="flex justify-between items-center border-b pb-2">
                 <span className="font-medium">Ganancia Bruta:</span>
                 <span className="text-green-600 font-semibold">${formatPrice(balanceSeleccionado.gananciaBruta)}</span>
@@ -566,37 +604,86 @@ export default function BalanceSection() {
           {paso === 1 && (
             <div className="space-y-4 py-4">
               <h3 className="font-medium">
-                Paso 1: {modoEdicion ? 'Modifica' : 'Selecciona'} el período
+                Paso 1: {modoEdicion ? 'Modifica' : 'Selecciona'} el tipo de balance
               </h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="fechaInicio">Fecha Inicio</Label>
-                  <Input
-                    id="fechaInicio"
-                    type="date"
-                    value={fechaInicio}
-                    onChange={(e) => setFechaInicio(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="fechaFin">Fecha Fin</Label>
-                  <Input
-                    id="fechaFin"
-                    type="date"
-                    value={fechaFin}
-                    onChange={(e) => setFechaFin(e.target.value)}
-                  />
+
+              {/* Selector de tipo */}
+              <div className="space-y-3">
+                <Label>Tipo de balance</Label>
+                <div className="flex gap-4">
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="tipoBalance"
+                      value="periodo"
+                      checked={tipoSeleccion === 'periodo'}
+                      onChange={(e) => setTipoSeleccion(e.target.value as 'periodo' | 'dia')}
+                      className="w-4 h-4"
+                    />
+                    <span>Período</span>
+                  </label>
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="tipoBalance"
+                      value="dia"
+                      checked={tipoSeleccion === 'dia'}
+                      onChange={(e) => setTipoSeleccion(e.target.value as 'periodo' | 'dia')}
+                      className="w-4 h-4"
+                    />
+                    <span>Día</span>
+                  </label>
                 </div>
               </div>
 
-              {/* Mostrar ganancia bruta calculada si hay fechas seleccionadas */}
-              {fechaInicio && fechaFin && fechaInicio <= fechaFin && (
-                <div className="mt-4 p-3 bg-green-50 rounded-lg border border-green-200">
-                  <p className="text-sm text-green-700">
-                    <strong>Ganancia Bruta del período:</strong> ${formatPrice(calcularGananciaBruta(fechaInicio, fechaFin))}
-                  </p>
+              {/* Campos de fecha según el tipo seleccionado */}
+              {tipoSeleccion === 'periodo' ? (
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="fechaInicio">Fecha Inicio</Label>
+                    <Input
+                      id="fechaInicio"
+                      type="date"
+                      value={fechaInicio}
+                      onChange={(e) => setFechaInicio(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="fechaFin">Fecha Fin</Label>
+                    <Input
+                      id="fechaFin"
+                      type="date"
+                      value={fechaFin}
+                      onChange={(e) => setFechaFin(e.target.value)}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Label htmlFor="fechaSeleccionada">Seleccionar Día</Label>
+                  <Input
+                    id="fechaSeleccionada"
+                    type="date"
+                    value={fechaSeleccionada}
+                    onChange={(e) => {
+                      setFechaSeleccionada(e.target.value)
+                      setFechaInicio(e.target.value)
+                      setFechaFin(e.target.value)
+                    }}
+                  />
                 </div>
               )}
+
+              {/* Mostrar ganancia bruta calculada */}
+              {((tipoSeleccion === 'periodo' && fechaInicio && fechaFin && fechaInicio <= fechaFin) ||
+                (tipoSeleccion === 'dia' && fechaSeleccionada)) && (
+                  <div className="mt-4 p-3 bg-green-50 rounded-lg border border-green-200">
+                    <p className="text-sm text-green-700">
+                      <strong>Ganancia Bruta del {tipoSeleccion === 'dia' ? 'día' : 'período'}:</strong>
+                      ${formatPrice(calcularGananciaBruta(fechaInicio, fechaFin, tipoSeleccion))}
+                    </p>
+                  </div>
+                )}
 
               <DialogFooter className="mt-4">
                 {modoEdicion && (
@@ -609,13 +696,18 @@ export default function BalanceSection() {
                 )}
                 <Button
                   onClick={() => setPaso(2)}
-                  disabled={!fechaInicio || !fechaFin}
+                  disabled={
+                    tipoSeleccion === 'periodo'
+                      ? (!fechaInicio || !fechaFin)
+                      : !fechaSeleccionada
+                  }
                 >
                   Siguiente
                 </Button>
               </DialogFooter>
             </div>
           )}
+
 
           {paso === 2 && (
             <div className="space-y-4 py-4">
@@ -665,7 +757,7 @@ export default function BalanceSection() {
                   <div className="flex justify-between text-sm">
                     <span>Ganancia Bruta:</span>
                     <span className="text-green-600 font-medium">
-                      ${formatPrice(calcularGananciaBruta(fechaInicio, fechaFin))}
+                      ${formatPrice(calcularGananciaBruta(fechaInicio, fechaFin, tipoSeleccion))}
                     </span>
                   </div>
                   <div className="flex justify-between text-sm">
@@ -676,8 +768,9 @@ export default function BalanceSection() {
                   </div>
                   <div className="flex justify-between text-sm font-bold border-t pt-2">
                     <span>Ganancia Neta:</span>
-                    <span className={calcularGananciaBruta(fechaInicio, fechaFin) - calcularTotalGastos(gastosNuevos) >= 0 ? 'text-green-600' : 'text-red-600'}>
-                      ${formatPrice(calcularGananciaBruta(fechaInicio, fechaFin) - calcularTotalGastos(gastosNuevos))}
+                    <span className={calcularGananciaBruta(fechaInicio, fechaFin, tipoSeleccion) - calcularTotalGastos(gastosNuevos) >= 0 ? 'text-green-600' : 'text-red-600'}>
+                      ${formatPrice(calcularGananciaBruta(fechaInicio, fechaFin, tipoSeleccion) - calcularTotalGastos(gastosNuevos))}
+
                     </span>
                   </div>
                 </div>

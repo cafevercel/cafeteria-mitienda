@@ -131,7 +131,7 @@ export async function PUT(
         }
 
         // Validar que fecha fin sea posterior a fecha inicio
-        if (new Date(fechaFin) <= new Date(fechaInicio)) {
+        if (new Date(fechaFin) < new Date(fechaInicio)) {
             return NextResponse.json({
                 error: 'La fecha de fin debe ser posterior a la fecha de inicio'
             }, { status: 400 });
