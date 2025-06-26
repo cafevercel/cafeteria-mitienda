@@ -57,6 +57,19 @@ const formatRangoFechas = (fechaInicio: string, fechaFin: string): string => {
   }
 }
 
+const normalizarFecha = (fechaString: string): string => {
+  if (!fechaString) return fechaString;
+
+  // Crear la fecha en la zona horaria local sin conversión UTC
+  const fecha = new Date(fechaString + 'T00:00:00');
+
+  // Formatear como YYYY-MM-DD
+  const year = fecha.getFullYear();
+  const month = String(fecha.getMonth() + 1).padStart(2, '0');
+  const day = String(fecha.getDate()).padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
+}
 
 
 export default function BalanceSection() {
@@ -115,8 +128,8 @@ export default function BalanceSection() {
     const ventasPorDia: { [key: string]: VentaDia } = {}
 
     ventas.forEach(venta => {
-      const fechaObj = new Date(venta.fecha)
-      const fechaKey = format(fechaObj, 'yyyy-MM-dd')
+      // Usar la función de normalización
+      const fechaKey = normalizarFecha(venta.fecha.split('T')[0])
 
       if (!ventasPorDia[fechaKey]) {
         ventasPorDia[fechaKey] = {
@@ -152,9 +165,10 @@ export default function BalanceSection() {
     })
 
     return Object.values(ventasPorDia).sort((a, b) =>
-      new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
+      new Date(b.fecha + 'T00:00:00').getTime() - new Date(a.fecha + 'T00:00:00').getTime()
     )
   }
+
 
   const agregarGastoField = () => {
     setGastosNuevos([...gastosNuevos, { nombre: '', cantidad: '' }])
@@ -199,8 +213,12 @@ export default function BalanceSection() {
   }
 
   const crearNuevoBalance = async () => {
+    // Normalizar fechas antes de validar
+    const fechaInicioNormalizada = normalizarFecha(fechaInicio)
+    const fechaFinNormalizada = normalizarFecha(fechaFin)
+
     // Validaciones
-    if (!fechaInicio || !fechaFin) {
+    if (!fechaInicioNormalizada || !fechaFinNormalizada) {
       toast({
         title: "Error",
         description: "Debe seleccionar fechas de inicio y fin",
@@ -209,7 +227,7 @@ export default function BalanceSection() {
       return
     }
 
-    if (fechaInicio > fechaFin) {
+    if (fechaInicioNormalizada > fechaFinNormalizada) {
       toast({
         title: "Error",
         description: "La fecha de inicio no puede ser posterior a la fecha fin",
@@ -234,7 +252,7 @@ export default function BalanceSection() {
 
     setIsSubmitting(true)
     try {
-      const gananciaBruta = calcularGananciaBruta(fechaInicio, fechaFin, tipoSeleccion)
+      const gananciaBruta = calcularGananciaBruta(fechaInicioNormalizada, fechaFinNormalizada, tipoSeleccion)
       const totalGastos = calcularTotalGastos(gastosNuevos)
       const gananciaNeta = gananciaBruta - totalGastos
 
@@ -244,8 +262,8 @@ export default function BalanceSection() {
       }))
 
       const nuevoBalance = {
-        fechaInicio,
-        fechaFin,
+        fechaInicio: fechaInicioNormalizada,
+        fechaFin: fechaFinNormalizada,
         gananciaBruta,
         gastos: gastosProcesados,
         totalGastos,
@@ -645,16 +663,14 @@ export default function BalanceSection() {
                       id="fechaInicio"
                       type="date"
                       value={fechaInicio}
-                      onChange={(e) => setFechaInicio(e.target.value)}
+                      onChange={(e) => setFechaInicio(normalizarFecha(e.target.value))}
                     />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="fechaFin">Fecha Fin</Label>
+
                     <Input
                       id="fechaFin"
                       type="date"
                       value={fechaFin}
-                      onChange={(e) => setFechaFin(e.target.value)}
+                      onChange={(e) => setFechaFin(normalizarFecha(e.target.value))}
                     />
                   </div>
                 </div>
@@ -666,9 +682,10 @@ export default function BalanceSection() {
                     type="date"
                     value={fechaSeleccionada}
                     onChange={(e) => {
-                      setFechaSeleccionada(e.target.value)
-                      setFechaInicio(e.target.value)
-                      setFechaFin(e.target.value)
+                      const fechaNormalizada = normalizarFecha(e.target.value)
+                      setFechaSeleccionada(fechaNormalizada)
+                      setFechaInicio(fechaNormalizada)
+                      setFechaFin(fechaNormalizada)
                     }}
                   />
                 </div>
