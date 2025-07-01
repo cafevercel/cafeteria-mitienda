@@ -13,6 +13,7 @@ export async function POST(request: NextRequest) {
         const parametrosRaw = formData.get('parametros') as string;
         const parametros = parametrosRaw ? JSON.parse(parametrosRaw) : [];
         const porcentajeGanancia = formData.get('porcentajeGanancia') as string;
+        const seccion = formData.get('seccion') as string;
 
         let fotoUrl = '';
 
@@ -24,8 +25,8 @@ export async function POST(request: NextRequest) {
 
         try {
             const result = await query(
-                'INSERT INTO productos (nombre, precio, precio_compra, cantidad, foto, tiene_parametros, porcentaje_ganancia) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
-                [nombre, Number(precio), Number(precioCompra), Number(cantidad), fotoUrl, tieneParametros, Number(porcentajeGanancia) || 0]
+                'INSERT INTO productos (nombre, precio, precio_compra, cantidad, foto, tiene_parametros, porcentaje_ganancia, seccion) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
+                [nombre, Number(precio), Number(precioCompra), Number(cantidad), fotoUrl, tieneParametros, Number(porcentajeGanancia) || 0, seccion || '']
             );
 
             const productoId = result.rows[0].id;
@@ -52,6 +53,7 @@ export async function POST(request: NextRequest) {
                     p.tiene_parametros,
                     p.precio_compra,
                     p.porcentaje_ganancia as "porcentajeGanancia",
+                    p.seccion,
                     COALESCE(
                         json_agg(
                             json_build_object(
@@ -66,7 +68,7 @@ export async function POST(request: NextRequest) {
                 WHERE p.id = $1
                 GROUP BY p.id
             `, [productoId]);
-            
+
             return NextResponse.json(productoCompleto.rows[0]);
         } catch (error) {
             await query('ROLLBACK');
@@ -90,6 +92,7 @@ export async function GET(request: NextRequest) {
                 p.tiene_parametros,
                 p.precio_compra,
                 p.porcentaje_ganancia as "porcentajeGanancia",
+                p.seccion,
                 COALESCE(
                     json_agg(
                         json_build_object(

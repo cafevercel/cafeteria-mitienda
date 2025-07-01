@@ -15,17 +15,6 @@ interface User {
   password: string;
 }
 
-interface ProductoBackend {
-  id: string;
-  nombre: string;
-  precio: number;
-  foto?: string;
-  cantidad: number;
-  tieneParametros: boolean;
-  porcentajeGanancia?: number;
-  parametros: Array<{ nombre: string; cantidad: number }>;
-}
-
 interface LocalProducto {
   id: string;
   nombre: string;
@@ -35,6 +24,7 @@ interface LocalProducto {
   tiene_parametros: boolean;
   tieneParametros?: boolean;
   porcentaje_ganancia?: number; // Usar el nombre con guion bajo
+  seccion?: string;
   parametros?: Array<{
     nombre: string;
     cantidad: number;

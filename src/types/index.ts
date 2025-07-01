@@ -29,7 +29,8 @@ export interface Producto {
   tiene_parametros: boolean;  // Propiedad del backend
   tieneParametros?: boolean;  // Propiedad del frontend
   parametros?: Parametro[]
-  porcentajeGanancia?: number; 
+  porcentajeGanancia?: number;
+  seccion?: string;
 }
 
 export interface VentaParametro {
@@ -122,7 +123,7 @@ export interface TransferProductParams {
   fromVendorId: string;
   toVendorId: string;
   cantidad: number;
-  parametros?: Array<{ nombre: string; cantidad: number }>; 
+  parametros?: Array<{ nombre: string; cantidad: number }>;
 }
 
 // Añade estas interfaces al final de tu archivo types/index.ts

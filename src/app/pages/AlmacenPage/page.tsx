@@ -79,7 +79,8 @@ interface NewProduct {
   cantidad: number;
   foto: string;
   tieneParametros: boolean;
-  porcentajeGanancia: number; // Añadir esta línea
+  porcentajeGanancia: number;
+  seccion: string;
   parametros: Array<{
     nombre: string;
     cantidad: number;
@@ -158,6 +159,86 @@ const useAlmacenData = () => {
   return { isAuthenticated, vendedores, inventario, fetchVendedores, fetchInventario, setInventario }
 }
 
+const SeccionAutocomplete = ({
+  value,
+  onChange,
+  seccionesExistentes,
+  placeholder = "Sección del producto"
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  seccionesExistentes: string[];
+  placeholder?: string;
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [filteredSecciones, setFilteredSecciones] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (value) {
+      const filtered = seccionesExistentes.filter(seccion =>
+        seccion.toLowerCase().includes(value.toLowerCase())
+      );
+      setFilteredSecciones(filtered);
+    } else {
+      setFilteredSecciones(seccionesExistentes);
+    }
+  }, [value, seccionesExistentes]);
+
+  return (
+    <div className="relative">
+      <Input
+        value={value}
+        onChange={(e) => {
+          onChange(e.target.value);
+          setIsOpen(true);
+        }}
+        onFocus={() => setIsOpen(true)}
+        onBlur={() => {
+          // Delay para permitir el clic en las opciones
+          setTimeout(() => setIsOpen(false), 200);
+        }}
+        placeholder={placeholder}
+      />
+
+      {isOpen && (filteredSecciones.length > 0 || value) && (
+        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
+          {/* Opción para crear nueva sección si no existe */}
+          {value && !seccionesExistentes.includes(value) && (
+            <div
+              className="px-3 py-2 cursor-pointer hover:bg-gray-100 border-b text-blue-600"
+              onClick={() => {
+                onChange(value);
+                setIsOpen(false);
+              }}
+            >
+              <span className="font-medium">Crear nueva: "{value}"</span>
+            </div>
+          )}
+
+          {/* Secciones existentes filtradas */}
+          {filteredSecciones.map((seccion, index) => (
+            <div
+              key={index}
+              className="px-3 py-2 cursor-pointer hover:bg-gray-100"
+              onClick={() => {
+                onChange(seccion);
+                setIsOpen(false);
+              }}
+            >
+              {seccion}
+            </div>
+          ))}
+
+          {filteredSecciones.length === 0 && value && seccionesExistentes.includes(value) && (
+            <div className="px-3 py-2 text-gray-500">
+              No hay más secciones que coincidan
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
 
 export default function AlmacenPage() {
   const { isAuthenticated, vendedores, inventario, fetchVendedores, fetchInventario, setInventario } = useAlmacenData()
@@ -184,7 +265,8 @@ export default function AlmacenPage() {
     cantidad: 0,
     foto: '',
     tieneParametros: false,
-    porcentajeGanancia: 0, // Añadir esta línea
+    porcentajeGanancia: 0,
+    seccion: '',
     parametros: []
   });
 
@@ -235,6 +317,23 @@ export default function AlmacenPage() {
   const [loadingVentas, setLoadingVentas] = useState(false)
   const [expandedVentasDays, setExpandedVentasDays] = useState<Set<string>>(new Set());
   const [expandedVentasProducts, setExpandedVentasProducts] = useState<Set<string>>(new Set());
+  const [seccionesExistentes, setSeccionesExistentes] = useState<string[]>([])
+
+
+  const obtenerSeccionesUnicas = useCallback(() => {
+    const secciones = inventario
+      .map(producto => producto.seccion)
+      .filter((seccion): seccion is string => seccion !== undefined && seccion !== null && seccion.trim() !== '')
+      .filter((seccion, index, array) => array.indexOf(seccion) === index) // Eliminar duplicados
+      .sort(); // Ordenar alfabéticamente
+
+    setSeccionesExistentes(secciones);
+  }, [inventario]);
+
+
+  useEffect(() => {
+    obtenerSeccionesUnicas();
+  }, [inventario, obtenerSeccionesUnicas]);
 
   // Función simplificada para mostrar ventas
   const handleMostrarVentas = async (vendedor: Vendedor) => {
@@ -949,7 +1048,8 @@ export default function AlmacenPage() {
       formData.append('nombre', newProduct.nombre);
       formData.append('precio', newProduct.precio.toString());
       formData.append('precioCompra', newProduct.precioCompra.toString());
-      formData.append('porcentajeGanancia', newProduct.porcentajeGanancia.toString()); // Añadir esta línea
+      formData.append('porcentajeGanancia', newProduct.porcentajeGanancia.toString());
+      formData.append('seccion', newProduct.seccion); // Agregar esta línea
 
       if (newProduct.tieneParametros) {
         formData.append('tieneParametros', 'true');
@@ -972,10 +1072,11 @@ export default function AlmacenPage() {
         nombre: '',
         precio: 0,
         precioCompra: 0,
-        porcentajeGanancia: 0, // Añadir esta línea
+        porcentajeGanancia: 0,
         cantidad: 0,
         foto: '',
         tieneParametros: false,
+        seccion: '', // Agregar esta línea
         parametros: []
       });
 
@@ -992,6 +1093,7 @@ export default function AlmacenPage() {
       });
     }
   };
+
 
 
 
@@ -1077,8 +1179,8 @@ export default function AlmacenPage() {
       formData.append('cantidad', editedProduct.cantidad.toString());
       formData.append('tiene_parametros', editedProduct.tiene_parametros.toString());
       formData.append('precio_compra', (editedProduct.precio_compra || 0).toString());
-      // Añadir el porcentaje de ganancia al FormData
       formData.append('porcentajeGanancia', (editedProduct.porcentajeGanancia || 0).toString());
+      formData.append('seccion', editedProduct.seccion || ''); // Agregar esta línea
 
       if (editedProduct.parametros) {
         formData.append('parametros', JSON.stringify(editedProduct.parametros));
@@ -1106,6 +1208,7 @@ export default function AlmacenPage() {
       });
     }
   };
+
   useEffect(() => {
     const loadCafeteriaData = async () => {
       if (activeSection === 'cafeteria') {
@@ -2265,6 +2368,16 @@ export default function AlmacenPage() {
               />
             </div>
 
+            <div>
+              <label htmlFor="seccion" className="block text-sm font-medium text-gray-700">Sección</label>
+              <SeccionAutocomplete
+                value={newProduct.seccion}
+                onChange={(value) => setNewProduct(prev => ({ ...prev, seccion: value }))}
+                seccionesExistentes={seccionesExistentes}
+                placeholder="Sección del producto"
+              />
+            </div>
+
             <div className="flex items-center space-x-2">
               <Checkbox
                 id="usaPorcentajeGanancia"
@@ -2436,8 +2549,10 @@ export default function AlmacenPage() {
           onEdit={handleEditProduct}
           onDelete={handleDeleteProduct}
           onDeliver={(productId, cantidadTotal, parametros) => handleProductDelivery(productId, cantidadTotal, parametros)}
+          seccionesExistentes={seccionesExistentes} // Agregar esta línea
         />
       )}
+
 
       {vendedorSeleccionado && (
         <VendorDialog

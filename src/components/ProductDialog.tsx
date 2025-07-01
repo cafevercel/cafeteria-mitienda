@@ -22,7 +22,91 @@ interface ProductDialogProps {
     cantidadTotal: number,
     parametros: { nombre: string; cantidad: number }[]
   ) => Promise<void>;
+  seccionesExistentes: string[]; // Agregar esta línea
 }
+
+
+// Componente de autocompletado para secciones
+const SeccionAutocomplete = ({
+  value,
+  onChange,
+  seccionesExistentes,
+  placeholder = "Sección del producto"
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  seccionesExistentes: string[];
+  placeholder?: string;
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [filteredSecciones, setFilteredSecciones] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (value) {
+      const filtered = seccionesExistentes.filter(seccion =>
+        seccion.toLowerCase().includes(value.toLowerCase())
+      );
+      setFilteredSecciones(filtered);
+    } else {
+      setFilteredSecciones(seccionesExistentes);
+    }
+  }, [value, seccionesExistentes]);
+
+  return (
+    <div className="relative">
+      <Input
+        value={value}
+        onChange={(e) => {
+          onChange(e.target.value);
+          setIsOpen(true);
+        }}
+        onFocus={() => setIsOpen(true)}
+        onBlur={() => {
+          // Delay para permitir el clic en las opciones
+          setTimeout(() => setIsOpen(false), 200);
+        }}
+        placeholder={placeholder}
+      />
+
+      {isOpen && (filteredSecciones.length > 0 || value) && (
+        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
+          {/* Opción para crear nueva sección si no existe */}
+          {value && !seccionesExistentes.includes(value) && (
+            <div
+              className="px-3 py-2 cursor-pointer hover:bg-gray-100 border-b text-blue-600"
+              onClick={() => {
+                onChange(value);
+                setIsOpen(false);
+              }}
+            >
+              <span className="font-medium">Crear nueva: "{value}"</span>
+            </div>
+          )}
+
+          {/* Secciones existentes filtradas */}
+          {filteredSecciones.map((seccion, index) => (
+            <div
+              key={index}
+              className="px-3 py-2 cursor-pointer hover:bg-gray-100"
+              onClick={() => {
+                onChange(seccion);
+                setIsOpen(false);
+              }}
+            >
+              {seccion}
+            </div>
+          ))}
+
+          {filteredSecciones.length === 0 && value && seccionesExistentes.includes(value) && (
+            <div className="px-3 py-2 text-gray-500">
+              No hay más secciones que coincidan
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
 
 type ModeType = 'view' | 'edit' | 'deliver';
 
@@ -33,7 +117,9 @@ export default function ProductDialog({
   onEdit,
   onDelete,
   onDeliver,
+  seccionesExistentes, // Agregar esta línea
 }: ProductDialogProps) {
+
   const [mode, setMode] = useState<ModeType>('view');
   const [imageUrl, setImageUrl] = useState<string>(product.foto || '');
   const [editedProduct, setEditedProduct] = useState<Producto>({
@@ -54,12 +140,11 @@ export default function ProductDialog({
   const [parameterQuantities, setParameterQuantities] = useState<{ [key: string]: number }>({});
   const [totalDeliveryQuantity, setTotalDeliveryQuantity] = useState(0);
   const [simpleDeliveryQuantity, setSimpleDeliveryQuantity] = useState<number>(0);
-  const [isUploading, setIsUploading] = useState(false);
 
   // Efecto para sincronizar el estado con el producto recibido
   useEffect(() => {
     const tienePorcentajeGanancia = product.porcentajeGanancia !== undefined && product.porcentajeGanancia > 0;
-    
+
     setEditedProduct({
       ...product,
       tieneParametros: product.tiene_parametros,
@@ -296,6 +381,7 @@ export default function ProductDialog({
               editedProduct={editedProduct}
               imageUrl={imageUrl}
               mostrarPorcentajeGanancia={mostrarPorcentajeGanancia}
+              seccionesExistentes={seccionesExistentes} // Agregar esta línea
               onInputChange={handleInputChange}
               onTieneParametrosChange={handleTieneParametrosChange}
               onMostrarPorcentajeGananciaChange={handleMostrarPorcentajeGananciaChange}
@@ -306,6 +392,7 @@ export default function ProductDialog({
               onSave={handleEdit}
               onCancel={() => setMode('view')}
             />
+
           ) : mode === 'deliver' ? (
             <DeliverMode
               product={product}
@@ -344,6 +431,7 @@ const EditMode = ({
   editedProduct,
   imageUrl,
   mostrarPorcentajeGanancia,
+  seccionesExistentes, // Agregar esta línea
   onInputChange,
   onTieneParametrosChange,
   onMostrarPorcentajeGananciaChange,
@@ -357,6 +445,7 @@ const EditMode = ({
   editedProduct: Producto;
   imageUrl: string;
   mostrarPorcentajeGanancia: boolean;
+  seccionesExistentes: string[]; // Agregar esta línea
   onInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onTieneParametrosChange: (checked: boolean) => void;
   onMostrarPorcentajeGananciaChange: (checked: boolean) => void;
@@ -367,6 +456,7 @@ const EditMode = ({
   onSave: () => void;
   onCancel: () => void;
 }) => (
+
   <>
     <div className="space-y-4">
       <div>
@@ -400,6 +490,22 @@ const EditMode = ({
           placeholder="Precio de compra"
         />
       </div>
+
+      <div>
+        <Label>Sección</Label>
+        <SeccionAutocomplete
+          value={editedProduct.seccion || ''}
+          onChange={(value) => {
+            const event = {
+              target: { name: 'seccion', value }
+            } as React.ChangeEvent<HTMLInputElement>;
+            onInputChange(event);
+          }}
+          seccionesExistentes={seccionesExistentes}
+          placeholder="Sección del producto"
+        />
+      </div>
+
 
       {/* Checkbox para mostrar/ocultar el campo de porcentaje de ganancia */}
       <div className="flex items-center space-x-2">
@@ -612,7 +718,9 @@ const ViewMode = ({
       <div className="space-y-2">
         <p className="text-lg font-medium">Precio de venta: ${product.precio}</p>
         <p className="text-md text-gray-700">Precio de compra: ${product.precio_compra || 0}</p>
-
+        {product.seccion && (
+          <p className="text-md text-gray-700">Sección: {product.seccion}</p>
+        )}
         {/* Solo mostrar el porcentaje de ganancia si está habilitado */}
         {mostrarPorcentajeGanancia && (product.porcentajeGanancia ?? 0) > 0 && (
           <p className="text-md text-gray-700">

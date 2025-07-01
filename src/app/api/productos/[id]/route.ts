@@ -19,28 +19,29 @@ interface ParametroVendedor {
 
 const obtenerProductoConParametros = async (productoId: string) => {
     const result = await query(`
-        SELECT 
-            p.id,
-            p.nombre,
-            p.precio,
-            p.cantidad,
-            p.foto,
-            p.tiene_parametros,
-            p.precio_compra,
-            p.porcentaje_ganancia as "porcentajeGanancia",
-            COALESCE(
-                json_agg(
-                    json_build_object(
-                        'nombre', pp.nombre,
-                        'cantidad', pp.cantidad
-                    )
-                ) FILTER (WHERE pp.id IS NOT NULL),
-                '[]'::json
-            ) as parametros
-        FROM productos p
-        LEFT JOIN producto_parametros pp ON p.id = pp.producto_id
-        WHERE p.id = $1
-        GROUP BY p.id
+            SELECT 
+                p.id,
+                p.nombre,
+                p.precio,
+                p.cantidad,
+                p.foto,
+                p.tiene_parametros,
+                p.precio_compra,
+                p.porcentaje_ganancia as "porcentajeGanancia",
+                p.seccion,
+                COALESCE(
+                    json_agg(
+                        json_build_object(
+                            'nombre', pp.nombre,
+                            'cantidad', pp.cantidad
+                        )
+                    ) FILTER (WHERE pp.id IS NOT NULL),
+                    '[]'::json
+                ) as parametros
+            FROM productos p
+            LEFT JOIN producto_parametros pp ON p.id = pp.producto_id
+            WHERE p.id = $1
+            GROUP BY p.id
     `, [productoId]);
 
     return result.rows[0];
@@ -60,7 +61,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
         const parametros: Parametro[] = parametrosRaw ? JSON.parse(parametrosRaw) : [];
         const precioCompra = formData.get('precio_compra') as string;
         const porcentajeGanancia = formData.get('porcentajeGanancia') as string;
-
+        const seccion = formData.get('seccion') as string;
         const currentProduct = await query('SELECT * FROM productos WHERE id = $1', [id]);
 
         if (currentProduct.rows.length === 0) {
@@ -78,8 +79,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
             let updateParams: any[];
 
             if (tieneParametros) {
-                // ✅ Para productos CON parámetros: NO actualizar cantidad
-                updateQuery = 'UPDATE productos SET nombre = $1, precio = $2, foto = $3, tiene_parametros = $4, precio_compra = $5, porcentaje_ganancia = $6 WHERE id = $7 RETURNING *';
+                updateQuery = 'UPDATE productos SET nombre = $1, precio = $2, foto = $3, tiene_parametros = $4, precio_compra = $5, porcentaje_ganancia = $6, seccion = $7 WHERE id = $8 RETURNING *';
                 updateParams = [
                     nombre,
                     Number(precio),
@@ -87,11 +87,11 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
                     tieneParametros,
                     precioCompra ? Number(precioCompra) : currentProduct.rows[0].precio_compra || 0,
                     porcentajeGanancia ? Number(porcentajeGanancia) : currentProduct.rows[0].porcentaje_ganancia || 0,
+                    seccion || '',
                     id
                 ];
             } else {
-                // ✅ Para productos SIN parámetros: SÍ actualizar cantidad
-                updateQuery = 'UPDATE productos SET nombre = $1, precio = $2, cantidad = $3, foto = $4, tiene_parametros = $5, precio_compra = $6, porcentaje_ganancia = $7 WHERE id = $8 RETURNING *';
+                updateQuery = 'UPDATE productos SET nombre = $1, precio = $2, cantidad = $3, foto = $4, tiene_parametros = $5, precio_compra = $6, porcentaje_ganancia = $7, seccion = $8 WHERE id = $9 RETURNING *';
                 updateParams = [
                     nombre,
                     Number(precio),
@@ -100,6 +100,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
                     tieneParametros,
                     precioCompra ? Number(precioCompra) : currentProduct.rows[0].precio_compra || 0,
                     porcentajeGanancia ? Number(porcentajeGanancia) : currentProduct.rows[0].porcentaje_ganancia || 0,
+                    seccion || '',
                     id
                 ];
             }
