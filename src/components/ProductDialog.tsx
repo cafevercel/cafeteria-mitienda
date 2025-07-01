@@ -79,7 +79,8 @@ const SeccionAutocomplete = ({
                 setIsOpen(false);
               }}
             >
-              <span className="font-medium">Crear nueva: "{value}"</span>
+              <span className="font-medium">Crear nueva: &quot;{value}&quot;</span>
+
             </div>
           )}
 
