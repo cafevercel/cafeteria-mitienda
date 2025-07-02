@@ -1235,14 +1235,16 @@ const ParametrosDialog = ({
   if (parametros.length === 0) {
     return (
       <Dialog open={open} onOpenChange={onClose}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>Seleccionar Parámetros de {producto?.nombre}</DialogTitle>
           </DialogHeader>
           <div className="p-4 text-center text-gray-600">
             No hay parámetros disponibles para este producto.
           </div>
-          <Button onClick={onClose}>Cerrar</Button>
+          <div className="flex justify-end">
+            <Button onClick={onClose}>Cerrar</Button>
+          </div>
         </DialogContent>
       </Dialog>
     );
@@ -1250,75 +1252,103 @@ const ParametrosDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Seleccionar Parámetros de {producto?.nombre}</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4">
-          {parametros.map((param, index) => {
-            // Encontrar el parámetro original para obtener la cantidad máxima disponible
-            const parametroOriginal = producto?.parametros?.find(p => p.nombre === param.nombre);
-            const cantidadMaxima = parametroOriginal?.cantidad || 0;
+      <DialogContent className="sm:max-w-[425px] max-h-[90vh] flex flex-col p-0">
+        {/* Header fijo */}
+        <div className="flex-shrink-0 p-6 pb-4">
+          <DialogHeader>
+            <DialogTitle>Seleccionar Parámetros de {producto?.nombre}</DialogTitle>
+          </DialogHeader>
+        </div>
 
-            return (
-              <div key={param.nombre} className="flex items-center justify-between">
-                <div>
-                  <label>{param.nombre}</label>
-                  <span className="text-sm text-gray-500 ml-2">
-                    (Disponible: {cantidadMaxima})
-                  </span>
+        {/* Área scrolleable usando div nativo con overflow */}
+        <div className="flex-1 overflow-y-auto px-6">
+          <div className="space-y-4 pb-4">
+            {parametros.map((param, index) => {
+              // Encontrar el parámetro original para obtener la cantidad máxima disponible
+              const parametroOriginal = producto?.parametros?.find(p => p.nombre === param.nombre);
+              const cantidadMaxima = parametroOriginal?.cantidad || 0;
+
+              return (
+                <div key={param.nombre} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-b-0">
+                  <div className="flex-1 min-w-0 mr-4">
+                    <label className="font-medium text-sm block">{param.nombre}</label>
+                    <span className="text-xs text-gray-500">
+                      (Disponible: {cantidadMaxima})
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-2 flex-shrink-0">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => {
+                        const newParams = [...parametros];
+                        newParams[index].cantidad = Math.max(0, param.cantidad - 1);
+                        setParametros(newParams);
+                      }}
+                      disabled={param.cantidad <= 0}
+                    >
+                      <Minus className="h-3 w-3" />
+                    </Button>
+                    <span className="min-w-[2rem] text-center text-sm font-medium">
+                      {param.cantidad}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => {
+                        const newParams = [...parametros];
+                        // No permitir exceder la cantidad máxima disponible
+                        newParams[index].cantidad = Math.min(
+                          param.cantidad + 1,
+                          cantidadMaxima
+                        );
+                        setParametros(newParams);
+                      }}
+                      disabled={param.cantidad >= cantidadMaxima}
+                    >
+                      <Plus className="h-3 w-3" />
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => {
-                      const newParams = [...parametros];
-                      newParams[index].cantidad = Math.max(0, param.cantidad - 1);
-                      setParametros(newParams);
-                    }}
-                  >
-                    <Minus className="h-4 w-4" />
-                  </Button>
-                  <span>{param.cantidad}</span>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => {
-                      const newParams = [...parametros];
-                      // No permitir exceder la cantidad máxima disponible
-                      newParams[index].cantidad = Math.min(
-                        param.cantidad + 1,
-                        cantidadMaxima
-                      );
-                      setParametros(newParams);
-                    }}
-                    disabled={param.cantidad >= cantidadMaxima}
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            );
-          })}
-          <div className="flex flex-col gap-2">
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Footer fijo */}
+        <div className="flex-shrink-0 p-6 pt-4 border-t bg-white">
+          <div className="space-y-3">
             {!hasSelectedParameters && (
-              <p className="text-sm text-red-500">
+              <p className="text-sm text-red-500 text-center">
                 Debes seleccionar al menos un parámetro
               </p>
             )}
-            <Button
-              onClick={() => onSubmit(parametros)}
-              disabled={!hasSelectedParameters}
-            >
-              Confirmar
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={onClose}
+                className="flex-1"
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={() => onSubmit(parametros)}
+                disabled={!hasSelectedParameters}
+                className="flex-1"
+              >
+                Confirmar
+              </Button>
+            </div>
           </div>
         </div>
       </DialogContent>
     </Dialog>
   );
 };
+
+
 
 
 
