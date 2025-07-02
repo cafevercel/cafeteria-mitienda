@@ -44,7 +44,6 @@ import { ImageUpload } from '@/components/ImageUpload'
 import { Producto, Vendedor, Venta, Transaccion, Merma, Parametro } from '@/types'
 import { toast } from "@/hooks/use-toast";
 import { useVendorProducts } from '@/hooks/use-vendor-products';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import VentasCafeteriaList from '@/components/VentasCafeteriaList'
 import TransaccionesList from '@/components/TransaccionesList'
 import BalanceSection from '@/components/BalanceSection'
@@ -319,6 +318,104 @@ export default function AlmacenPage() {
   const [expandedVentasDays, setExpandedVentasDays] = useState<Set<string>>(new Set());
   const [expandedVentasProducts, setExpandedVentasProducts] = useState<Set<string>>(new Set());
   const [seccionesExistentes, setSeccionesExistentes] = useState<string[]>([])
+
+
+  const handleExportCafeteriaToExcel = () => {
+    // Verificar que los datos estén disponibles
+    if (!productosVendedor || productosVendedor.length === 0) {
+      toast({
+        title: "Sin datos",
+        description: "No hay productos en cafetería para exportar",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const exportData: any[] = [];
+
+    productosVendedor.forEach((producto: Producto) => {
+      // Calcular la cantidad total en cafetería
+      const cantidadCafeteria = producto.tiene_parametros && producto.parametros
+        ? producto.parametros.filter((p: any) => isNaN(Number(p.nombre)) && p.nombre.trim() !== '')
+          .reduce((sum: number, param: any) => sum + param.cantidad, 0)
+        : producto.cantidad;
+
+      // Buscar el producto correspondiente en el almacén
+      const productoAlmacen = inventario.find((p: Producto) => p.id === producto.id);
+      const cantidadAlmacen = productoAlmacen
+        ? (productoAlmacen.tiene_parametros && productoAlmacen.parametros
+          ? productoAlmacen.parametros.filter((p: any) => isNaN(Number(p.nombre)) && p.nombre.trim() !== '')
+            .reduce((sum: number, param: any) => sum + param.cantidad, 0)
+          : productoAlmacen.cantidad)
+        : 0;
+
+      if (producto.tiene_parametros && producto.parametros && producto.parametros.length > 0) {
+        // Si tiene parámetros, crear una fila por cada parámetro
+        const parametrosValidos = producto.parametros.filter((p: any) =>
+          isNaN(Number(p.nombre)) && p.nombre.trim() !== ''
+        );
+
+        if (parametrosValidos.length > 0) {
+          parametrosValidos.forEach((parametro: any) => {
+            exportData.push({
+              'Nombre del Producto': producto.nombre,
+              'Subproducto': parametro.nombre,
+              'Cantidad en Cafetería': parametro.cantidad,
+              'Precio': `$${Number(producto.precio).toFixed(2)}`,
+              'Cantidad Total en Cafetería': cantidadCafeteria,
+              'Cantidad en Almacén': cantidadAlmacen
+            });
+          });
+        } else {
+          // Si no hay parámetros válidos, agregar solo el producto
+          exportData.push({
+            'Nombre del Producto': producto.nombre,
+            'Subproducto': 'N/A',
+            'Cantidad en Cafetería': cantidadCafeteria,
+            'Precio': `$${Number(producto.precio).toFixed(2)}`,
+            'Cantidad Total en Cafetería': cantidadCafeteria,
+            'Cantidad en Almacén': cantidadAlmacen
+          });
+        }
+      } else {
+        // Si no tiene parámetros, agregar solo el producto
+        exportData.push({
+          'Nombre del Producto': producto.nombre,
+          'Subproducto': 'N/A',
+          'Cantidad en Cafetería': cantidadCafeteria,
+          'Precio': `$${Number(producto.precio).toFixed(2)}`,
+          'Cantidad Total en Cafetería': cantidadCafeteria,
+          'Cantidad en Almacén': cantidadAlmacen
+        });
+      }
+    });
+
+    // Crear el archivo Excel
+    const ws = XLSX.utils.json_to_sheet(exportData);
+
+    // Ajustar el ancho de las columnas
+    const colWidths = [
+      { wch: 25 }, // Nombre del Producto
+      { wch: 20 }, // Subproducto
+      { wch: 15 }, // Cantidad en Cafetería
+      { wch: 12 }, // Precio
+      { wch: 20 }, // Cantidad Total en Cafetería
+      { wch: 18 }  // Cantidad en Almacén
+    ];
+    ws['!cols'] = colWidths;
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Productos Cafetería");
+
+    // Generar nombre del archivo con fecha actual
+    const fechaActual = new Date().toLocaleDateString('es-ES').replace(/\//g, '-');
+    XLSX.writeFile(wb, `productos_cafeteria_${fechaActual}.xlsx`);
+
+    toast({
+      title: "Éxito",
+      description: "Lista de productos de cafetería exportada correctamente",
+    });
+  };
 
 
   const obtenerSeccionesUnicas = useCallback(() => {
@@ -1822,28 +1919,43 @@ export default function AlmacenPage() {
           <Card>
             <CardHeader>
               <CardTitle className="mb-4">Productos en Cafetería</CardTitle>
-              <div className="flex flex-wrap gap-2 justify-start">
-                <Button
-                  variant={activeCafeteriaTab === 'productos' ? "default" : "outline"}
-                  onClick={() => setActiveCafeteriaTab('productos')}
-                  size="sm"
-                >
-                  Productos
-                </Button>
-                <Button
-                  variant={activeCafeteriaTab === 'transacciones' ? "default" : "outline"}
-                  onClick={() => setActiveCafeteriaTab('transacciones')}
-                  size="sm"
-                >
-                  Transacciones
-                </Button>
-                <Button
-                  variant={activeCafeteriaTab === 'ventas' ? "default" : "outline"}
-                  onClick={() => setActiveCafeteriaTab('ventas')}
-                  size="sm"
-                >
-                  Ventas
-                </Button>
+              <div className="flex justify-between items-center mb-4">
+                <div className="flex flex-wrap gap-2 justify-start">
+                  <Button
+                    variant={activeCafeteriaTab === 'productos' ? "default" : "outline"}
+                    onClick={() => setActiveCafeteriaTab('productos')}
+                    size="sm"
+                  >
+                    Productos
+                  </Button>
+                  <Button
+                    variant={activeCafeteriaTab === 'transacciones' ? "default" : "outline"}
+                    onClick={() => setActiveCafeteriaTab('transacciones')}
+                    size="sm"
+                  >
+                    Transacciones
+                  </Button>
+                  <Button
+                    variant={activeCafeteriaTab === 'ventas' ? "default" : "outline"}
+                    onClick={() => setActiveCafeteriaTab('ventas')}
+                    size="sm"
+                  >
+                    Ventas
+                  </Button>
+                </div>
+
+                {/* Botón de exportar - solo visible en la pestaña de productos */}
+                {activeCafeteriaTab === 'productos' && (
+                  <Button
+                    onClick={handleExportCafeteriaToExcel}
+                    className="bg-green-500 hover:bg-green-600 text-white"
+                    size="sm"
+                  >
+                    <FileSpreadsheet className="mr-2 h-4 w-4" />
+                    <span className="hidden sm:inline">Exportar Cafetería</span>
+                    <span className="sm:hidden">Exportar</span>
+                  </Button>
+                )}
               </div>
             </CardHeader>
             <CardContent>
