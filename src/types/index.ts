@@ -133,6 +133,12 @@ export interface GastoBalance {
   cantidad: number | string;
 }
 
+export interface IngresoBalance {
+  nombre: string;
+  cantidad: number | string;
+}
+
+// Actualizar la interface Balance
 export interface Balance {
   id: string;
   fechaInicio: string;
@@ -140,6 +146,8 @@ export interface Balance {
   gananciaBruta: number;
   gastos: GastoBalance[];
   totalGastos: number;
+  ingresos: IngresoBalance[];  // ← NUEVO
+  totalIngresos: number;       // ← NUEVO
   gananciaNeta: number;
   fechaCreacion: string;
 }

@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Venta, Vendedor, Transaccion, VentaParametro, TransferProductParams, Gasto, Producto, GastoBalance, Balance } from '@/types';
+import { Venta, Vendedor, Transaccion, VentaParametro, IngresoBalance , Gasto, Producto, GastoBalance, Balance } from '@/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
 

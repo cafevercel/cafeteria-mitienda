@@ -1,22 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
-
+import { GastoBalance, Balance, IngresoBalance } from '@/types'
 // Interfaces para el tipado
-interface GastoBalance {
-    nombre: string;
-    cantidad: number;
+
+function validarIngresos(ingresos: any[]): ingresos is IngresoBalance[] {
+    return ingresos.every(ingreso =>
+        typeof ingreso === 'object' &&
+        typeof ingreso.nombre === 'string' &&
+        typeof ingreso.cantidad === 'number' &&
+        ingreso.nombre.trim().length > 0 &&
+        ingreso.cantidad >= 0
+    );
 }
 
-interface Balance {
-    id: string;
-    fechaInicio: string;
-    fechaFin: string;
-    gananciaBruta: number;
-    gastos: GastoBalance[];
-    totalGastos: number;
-    gananciaNeta: number;
-    fechaCreacion: string;
-}
 
 // Función de validación de gastos
 function validarGastos(gastos: any[]): gastos is GastoBalance[] {
@@ -52,6 +48,8 @@ export async function GET(
                 ganancia_bruta as "gananciaBruta", 
                 gastos, 
                 total_gastos as "totalGastos", 
+                ingresos,                          
+                total_ingresos as "totalIngresos",
                 ganancia_neta as "gananciaNeta", 
                 fecha_creacion as "fechaCreacion"
             FROM balances
@@ -68,7 +66,8 @@ export async function GET(
         // Convertir los gastos de JSON a objetos JavaScript
         const balance = {
             ...result.rows[0],
-            gastos: result.rows[0].gastos || []
+            gastos: result.rows[0].gastos || [],
+            ingresos: result.rows[0].ingresos || []  // ← AGREGAR
         };
 
         return NextResponse.json(balance);
@@ -91,6 +90,7 @@ export async function GET(
 }
 
 // PUT - Actualizar un balance específico
+// PUT - Actualizar un balance específico
 export async function PUT(
     request: NextRequest,
     { params }: { params: { id: string } }
@@ -112,6 +112,8 @@ export async function PUT(
             gananciaBruta,
             gastos,
             totalGastos,
+            ingresos,        // ← AGREGAR
+            totalIngresos,   // ← AGREGAR
             gananciaNeta
         } = data;
 
@@ -137,13 +139,16 @@ export async function PUT(
             }, { status: 400 });
         }
 
-        if (typeof gananciaBruta !== 'number' || typeof totalGastos !== 'number' || typeof gananciaNeta !== 'number') {
+        // ← CAMBIAR: Agregar totalIngresos a la validación
+        if (typeof gananciaBruta !== 'number' || typeof totalGastos !== 'number' ||
+            typeof totalIngresos !== 'number' || typeof gananciaNeta !== 'number') {
             return NextResponse.json({
                 error: 'Los valores monetarios deben ser números'
             }, { status: 400 });
         }
 
-        if (gananciaBruta < 0 || totalGastos < 0) {
+        // ← CAMBIAR: Agregar totalIngresos a la validación
+        if (gananciaBruta < 0 || totalGastos < 0 || totalIngresos < 0) {
             return NextResponse.json({
                 error: 'Los valores monetarios no pueden ser negativos'
             }, { status: 400 });
@@ -155,11 +160,24 @@ export async function PUT(
             }, { status: 400 });
         }
 
-        // Validar que la ganancia neta sea correcta
-        const gananciaNeteCalculada = gananciaBruta - totalGastos;
+        // ← AGREGAR: Validación de ingresos
+        if (!Array.isArray(ingresos)) {
+            return NextResponse.json({
+                error: 'Los ingresos deben ser un array'
+            }, { status: 400 });
+        }
+
+        if (!validarIngresos(ingresos)) {
+            return NextResponse.json({
+                error: 'Los ingresos deben tener la estructura correcta (nombre: string, cantidad: number)'
+            }, { status: 400 });
+        }
+
+        // ← CAMBIAR: Nueva fórmula de ganancia neta
+        const gananciaNeteCalculada = gananciaBruta + totalIngresos - totalGastos;
         if (Math.abs(gananciaNeta - gananciaNeteCalculada) > 0.01) {
             return NextResponse.json({
-                error: 'La ganancia neta no coincide con el cálculo (ganancia bruta - total gastos)'
+                error: 'La ganancia neta no coincide con el cálculo (ganancia bruta + ingresos - gastos)'
             }, { status: 400 });
         }
 
@@ -167,7 +185,7 @@ export async function PUT(
         await query('BEGIN');
 
         try {
-            // Actualizar el balance (una sola consulta)
+            // ← CAMBIAR: Actualizar query con campos de ingresos
             const result = await query(`
                 UPDATE balances 
                 SET 
@@ -176,7 +194,9 @@ export async function PUT(
                     ganancia_bruta = $4,
                     gastos = $5,
                     total_gastos = $6,
-                    ganancia_neta = $7
+                    ingresos = $7,           // ← AGREGAR
+                    total_ingresos = $8,     // ← AGREGAR
+                    ganancia_neta = $9       // ← CAMBIAR posición
                 WHERE id = $1
                 RETURNING 
                     id, 
@@ -185,6 +205,8 @@ export async function PUT(
                     ganancia_bruta as "gananciaBruta", 
                     gastos, 
                     total_gastos as "totalGastos", 
+                    ingresos,                          // ← AGREGAR
+                    total_ingresos as "totalIngresos", // ← AGREGAR
                     ganancia_neta as "gananciaNeta", 
                     fecha_creacion as "fechaCreacion"
             `, [
@@ -194,7 +216,9 @@ export async function PUT(
                 gananciaBruta,
                 JSON.stringify(gastos),
                 totalGastos,
-                gananciaNeta
+                JSON.stringify(ingresos),  // ← AGREGAR
+                totalIngresos,             // ← AGREGAR
+                gananciaNeta               // ← Ahora es $9
             ]);
 
             if (result.rows.length === 0) {
@@ -208,9 +232,11 @@ export async function PUT(
             // Confirmar transacción
             await query('COMMIT');
 
+            // ← CAMBIAR: Incluir ingresos en la respuesta
             return NextResponse.json({
                 ...result.rows[0],
-                gastos: result.rows[0].gastos || []
+                gastos: result.rows[0].gastos || [],
+                ingresos: result.rows[0].ingresos || []  // ← AGREGAR
             });
 
         } catch (error) {
@@ -235,6 +261,7 @@ export async function PUT(
         }, { status: 500 });
     }
 }
+
 
 // DELETE - Eliminar un balance específico
 export async function DELETE(
@@ -266,6 +293,8 @@ export async function DELETE(
                     ganancia_bruta as "gananciaBruta", 
                     gastos, 
                     total_gastos as "totalGastos", 
+                    ingresos,                          
+                    total_ingresos as "totalIngresos", 
                     ganancia_neta as "gananciaNeta", 
                     fecha_creacion as "fechaCreacion"
             `, [id]);
@@ -285,7 +314,8 @@ export async function DELETE(
                 message: 'Balance eliminado correctamente',
                 balance: {
                     ...result.rows[0],
-                    gastos: result.rows[0].gastos || []
+                    gastos: result.rows[0].gastos || [],
+                    ingresos: result.rows[0].ingresos || []  // ← AGREGAR
                 }
             });
 
