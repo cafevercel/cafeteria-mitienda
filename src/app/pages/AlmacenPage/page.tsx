@@ -1918,44 +1918,49 @@ export default function AlmacenPage() {
         <div>
           <Card>
             <CardHeader>
-              <CardTitle className="mb-4">Productos en Cafetería</CardTitle>
+              {/* Header con título y botón de exportar alineados */}
               <div className="flex justify-between items-center mb-4">
-                <div className="flex flex-wrap gap-2 justify-start">
-                  <Button
-                    variant={activeCafeteriaTab === 'productos' ? "default" : "outline"}
-                    onClick={() => setActiveCafeteriaTab('productos')}
-                    size="sm"
-                  >
-                    Productos
-                  </Button>
-                  <Button
-                    variant={activeCafeteriaTab === 'transacciones' ? "default" : "outline"}
-                    onClick={() => setActiveCafeteriaTab('transacciones')}
-                    size="sm"
-                  >
-                    Transacciones
-                  </Button>
-                  <Button
-                    variant={activeCafeteriaTab === 'ventas' ? "default" : "outline"}
-                    onClick={() => setActiveCafeteriaTab('ventas')}
-                    size="sm"
-                  >
-                    Ventas
-                  </Button>
-                </div>
+                <CardTitle>Productos en Cafetería</CardTitle>
 
-                {/* Botón de exportar - solo visible en la pestaña de productos */}
+                {/* Botón de exportar - solo icono en móvil, a la altura del título */}
                 {activeCafeteriaTab === 'productos' && (
                   <Button
                     onClick={handleExportCafeteriaToExcel}
                     className="bg-green-500 hover:bg-green-600 text-white"
                     size="sm"
                   >
-                    <FileSpreadsheet className="mr-2 h-4 w-4" />
-                    <span className="hidden sm:inline">Exportar Cafetería</span>
-                    <span className="sm:hidden">Exportar</span>
+                    <FileSpreadsheet className="h-4 w-4" />
+                    <span className="hidden md:inline ml-2">Exportar Cafetería</span>
                   </Button>
                 )}
+              </div>
+
+              {/* Pestañas - ancho completo y distribuidas uniformemente */}
+              <div className="grid grid-cols-3 gap-2 w-full">
+                <Button
+                  variant={activeCafeteriaTab === 'productos' ? "default" : "outline"}
+                  onClick={() => setActiveCafeteriaTab('productos')}
+                  size="sm"
+                  className="w-full"
+                >
+                  Productos
+                </Button>
+                <Button
+                  variant={activeCafeteriaTab === 'transacciones' ? "default" : "outline"}
+                  onClick={() => setActiveCafeteriaTab('transacciones')}
+                  size="sm"
+                  className="w-full"
+                >
+                  Transacciones
+                </Button>
+                <Button
+                  variant={activeCafeteriaTab === 'ventas' ? "default" : "outline"}
+                  onClick={() => setActiveCafeteriaTab('ventas')}
+                  size="sm"
+                  className="w-full"
+                >
+                  Ventas
+                </Button>
               </div>
             </CardHeader>
             <CardContent>

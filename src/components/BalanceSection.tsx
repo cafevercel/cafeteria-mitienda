@@ -900,29 +900,33 @@ export default function BalanceSection() {
                 </div>
               )}
 
-              <DialogFooter className="mt-4 flex justify-between">
+              <DialogFooter className="mt-4 flex flex-col sm:flex-row gap-2 sm:justify-between">
                 <Button
                   variant="outline"
                   onClick={() => setPaso(1)}
+                  className="w-full sm:w-auto"
                 >
                   Anterior
                 </Button>
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                   {modoEdicion && (
                     <Button
                       variant="outline"
                       onClick={cancelarEdicion}
+                      className="w-full sm:w-auto"
                     >
                       Cancelar
                     </Button>
                   )}
                   <Button
                     onClick={() => setPaso(3)}
+                    className="w-full sm:w-auto"
                   >
                     Siguiente
                   </Button>
                 </div>
               </DialogFooter>
+
             </div>
           )}
 
@@ -998,18 +1002,20 @@ export default function BalanceSection() {
                 </div>
               )}
 
-              <DialogFooter className="mt-4 flex justify-between">
+              <DialogFooter className="mt-4 flex flex-col sm:flex-row gap-2 sm:justify-between">
                 <Button
                   variant="outline"
                   onClick={() => setPaso(2)}
+                  className="w-full sm:w-auto"
                 >
                   Anterior
                 </Button>
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                   {modoEdicion && (
                     <Button
                       variant="outline"
                       onClick={cancelarEdicion}
+                      className="w-full sm:w-auto"
                     >
                       Cancelar
                     </Button>
@@ -1017,6 +1023,7 @@ export default function BalanceSection() {
                   <Button
                     onClick={modoEdicion ? guardarEdicion : crearNuevoBalance}
                     disabled={isSubmitting}
+                    className="w-full sm:w-auto"
                   >
                     {isSubmitting
                       ? (modoEdicion ? 'Guardando...' : 'Creando...')
