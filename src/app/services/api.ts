@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Venta, Vendedor, Transaccion, VentaParametro, IngresoBalance , Gasto, Producto, GastoBalance, Balance } from '@/types';
+import { Venta, Vendedor, Transaccion, VentaParametro, IngresoBalance, Gasto, Producto, GastoBalance, Balance } from '@/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
 
@@ -711,14 +711,25 @@ export const eliminarBalance = async (balanceId: string): Promise<void> => {
 
 export const editarBalance = async (balanceId: string, balance: Omit<Balance, 'id' | 'fechaCreacion'>): Promise<Balance> => {
   try {
-    const response = await api.put('/balances', {
-      id: balanceId,
-      ...balance
-    });
+    // ✅ USAR EL ENDPOINT CORRECTO CON EL ID EN LA URL
+    const response = await api.put(`/balances/${balanceId}`, balance);
     return response.data;
   } catch (error) {
     console.error('Error al editar balance:', error);
+
+    // ✅ MEJOR MANEJO DE ERRORES
+    if (axios.isAxiosError(error)) {
+      if (error.response?.status === 404) {
+        throw new Error('Balance no encontrado');
+      } else if (error.response?.status === 400) {
+        throw new Error(`Error de validación: ${error.response.data.error || 'Datos inválidos'}`);
+      } else if (error.response?.data?.error) {
+        throw new Error(error.response.data.error);
+      }
+    }
+
     throw new Error('No se pudo editar el balance');
   }
 };
+
 

@@ -630,7 +630,10 @@ export default function BalanceSection() {
               <div>
                 <h3 className="font-medium mb-2">Ingresos Extras:</h3>
                 <div className="space-y-2 pl-2 max-h-[200px] overflow-y-auto">
-                  {balanceSeleccionado.ingresos?.map((ingreso, index) => (
+                  {(balanceSeleccionado.ingresos && Array.isArray(balanceSeleccionado.ingresos)
+                    ? balanceSeleccionado.ingresos
+                    : []
+                  ).map((ingreso, index) => (
                     <div key={index} className="flex justify-between items-center">
                       <span>{ingreso.nombre}</span>
                       <span className="text-blue-600">+${formatPrice(ingreso.cantidad)}</span>
