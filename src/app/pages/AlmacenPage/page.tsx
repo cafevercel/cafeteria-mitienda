@@ -47,7 +47,9 @@ import { useVendorProducts } from '@/hooks/use-vendor-products';
 import VentasCafeteriaList from '@/components/VentasCafeteriaList'
 import TransaccionesList from '@/components/TransaccionesList'
 import BalanceSection from '@/components/BalanceSection'
+import MenuSectionComponent from '@/components/MenuSection'
 import React from 'react'
+
 
 
 interface VentaSemana {
@@ -273,7 +275,8 @@ export default function AlmacenPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedProduct, setSelectedProduct] = useState<Producto | null>(null)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
-  const [activeSection, setActiveSection] = useState('productos')
+  // En AlmacenPage.tsx, actualizar el estado:
+  const [activeSection, setActiveSection] = useState<'productos' | 'cafeteria' | 'vendedores' | 'ventas' | 'balance' | 'menu'>('productos')
   const [showMassDeliveryDialog, setShowMassDeliveryDialog] = useState(false)
   const [selectedProducts, setSelectedProducts] = useState<{
     [productId: string]: {
@@ -1546,6 +1549,17 @@ export default function AlmacenPage() {
               >
                 Balance
               </Button>
+
+              <Button
+                variant="ghost"
+                className={activeSection === 'menu' ? 'bg-orange-100 text-orange-800' : 'text-orange-700 hover:bg-orange-50 hover:text-orange-800'}
+                onClick={() => {
+                  setActiveSection('menu')
+                  setIsMenuOpen(false)
+                }}
+              >
+                Menú
+              </Button>
             </nav>
           </SheetContent>
         </Sheet>
@@ -2249,6 +2263,10 @@ export default function AlmacenPage() {
 
       {activeSection === 'balance' && (
         <BalanceSection />
+      )}
+
+      {activeSection === 'menu' && (
+        <MenuSectionComponent />
       )}
 
       <Dialog open={showMassDeliveryDialog} onOpenChange={setShowMassDeliveryDialog}>

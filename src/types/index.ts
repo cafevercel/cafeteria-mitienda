@@ -151,3 +151,10 @@ export interface Balance {
   gananciaNeta: number;
   fechaCreacion: string;
 }
+
+export interface MenuSection {
+  name: string;
+  product_count: number;
+  sample_image: string | null;
+  orden: number;
+}

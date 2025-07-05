@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Venta, Vendedor, Transaccion, VentaParametro, IngresoBalance, Gasto, Producto, GastoBalance, Balance } from '@/types';
+import { Venta, Vendedor, Transaccion, VentaParametro, IngresoBalance, Gasto, Producto, GastoBalance, Balance, MenuSection } from '@/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
 
@@ -733,3 +733,21 @@ export const editarBalance = async (balanceId: string, balance: Omit<Balance, 'i
 };
 
 
+export const getMenuSections = async (): Promise<MenuSection[]> => {
+  try {
+    const response = await api.get('/menu/sections');
+    return response.data.sections;
+  } catch (error) {
+    console.error('Error al obtener secciones del menú:', error);
+    throw new Error('No se pudieron cargar las secciones del menú');
+  }
+};
+
+export const saveMenuSectionOrder = async (sections: MenuSection[]): Promise<void> => {
+  try {
+    await api.put('/menu/sections/order', { sections });
+  } catch (error) {
+    console.error('Error al guardar orden de secciones:', error);
+    throw new Error('No se pudo guardar el orden de las secciones');
+  }
+};
