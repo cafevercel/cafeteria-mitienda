@@ -139,8 +139,8 @@ const MenuSectionComponent = () => {
                                                     ref={provided.innerRef}
                                                     {...provided.draggableProps}
                                                     className={`flex items-center p-4 bg-white border rounded-lg shadow-sm transition-all ${snapshot.isDragging
-                                                            ? 'shadow-lg rotate-2 bg-blue-50'
-                                                            : 'hover:shadow-md'
+                                                        ? 'shadow-lg rotate-2 bg-blue-50'
+                                                        : 'hover:shadow-md'
                                                         }`}
                                                 >
                                                     <div
@@ -190,10 +190,11 @@ const MenuSectionComponent = () => {
                 {hasChanges && (
                     <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                         <p className="text-sm text-yellow-800">
-                            ⚠️ Tienes cambios sin guardar. No olvides hacer clic en "Guardar Orden".
+                            ⚠️ Tienes cambios sin guardar. No olvides hacer clic en 'Guardar Orden'.
                         </p>
                     </div>
                 )}
+
             </CardContent>
         </Card>
     )
