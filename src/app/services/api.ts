@@ -751,3 +751,17 @@ export const saveMenuSectionOrder = async (sections: MenuSection[]): Promise<voi
     throw new Error('No se pudo guardar el orden de las secciones');
   }
 };
+
+// En api.ts, agrega esta función
+export const eliminarSeccionMenu = async (seccionNombre: string): Promise<void> => {
+  try {
+    const response = await api.delete(`/menu/sections/${encodeURIComponent(seccionNombre)}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error al eliminar sección:', error);
+    if (axios.isAxiosError(error) && error.response) {
+      throw new Error(`Error al eliminar la sección: ${error.response.data.error || 'Ocurrió un error'}`);
+    }
+    throw new Error('No se pudo eliminar la sección');
+  }
+};
