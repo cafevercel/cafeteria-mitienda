@@ -246,7 +246,7 @@ const MenuSectionComponent = () => {
                     {hasChanges && (
                         <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                             <p className="text-sm text-yellow-800">
-                                ⚠️ Tienes cambios sin guardar. No olvides hacer clic en "Guardar Orden".
+                                ⚠️ Tienes cambios sin guardar. No olvides hacer clic en &quot;Guardar Orden&quot;.
                             </p>
                         </div>
                     )}
@@ -263,7 +263,7 @@ const MenuSectionComponent = () => {
                         </AlertDialogTitle>
                         <AlertDialogDescription className="space-y-2">
                             <p>
-                                ¿Estás seguro de que quieres eliminar la sección <strong>"{sectionToDelete?.name}"</strong>?
+                                ¿Estás seguro de que quieres eliminar la sección <strong>&quot;{sectionToDelete?.name}&quot;</strong>?
                             </p>
                             <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-200">
                                 <p className="text-sm text-yellow-800">
