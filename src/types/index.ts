@@ -27,9 +27,9 @@ export interface Agrego {
 }
 
 export interface AgregoForm {
-  id?: number;
-  nombre: string;
-  precio: number;
+  id?: number | string // ✅ Agregar ID opcional
+  nombre: string
+  precio: number
 }
 
 export interface Costo {
@@ -40,9 +40,9 @@ export interface Costo {
 }
 
 export interface CostoForm {
-  id?: number;
-  nombre: string;
-  precio: number;
+  id?: number | string // ✅ Agregar ID opcional
+  nombre: string
+  precio: number
 }
 
 // Actualizar la interface Producto

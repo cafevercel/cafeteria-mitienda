@@ -76,6 +76,7 @@ const MenuSectionComponent = () => {
     const [editingCostos, setEditingCostos] = useState<CostoForm[]>([])
     const [tieneCostos, setTieneCostos] = useState(false)
 
+
     const fetchSections = async () => {
         try {
             setLoading(true)
@@ -205,35 +206,57 @@ const MenuSectionComponent = () => {
     }
 
     const handleEditProduct = (producto: Producto) => {
-        setEditingProduct(producto)
-        setEditingSection(producto.seccion || "sin-seccion")
+        console.log("🔍 Opening edit for:", producto.nombre)
 
-        // Configurar agregos - EXISTENTE
-        setTieneAgregos(producto.tiene_agrego || false)
-        const agregosForm: AgregoForm[] = (producto.agregos || []).map(agrego => ({
-            id: agrego.id,
-            nombre: agrego.nombre,
-            precio: agrego.precio
-        }))
-        setEditingAgregos(agregosForm)
-
-        // Configurar costos - NUEVO
-        setTieneCostos(producto.tiene_costo || false)
-        const costosForm: CostoForm[] = (producto.costos || []).map(costo => ({
-            id: costo.id,
-            nombre: costo.nombre,
-            precio: costo.precio
-        }))
-        setEditingCostos(costosForm)
-
-        // Reset estados de nueva sección
+        // ✅ LIMPIAR COMPLETAMENTE PRIMERO
+        setEditingProduct(null)
+        setEditingSection('')
         setShowNewSectionInput(false)
         setNewSectionName('')
+        setTieneAgregos(false)
+        setEditingAgregos([])
+        setTieneCostos(false)
+        setEditingCostos([])
+
+        // ✅ USAR setTimeout PARA ASEGURAR LIMPIEZA
+        setTimeout(() => {
+            setEditingProduct(producto)
+            setEditingSection(producto.seccion || "sin-seccion")
+
+            // Configurar agregos SOLO si existen
+            if (producto.tiene_agrego && producto.agregos && producto.agregos.length > 0) {
+                console.log("🔧 Setting agregos:", producto.agregos.length)
+                setTieneAgregos(true)
+                const agregosForm: AgregoForm[] = producto.agregos.map((agrego, index) => ({
+                    id: agrego.id || `existing-agrego-${index}`, // ✅ ID único
+                    nombre: agrego.nombre,
+                    precio: agrego.precio
+                }))
+                setEditingAgregos(agregosForm)
+            }
+
+            // Configurar costos SOLO si existen
+            if (producto.tiene_costo && producto.costos && producto.costos.length > 0) {
+                console.log("🔧 Setting costos:", producto.costos.length)
+                setTieneCostos(true)
+                const costosForm: CostoForm[] = producto.costos.map((costo, index) => ({
+                    id: costo.id || `existing-costo-${index}`, // ✅ ID único
+                    nombre: costo.nombre,
+                    precio: costo.precio
+                }))
+                setEditingCostos(costosForm)
+            }
+        }, 0)
     }
 
-    // Agregar estas funciones después de las funciones de agregos
+
+
     const handleAddCosto = () => {
-        setEditingCostos(prev => [...prev, { nombre: '', precio: 0 }])
+        setEditingCostos(prev => [...prev, {
+            id: Date.now() + Math.random(), // ✅ ID único
+            nombre: '',
+            precio: 0
+        }])
     }
 
     const handleRemoveCosto = (index: number) => {
@@ -248,7 +271,11 @@ const MenuSectionComponent = () => {
 
 
     const handleAddAgrego = () => {
-        setEditingAgregos(prev => [...prev, { nombre: '', precio: 0 }])
+        setEditingAgregos(prev => [...prev, {
+            id: Date.now() + Math.random(), // ✅ ID único
+            nombre: '',
+            precio: 0
+        }])
     }
 
     const handleRemoveAgrego = (index: number) => {
@@ -840,7 +867,7 @@ const MenuSectionComponent = () => {
                                     ) : (
                                         <div className="space-y-3">
                                             {editingAgregos.map((agrego, index) => (
-                                                <div key={index} className="flex gap-2 items-center">
+                                                <div key={agrego.id || `agrego-${index}`} className="flex gap-2 items-center">
                                                     <Input
                                                         placeholder="Nombre del agrego"
                                                         value={agrego.nombre}
@@ -914,7 +941,7 @@ const MenuSectionComponent = () => {
                                     ) : (
                                         <div className="space-y-3">
                                             {editingCostos.map((costo, index) => (
-                                                <div key={index} className="flex gap-2 items-center">
+                                                <div key={costo.id || `costo-${index}`} className="flex gap-2 items-center">
                                                     <Input
                                                         placeholder="Nombre del costo"
                                                         value={costo.nombre}

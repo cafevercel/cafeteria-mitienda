@@ -1,3 +1,4 @@
+//productos/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 
@@ -45,54 +46,65 @@ export async function POST(request: NextRequest) {
 
             // ACTUALIZAR: Incluir costos en la consulta
             const productoCompleto = await query(`
-                SELECT 
-                    p.id,
-                    p.nombre,
-                    p.precio,
-                    p.cantidad,
-                    p.foto,
-                    p.tiene_parametros,
-                    p.tiene_agrego,
-                    p.tiene_costo,
-                    p.precio_compra,
-                    p.porcentaje_ganancia as "porcentajeGanancia",
-                    p.seccion,
-                    COALESCE(
-                        json_agg(
-                            json_build_object(
-                                'nombre', pp.nombre,
-                                'cantidad', pp.cantidad
-                            )
-                        ) FILTER (WHERE pp.id IS NOT NULL),
-                        '[]'::json
-                    ) as parametros,
-                    COALESCE(
-                        json_agg(
-                            json_build_object(
-                                'id', a.id,
-                                'nombre', a.nombre,
-                                'precio', a.precio
-                            )
-                        ) FILTER (WHERE a.id IS NOT NULL),
-                        '[]'::json
-                    ) as agregos,
-                    COALESCE(
-                        json_agg(
-                            json_build_object(
-                                'id', c.id,
-                                'nombre', c.nombre,
-                                'precio', c.precio
-                            )
-                        ) FILTER (WHERE c.id IS NOT NULL),
-                        '[]'::json
-                    ) as costos
-                FROM productos p
-                LEFT JOIN producto_parametros pp ON p.id = pp.producto_id
-                LEFT JOIN agregos a ON p.id = a.producto_id
-                LEFT JOIN costos c ON p.id = c.producto_id
-                WHERE p.id = $1
-                GROUP BY p.id
-            `, [productoId]);
+    SELECT 
+        p.id,
+        p.nombre,
+        p.precio,
+        p.cantidad,
+        p.foto,
+        p.tiene_parametros,
+        p.tiene_agrego,
+        p.tiene_costo,
+        p.precio_compra,
+        p.porcentaje_ganancia as "porcentajeGanancia",
+        p.seccion,
+        -- ✅ SUBCONSULTA SEPARADA para parámetros
+        (
+            SELECT COALESCE(
+                json_agg(
+                    json_build_object(
+                        'nombre', pp.nombre,
+                        'cantidad', pp.cantidad
+                    )
+                ),
+                '[]'::json
+            )
+            FROM producto_parametros pp
+            WHERE pp.producto_id = p.id
+        ) as parametros,
+        -- ✅ SUBCONSULTA SEPARADA para agregos
+        (
+            SELECT COALESCE(
+                json_agg(
+                    json_build_object(
+                        'id', a.id,
+                        'nombre', a.nombre,
+                        'precio', a.precio
+                    )
+                ),
+                '[]'::json
+            )
+            FROM agregos a
+            WHERE a.producto_id = p.id
+        ) as agregos,
+        -- ✅ SUBCONSULTA SEPARADA para costos
+        (
+            SELECT COALESCE(
+                json_agg(
+                    json_build_object(
+                        'id', c.id,
+                        'nombre', c.nombre,
+                        'precio', c.precio
+                    )
+                ),
+                '[]'::json
+            )
+            FROM costos c
+            WHERE c.producto_id = p.id
+        ) as costos
+    FROM productos p
+    WHERE p.id = $1
+`, [productoId]);
 
             return NextResponse.json(productoCompleto.rows[0]);
         } catch (error) {
@@ -107,7 +119,7 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
     try {
-        // ACTUALIZAR: Incluir costos en la consulta
+        // ✅ ACTUALIZAR: Usar subconsultas para evitar duplicación
         const result = await query(`
             SELECT 
                 p.id,
@@ -121,40 +133,52 @@ export async function GET(request: NextRequest) {
                 p.precio_compra,
                 p.porcentaje_ganancia as "porcentajeGanancia",
                 p.seccion,
-                COALESCE(
-                    json_agg(
-                        json_build_object(
-                            'nombre', pp.nombre,
-                            'cantidad', pp.cantidad
-                        )
-                    ) FILTER (WHERE pp.id IS NOT NULL),
-                    '[]'::json
+                -- ✅ SUBCONSULTA SEPARADA para parámetros
+                (
+                    SELECT COALESCE(
+                        json_agg(
+                            json_build_object(
+                                'nombre', pp.nombre,
+                                'cantidad', pp.cantidad
+                            )
+                        ),
+                        '[]'::json
+                    )
+                    FROM producto_parametros pp
+                    WHERE pp.producto_id = p.id
                 ) as parametros,
-                COALESCE(
-                    json_agg(
-                        json_build_object(
-                            'id', a.id,
-                            'nombre', a.nombre,
-                            'precio', a.precio
-                        )
-                    ) FILTER (WHERE a.id IS NOT NULL),
-                    '[]'::json
+                -- ✅ SUBCONSULTA SEPARADA para agregos
+                (
+                    SELECT COALESCE(
+                        json_agg(
+                            json_build_object(
+                                'id', a.id,
+                                'nombre', a.nombre,
+                                'precio', a.precio
+                            )
+                        ),
+                        '[]'::json
+                    )
+                    FROM agregos a
+                    WHERE a.producto_id = p.id
                 ) as agregos,
-                COALESCE(
-                    json_agg(
-                        json_build_object(
-                            'id', c.id,
-                            'nombre', c.nombre,
-                            'precio', c.precio
-                        )
-                    ) FILTER (WHERE c.id IS NOT NULL),
-                    '[]'::json
+                -- ✅ SUBCONSULTA SEPARADA para costos
+                (
+                    SELECT COALESCE(
+                        json_agg(
+                            json_build_object(
+                                'id', c.id,
+                                'nombre', c.nombre,
+                                'precio', c.precio
+                            )
+                        ),
+                        '[]'::json
+                    )
+                    FROM costos c
+                    WHERE c.producto_id = p.id
                 ) as costos
             FROM productos p
-            LEFT JOIN producto_parametros pp ON p.id = pp.producto_id
-            LEFT JOIN agregos a ON p.id = a.producto_id
-            LEFT JOIN costos c ON p.id = c.producto_id
-            GROUP BY p.id
+            ORDER BY p.id
         `);
 
         return NextResponse.json(result.rows);
@@ -163,4 +187,5 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
     }
 }
+
 

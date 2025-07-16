@@ -1,3 +1,4 @@
+//productos/[id]/agregos/route.ts
 import { neon } from "@neondatabase/serverless"
 import { NextResponse } from "next/server"
 

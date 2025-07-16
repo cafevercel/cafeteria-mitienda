@@ -1,3 +1,4 @@
+//productos/[id]/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { put } from '@vercel/blob';
@@ -33,57 +34,69 @@ interface Costo {
 
 const obtenerProductoConParametros = async (productoId: string) => {
     const result = await query(`
-            SELECT 
-                p.id,
-                p.nombre,
-                p.precio,
-                p.cantidad,
-                p.foto,
-                p.tiene_parametros,
-                p.tiene_agrego,
-                p.tiene_costo,
-                p.precio_compra,
-                p.porcentaje_ganancia as "porcentajeGanancia",
-                p.seccion,
-                COALESCE(
+        SELECT 
+            p.id,
+            p.nombre,
+            p.precio,
+            p.cantidad,
+            p.foto,
+            p.tiene_parametros,
+            p.tiene_agrego,
+            p.tiene_costo,
+            p.precio_compra,
+            p.porcentaje_ganancia as "porcentajeGanancia",
+            p.seccion,
+            -- ✅ SUBCONSULTA SEPARADA para parámetros
+            (
+                SELECT COALESCE(
                     json_agg(
                         json_build_object(
                             'nombre', pp.nombre,
                             'cantidad', pp.cantidad
                         )
-                    ) FILTER (WHERE pp.id IS NOT NULL),
+                    ),
                     '[]'::json
-                ) as parametros,
-                COALESCE(
+                )
+                FROM producto_parametros pp
+                WHERE pp.producto_id = p.id
+            ) as parametros,
+            -- ✅ SUBCONSULTA SEPARADA para agregos
+            (
+                SELECT COALESCE(
                     json_agg(
                         json_build_object(
                             'id', a.id,
                             'nombre', a.nombre,
                             'precio', a.precio
                         )
-                    ) FILTER (WHERE a.id IS NOT NULL),
+                    ),
                     '[]'::json
-                ) as agregos,
-                COALESCE(
+                )
+                FROM agregos a
+                WHERE a.producto_id = p.id
+            ) as agregos,
+            -- ✅ SUBCONSULTA SEPARADA para costos
+            (
+                SELECT COALESCE(
                     json_agg(
                         json_build_object(
                             'id', c.id,
                             'nombre', c.nombre,
                             'precio', c.precio
                         )
-                    ) FILTER (WHERE c.id IS NOT NULL),
+                    ),
                     '[]'::json
-                ) as costos
-            FROM productos p
-            LEFT JOIN producto_parametros pp ON p.id = pp.producto_id
-            LEFT JOIN agregos a ON p.id = a.producto_id
-            LEFT JOIN costos c ON p.id = c.producto_id
-            WHERE p.id = $1
-            GROUP BY p.id
+                )
+                FROM costos c
+                WHERE c.producto_id = p.id
+            ) as costos
+        FROM productos p
+        WHERE p.id = $1
     `, [productoId]);
 
     return result.rows[0];
 };
+
 
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
     try {
