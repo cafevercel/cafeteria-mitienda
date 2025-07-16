@@ -689,7 +689,7 @@ const MenuSectionComponent = () => {
                         </AlertDialogTitle>
                         <AlertDialogDescription className="space-y-2">
                             <p>
-                                ¿Estás seguro de que quieres eliminar la sección <strong>&quot;{sectionToDelete?.name}&quot;</strong>?
+                                ¿Estás seguro de que quieres eliminar la sección <strong>'{sectionToDelete?.name}'</strong>?
                             </p>
                             <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-200">
                                 <p className="text-sm text-yellow-800">
@@ -835,7 +835,7 @@ const MenuSectionComponent = () => {
 
                                     {editingAgregos.length === 0 ? (
                                         <p className="text-sm text-green-700 text-center py-4">
-                                            No hay agregos. Haz clic en &quot;Agregar&quot; para añadir uno.
+                                            No hay agregos. Haz clic en 'Agregar' para añadir uno.
                                         </p>
                                     ) : (
                                         <div className="space-y-3">
@@ -909,7 +909,7 @@ const MenuSectionComponent = () => {
 
                                     {editingCostos.length === 0 ? (
                                         <p className="text-sm text-orange-700 text-center py-4">
-                                            No hay costos. Haz clic en &quot;Agregar&quot; para añadir uno.
+                                            No hay costos. Haz clic en 'Agregar' para añadir uno.
                                         </p>
                                     ) : (
                                         <div className="space-y-3">
