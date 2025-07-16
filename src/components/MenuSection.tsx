@@ -739,7 +739,7 @@ const MenuSectionComponent = () => {
                     <DialogHeader>
                         <DialogTitle>Editar Producto</DialogTitle>
                         <DialogDescription>
-                            Edita la sección y agregos del producto "{editingProduct?.nombre}"
+                            Edita la sección y agregos del producto {editingProduct?.nombre}
                         </DialogDescription>
                     </DialogHeader>
 
