@@ -24,9 +24,10 @@ export async function POST(request: NextRequest) {
         await query('BEGIN');
 
         try {
+            // ACTUALIZAR: Agregar tiene_costo con valor por defecto FALSE
             const result = await query(
-                'INSERT INTO productos (nombre, precio, precio_compra, cantidad, foto, tiene_parametros, porcentaje_ganancia, seccion) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
-                [nombre, Number(precio), Number(precioCompra), Number(cantidad), fotoUrl, tieneParametros, Number(porcentajeGanancia) || 0, seccion || '']
+                'INSERT INTO productos (nombre, precio, precio_compra, cantidad, foto, tiene_parametros, tiene_agrego, tiene_costo, porcentaje_ganancia, seccion) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *',
+                [nombre, Number(precio), Number(precioCompra), Number(cantidad), fotoUrl, tieneParametros, false, false, Number(porcentajeGanancia) || 0, seccion || '']
             );
 
             const productoId = result.rows[0].id;
@@ -42,7 +43,7 @@ export async function POST(request: NextRequest) {
 
             await query('COMMIT');
 
-            // Usar la misma función que en [id]/route.ts para obtener el producto con parámetros
+            // ACTUALIZAR: Incluir costos en la consulta
             const productoCompleto = await query(`
                 SELECT 
                     p.id,
@@ -51,6 +52,8 @@ export async function POST(request: NextRequest) {
                     p.cantidad,
                     p.foto,
                     p.tiene_parametros,
+                    p.tiene_agrego,
+                    p.tiene_costo,
                     p.precio_compra,
                     p.porcentaje_ganancia as "porcentajeGanancia",
                     p.seccion,
@@ -62,9 +65,31 @@ export async function POST(request: NextRequest) {
                             )
                         ) FILTER (WHERE pp.id IS NOT NULL),
                         '[]'::json
-                    ) as parametros
+                    ) as parametros,
+                    COALESCE(
+                        json_agg(
+                            json_build_object(
+                                'id', a.id,
+                                'nombre', a.nombre,
+                                'precio', a.precio
+                            )
+                        ) FILTER (WHERE a.id IS NOT NULL),
+                        '[]'::json
+                    ) as agregos,
+                    COALESCE(
+                        json_agg(
+                            json_build_object(
+                                'id', c.id,
+                                'nombre', c.nombre,
+                                'precio', c.precio
+                            )
+                        ) FILTER (WHERE c.id IS NOT NULL),
+                        '[]'::json
+                    ) as costos
                 FROM productos p
                 LEFT JOIN producto_parametros pp ON p.id = pp.producto_id
+                LEFT JOIN agregos a ON p.id = a.producto_id
+                LEFT JOIN costos c ON p.id = c.producto_id
                 WHERE p.id = $1
                 GROUP BY p.id
             `, [productoId]);
@@ -82,6 +107,7 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
     try {
+        // ACTUALIZAR: Incluir costos en la consulta
         const result = await query(`
             SELECT 
                 p.id,
@@ -90,6 +116,8 @@ export async function GET(request: NextRequest) {
                 p.cantidad,
                 p.foto,
                 p.tiene_parametros,
+                p.tiene_agrego,
+                p.tiene_costo,
                 p.precio_compra,
                 p.porcentaje_ganancia as "porcentajeGanancia",
                 p.seccion,
@@ -101,9 +129,31 @@ export async function GET(request: NextRequest) {
                         )
                     ) FILTER (WHERE pp.id IS NOT NULL),
                     '[]'::json
-                ) as parametros
+                ) as parametros,
+                COALESCE(
+                    json_agg(
+                        json_build_object(
+                            'id', a.id,
+                            'nombre', a.nombre,
+                            'precio', a.precio
+                        )
+                    ) FILTER (WHERE a.id IS NOT NULL),
+                    '[]'::json
+                ) as agregos,
+                COALESCE(
+                    json_agg(
+                        json_build_object(
+                            'id', c.id,
+                            'nombre', c.nombre,
+                            'precio', c.precio
+                        )
+                    ) FILTER (WHERE c.id IS NOT NULL),
+                    '[]'::json
+                ) as costos
             FROM productos p
             LEFT JOIN producto_parametros pp ON p.id = pp.producto_id
+            LEFT JOIN agregos a ON p.id = a.producto_id
+            LEFT JOIN costos c ON p.id = c.producto_id
             GROUP BY p.id
         `);
 
@@ -113,3 +163,4 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
     }
 }
+

@@ -19,6 +19,33 @@ export interface Parametro {
   cantidad: number;
 }
 
+export interface Agrego {
+  id?: number;  // Cambiar a number ya que es SERIAL
+  producto_id?: number;  // Cambiar a number
+  nombre: string;
+  precio: number;
+}
+
+export interface AgregoForm {
+  id?: number;
+  nombre: string;
+  precio: number;
+}
+
+export interface Costo {
+  id?: number;
+  producto_id?: number;
+  nombre: string;
+  precio: number;
+}
+
+export interface CostoForm {
+  id?: number;
+  nombre: string;
+  precio: number;
+}
+
+// Actualizar la interface Producto
 export interface Producto {
   id: string;
   nombre: string;
@@ -26,9 +53,13 @@ export interface Producto {
   precio_compra?: number;
   cantidad: number;
   foto?: string | null;
-  tiene_parametros: boolean;  // Propiedad del backend
-  tieneParametros?: boolean;  // Propiedad del frontend
+  tiene_parametros: boolean;
+  tiene_agrego?: boolean;
+  tiene_costo?: boolean;      // ← NUEVO
+  tieneParametros?: boolean;
   parametros?: Parametro[]
+  agregos?: Agrego[];
+  costos?: Costo[];           // ← NUEVO
   porcentajeGanancia?: number;
   seccion?: string;
 }

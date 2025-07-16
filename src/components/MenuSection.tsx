@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from "@/hooks/use-toast"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
 import {
     GripVertical,
     Save,
@@ -39,7 +41,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog"
 import { getMenuSections, saveMenuSectionOrder, eliminarSeccionMenu, getInventario, editarProducto } from '@/app/services/api'
-import { MenuSection, Producto } from '@/types'
+import { MenuSection, Producto, Agrego, AgregoForm, Costo, CostoForm } from '@/types'
 
 const MenuSectionComponent = () => {
     // Estados para pestañas de orden
@@ -65,6 +67,14 @@ const MenuSectionComponent = () => {
     // Estados para crear nueva sección
     const [showNewSectionInput, setShowNewSectionInput] = useState(false)
     const [newSectionName, setNewSectionName] = useState('')
+
+    //agregos
+    const [editingAgregos, setEditingAgregos] = useState<AgregoForm[]>([])
+    const [tieneAgregos, setTieneAgregos] = useState(false)
+
+    //costos adicionales
+    const [editingCostos, setEditingCostos] = useState<CostoForm[]>([])
+    const [tieneCostos, setTieneCostos] = useState(false)
 
     const fetchSections = async () => {
         try {
@@ -196,17 +206,66 @@ const MenuSectionComponent = () => {
 
     const handleEditProduct = (producto: Producto) => {
         setEditingProduct(producto)
-        // Si no tiene sección, usar "sin-seccion" como valor por defecto
         setEditingSection(producto.seccion || "sin-seccion")
+
+        // Configurar agregos - EXISTENTE
+        setTieneAgregos(producto.tiene_agrego || false)
+        const agregosForm: AgregoForm[] = (producto.agregos || []).map(agrego => ({
+            id: agrego.id,
+            nombre: agrego.nombre,
+            precio: agrego.precio
+        }))
+        setEditingAgregos(agregosForm)
+
+        // Configurar costos - NUEVO
+        setTieneCostos(producto.tiene_costo || false)
+        const costosForm: CostoForm[] = (producto.costos || []).map(costo => ({
+            id: costo.id,
+            nombre: costo.nombre,
+            precio: costo.precio
+        }))
+        setEditingCostos(costosForm)
+
         // Reset estados de nueva sección
         setShowNewSectionInput(false)
         setNewSectionName('')
     }
 
+    // Agregar estas funciones después de las funciones de agregos
+    const handleAddCosto = () => {
+        setEditingCostos(prev => [...prev, { nombre: '', precio: 0 }])
+    }
+
+    const handleRemoveCosto = (index: number) => {
+        setEditingCostos(prev => prev.filter((_, i) => i !== index))
+    }
+
+    const handleCostoChange = (index: number, field: 'nombre' | 'precio', value: string | number) => {
+        setEditingCostos(prev => prev.map((costo, i) =>
+            i === index ? { ...costo, [field]: value } : costo
+        ))
+    }
+
+
+    const handleAddAgrego = () => {
+        setEditingAgregos(prev => [...prev, { nombre: '', precio: 0 }])
+    }
+
+    const handleRemoveAgrego = (index: number) => {
+        setEditingAgregos(prev => prev.filter((_, i) => i !== index))
+    }
+
+    const handleAgregoChange = (index: number, field: 'nombre' | 'precio', value: string | number) => {
+        setEditingAgregos(prev => prev.map((agrego, i) =>
+            i === index ? { ...agrego, [field]: value } : agrego
+        ))
+    }
+
+
     const handleSaveProductSection = async () => {
         if (!editingProduct) return
 
-        // Validar nueva sección si está creando una
+        // Validaciones existentes...
         if (showNewSectionInput) {
             if (!newSectionName.trim()) {
                 toast({
@@ -217,7 +276,6 @@ const MenuSectionComponent = () => {
                 return
             }
 
-            // Verificar si la sección ya existe
             const existingSections = uniqueSections.concat(sections.map(s => s.name))
             if (existingSections.some(section => section.toLowerCase() === newSectionName.trim().toLowerCase())) {
                 toast({
@@ -228,14 +286,37 @@ const MenuSectionComponent = () => {
                 return
             }
 
-            // Usar el nombre de la nueva sección
             setEditingSection(newSectionName.trim())
+        }
+
+        if (tieneAgregos) {
+            const agregosValidos = editingAgregos.filter(a => a.nombre.trim() !== '')
+            if (agregosValidos.length === 0) {
+                toast({
+                    title: "Error",
+                    description: "Debe agregar al menos un agrego si marca 'Tiene agregos'",
+                    variant: "destructive",
+                })
+                return
+            }
+        }
+
+        // NUEVA validación para costos
+        if (tieneCostos) {
+            const costosValidos = editingCostos.filter(c => c.nombre.trim() !== '')
+            if (costosValidos.length === 0) {
+                toast({
+                    title: "Error",
+                    description: "Debe agregar al menos un costo si marca 'Tiene costos adicionales'",
+                    variant: "destructive",
+                })
+                return
+            }
         }
 
         try {
             setSavingProduct(true)
 
-            // Crear FormData para la edición
             const formData = new FormData()
             formData.append('nombre', editingProduct.nombre)
             formData.append('precio', editingProduct.precio.toString())
@@ -247,8 +328,25 @@ const MenuSectionComponent = () => {
                 sectionToSave = newSectionName.trim()
             }
 
-            // Si es "sin-seccion", enviar string vacío, sino enviar la sección seleccionada
             formData.append('seccion', sectionToSave === "sin-seccion" ? "" : sectionToSave)
+
+            // Agregar información de agregos - EXISTENTE
+            formData.append('tiene_agrego', tieneAgregos.toString())
+            if (tieneAgregos) {
+                const agregosValidos = editingAgregos.filter(a => a.nombre.trim() !== '')
+                formData.append('agregos', JSON.stringify(agregosValidos))
+            } else {
+                formData.append('agregos', JSON.stringify([]))
+            }
+
+            // Agregar información de costos - NUEVO
+            formData.append('tiene_costo', tieneCostos.toString())
+            if (tieneCostos) {
+                const costosValidos = editingCostos.filter(c => c.nombre.trim() !== '')
+                formData.append('costos', JSON.stringify(costosValidos))
+            } else {
+                formData.append('costos', JSON.stringify([]))
+            }
 
             if (editingProduct.tiene_parametros) {
                 formData.append('tiene_parametros', 'true')
@@ -263,14 +361,30 @@ const MenuSectionComponent = () => {
             const newSection = sectionToSave === "sin-seccion" ? "" : sectionToSave
             setProductos(prev => prev.map(p =>
                 p.id === editingProduct.id
-                    ? { ...p, seccion: newSection }
+                    ? {
+                        ...p,
+                        seccion: newSection,
+                        tiene_agrego: tieneAgregos,
+                        agregos: tieneAgregos ? editingAgregos
+                            .filter(a => a.nombre.trim() !== '')
+                            .map(a => ({
+                                ...a,
+                                producto_id: parseInt(editingProduct.id)
+                            } as Agrego)) : [],
+                        tiene_costo: tieneCostos,  // NUEVO
+                        costos: tieneCostos ? editingCostos
+                            .filter(c => c.nombre.trim() !== '')
+                            .map(c => ({
+                                ...c,
+                                producto_id: parseInt(editingProduct.id)
+                            } as Costo)) : []  // NUEVO
+                    }
                     : p
             ))
 
-            // Mensaje de éxito diferente si se creó una nueva sección
             const successMessage = showNewSectionInput
-                ? `Nueva sección "${sectionToSave}" creada y asignada al producto`
-                : "Sección del producto actualizada correctamente"
+                ? `Nueva sección "${sectionToSave}" creada y producto actualizado`
+                : "Producto actualizado correctamente"
 
             toast({
                 title: "Éxito",
@@ -282,13 +396,16 @@ const MenuSectionComponent = () => {
             setEditingSection('')
             setShowNewSectionInput(false)
             setNewSectionName('')
+            setTieneAgregos(false)
+            setEditingAgregos([])
+            setTieneCostos(false)      // NUEVO
+            setEditingCostos([])       // NUEVO
 
-            // Recargar secciones para reflejar cambios
             fetchSections()
         } catch (error) {
             toast({
                 title: "Error",
-                description: "No se pudo actualizar la sección del producto",
+                description: "No se pudo actualizar el producto",
                 variant: "destructive",
             })
         } finally {
@@ -332,7 +449,7 @@ const MenuSectionComponent = () => {
                     <Tabs defaultValue="orden" className="w-full">
                         <TabsList className="grid w-full grid-cols-2">
                             <TabsTrigger value="orden">Orden de Secciones</TabsTrigger>
-                            <TabsTrigger value="productos">Productos por Sección</TabsTrigger>
+                            <TabsTrigger value="productos">Productos</TabsTrigger> {/* ← Cambiar nombre */}
                         </TabsList>
 
                         {/* Pestaña de Orden */}
@@ -458,10 +575,10 @@ const MenuSectionComponent = () => {
                             )}
                         </TabsContent>
 
-                        {/* Pestaña de Productos */}
+                        {/* Pestaña de Productos - actualizar el título */}
                         <TabsContent value="productos" className="space-y-4">
                             <div className="flex justify-between items-center">
-                                <h3 className="text-lg font-medium">Productos por Sección</h3>
+                                <h3 className="text-lg font-medium">Gestión de Productos</h3> {/* ← Cambiar título */}
                                 <Button
                                     variant="outline"
                                     onClick={fetchProductos}
@@ -610,16 +727,24 @@ const MenuSectionComponent = () => {
             </AlertDialog>
 
             {/* Dialog para editar sección de producto */}
-            <Dialog open={editingProduct !== null} onOpenChange={() => setEditingProduct(null)}>
-                <DialogContent>
+            <Dialog open={editingProduct !== null} onOpenChange={() => {
+                setEditingProduct(null)
+                setTieneAgregos(false)
+                setEditingAgregos([])
+                setTieneCostos(false)      // NUEVO
+                setEditingCostos([])       // NUEVO
+            }}>
+
+                <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
                     <DialogHeader>
-                        <DialogTitle>Editar Sección del Producto</DialogTitle>
+                        <DialogTitle>Editar Producto</DialogTitle>
                         <DialogDescription>
-                            Cambia la sección del producto &quot;{editingProduct?.nombre}&quot;
+                            Edita la sección y agregos del producto "{editingProduct?.nombre}"
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="space-y-4">
+                    <div className="space-y-6">
+                        {/* Sección existente */}
                         <div>
                             <label className="text-sm font-medium text-gray-700 mb-2 block">
                                 Sección
@@ -656,7 +781,7 @@ const MenuSectionComponent = () => {
                             </Select>
                         </div>
 
-                        {/* Input para crear nueva sección */}
+                        {/* Input para crear nueva sección - existente */}
                         {showNewSectionInput && (
                             <div className="space-y-3 p-4 bg-blue-50 rounded-lg border border-blue-200">
                                 <label className="text-sm font-medium text-blue-900 block">
@@ -674,9 +799,161 @@ const MenuSectionComponent = () => {
                             </div>
                         )}
 
-                        <div className="text-sm text-gray-600">
+                        {/* Sección de Agregos - NUEVO */}
+                        <div className="space-y-4">
+                            <div className="flex items-center space-x-2">
+                                <Checkbox
+                                    id="tiene-agregos"
+                                    checked={tieneAgregos}
+                                    onCheckedChange={(checked) => {
+                                        setTieneAgregos(checked as boolean)
+                                        if (!checked) {
+                                            setEditingAgregos([])
+                                        }
+                                    }}
+                                />
+                                <Label htmlFor="tiene-agregos" className="text-sm font-medium">
+                                    Tiene agregos
+                                </Label>
+                            </div>
+
+                            {tieneAgregos && (
+                                <div className="space-y-4 p-4 bg-green-50 rounded-lg border border-green-200">
+                                    <div className="flex justify-between items-center">
+                                        <h4 className="text-sm font-medium text-green-900">Agregos del producto</h4>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={handleAddAgrego}
+                                            className="text-green-600 hover:text-green-700 border-green-300"
+                                        >
+                                            <Plus className="h-4 w-4 mr-1" />
+                                            Agregar
+                                        </Button>
+                                    </div>
+
+                                    {editingAgregos.length === 0 ? (
+                                        <p className="text-sm text-green-700 text-center py-4">
+                                            No hay agregos. Haz clic en "Agregar" para añadir uno.
+                                        </p>
+                                    ) : (
+                                        <div className="space-y-3">
+                                            {editingAgregos.map((agrego, index) => (
+                                                <div key={index} className="flex gap-2 items-center">
+                                                    <Input
+                                                        placeholder="Nombre del agrego"
+                                                        value={agrego.nombre}
+                                                        onChange={(e) => handleAgregoChange(index, 'nombre', e.target.value)}
+                                                        className="flex-1"
+                                                    />
+                                                    <Input
+                                                        type="number"
+                                                        placeholder="Precio"
+                                                        value={agrego.precio}
+                                                        onChange={(e) => handleAgregoChange(index, 'precio', parseFloat(e.target.value) || 0)}
+                                                        className="w-24"
+                                                        step="0.01"
+                                                        min="0"
+                                                    />
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => handleRemoveAgrego(index)}
+                                                        className="text-red-600 hover:text-red-700 border-red-300"
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Sección de Costos Adicionales - NUEVO */}
+                        <div className="space-y-4">
+                            <div className="flex items-center space-x-2">
+                                <Checkbox
+                                    id="tiene-costos"
+                                    checked={tieneCostos}
+                                    onCheckedChange={(checked) => {
+                                        setTieneCostos(checked as boolean)
+                                        if (!checked) {
+                                            setEditingCostos([])
+                                        }
+                                    }}
+                                />
+                                <Label htmlFor="tiene-costos" className="text-sm font-medium">
+                                    Tiene costos adicionales
+                                </Label>
+                            </div>
+
+                            {tieneCostos && (
+                                <div className="space-y-4 p-4 bg-orange-50 rounded-lg border border-orange-200">
+                                    <div className="flex justify-between items-center">
+                                        <h4 className="text-sm font-medium text-orange-900">Costos adicionales del producto</h4>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={handleAddCosto}
+                                            className="text-orange-600 hover:text-orange-700 border-orange-300"
+                                        >
+                                            <Plus className="h-4 w-4 mr-1" />
+                                            Agregar
+                                        </Button>
+                                    </div>
+
+                                    {editingCostos.length === 0 ? (
+                                        <p className="text-sm text-orange-700 text-center py-4">
+                                            No hay costos. Haz clic en "Agregar" para añadir uno.
+                                        </p>
+                                    ) : (
+                                        <div className="space-y-3">
+                                            {editingCostos.map((costo, index) => (
+                                                <div key={index} className="flex gap-2 items-center">
+                                                    <Input
+                                                        placeholder="Nombre del costo"
+                                                        value={costo.nombre}
+                                                        onChange={(e) => handleCostoChange(index, 'nombre', e.target.value)}
+                                                        className="flex-1"
+                                                    />
+                                                    <Input
+                                                        type="number"
+                                                        placeholder="Precio"
+                                                        value={costo.precio}
+                                                        onChange={(e) => handleCostoChange(index, 'precio', parseFloat(e.target.value) || 0)}
+                                                        className="w-24"
+                                                        step="0.01"
+                                                        min="0"
+                                                    />
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => handleRemoveCosto(index)}
+                                                        className="text-red-600 hover:text-red-700 border-red-300"
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
+
+                        {/* Información del producto - existente */}
+                        <div className="text-sm text-gray-600 space-y-1">
                             <p><strong>Producto:</strong> {editingProduct?.nombre}</p>
                             <p><strong>Sección actual:</strong> {editingProduct?.seccion || 'Sin sección'}</p>
+                            <p><strong>Tiene agregos:</strong> {editingProduct?.tiene_agrego ? 'Sí' : 'No'}</p>
+                            <p><strong>Tiene costos:</strong> {editingProduct?.tiene_costo ? 'Sí' : 'No'}</p> {/* NUEVO */}
                             {showNewSectionInput && newSectionName.trim() && (
                                 <p><strong>Nueva sección:</strong> {newSectionName.trim()}</p>
                             )}
@@ -690,11 +967,16 @@ const MenuSectionComponent = () => {
                                 setEditingProduct(null)
                                 setShowNewSectionInput(false)
                                 setNewSectionName('')
+                                setTieneAgregos(false)
+                                setEditingAgregos([])
+                                setTieneCostos(false)      // NUEVO
+                                setEditingCostos([])       // NUEVO
                             }}
                             disabled={savingProduct}
                         >
                             Cancelar
                         </Button>
+
                         <Button
                             onClick={handleSaveProductSection}
                             disabled={savingProduct || (showNewSectionInput && !newSectionName.trim())}
@@ -708,7 +990,7 @@ const MenuSectionComponent = () => {
                             ) : (
                                 <>
                                     <Save className="h-4 w-4 mr-2" />
-                                    {showNewSectionInput ? 'Crear y Asignar' : 'Guardar Cambios'}
+                                    {showNewSectionInput ? 'Crear y Guardar' : 'Guardar Cambios'}
                                 </>
                             )}
                         </Button>

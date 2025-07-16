@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Venta, Vendedor, Transaccion, VentaParametro, IngresoBalance, Gasto, Producto, GastoBalance, Balance, MenuSection } from '@/types';
+import { Venta, Vendedor, Transaccion, VentaParametro, IngresoBalance, Gasto, Producto, GastoBalance, Balance, MenuSection, Agrego, Costo } from '@/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
 
@@ -207,15 +207,12 @@ export const editarProducto = async (id: string, formData: FormData) => {
     if (parametrosRaw) {
       try {
         const parametros = JSON.parse(parametrosRaw as string);
-
-        // Validar que sea un array con la estructura correcta
         if (Array.isArray(parametros)) {
           const parametrosValidados = parametros.filter(p =>
             p && typeof p === 'object' &&
             'nombre' in p &&
             'cantidad' in p
           );
-
           formData.set('parametros', JSON.stringify(parametrosValidados));
         }
       } catch (parseError) {
@@ -224,13 +221,45 @@ export const editarProducto = async (id: string, formData: FormData) => {
       }
     }
 
-    // Para depuración - verificar si porcentaje_ganancia está en el FormData
-    console.log('FormData antes de enviar:', {
-      precio_compra: formData.get('precio_compra'),
-      porcentaje_ganancia: formData.get('porcentaje_ganancia'),
-      nombre: formData.get('nombre'),
-      precio: formData.get('precio')
-    });
+    // Procesar agregos - EXISTENTE
+    const agregosRaw = formData.get('agregos');
+    if (agregosRaw) {
+      try {
+        const agregos = JSON.parse(agregosRaw as string);
+        if (Array.isArray(agregos)) {
+          const agregosValidados = agregos.filter(a =>
+            a && typeof a === 'object' &&
+            'nombre' in a &&
+            'precio' in a &&
+            a.nombre.trim() !== ''
+          );
+          formData.set('agregos', JSON.stringify(agregosValidados));
+        }
+      } catch (parseError) {
+        console.error('Error al parsear agregos en edición:', parseError);
+        formData.set('agregos', JSON.stringify([]));
+      }
+    }
+
+    // Procesar costos - NUEVO
+    const costosRaw = formData.get('costos');
+    if (costosRaw) {
+      try {
+        const costos = JSON.parse(costosRaw as string);
+        if (Array.isArray(costos)) {
+          const costosValidados = costos.filter(c =>
+            c && typeof c === 'object' &&
+            'nombre' in c &&
+            'precio' in c &&
+            c.nombre.trim() !== ''
+          );
+          formData.set('costos', JSON.stringify(costosValidados));
+        }
+      } catch (parseError) {
+        console.error('Error al parsear costos en edición:', parseError);
+        formData.set('costos', JSON.stringify([]));
+      }
+    }
 
     const response = await api.put(`/productos/${id}`, formData, {
       headers: {
@@ -763,5 +792,44 @@ export const eliminarSeccionMenu = async (seccionNombre: string): Promise<void> 
       throw new Error(`Error al eliminar la sección: ${error.response.data.error || 'Ocurrió un error'}`);
     }
     throw new Error('No se pudo eliminar la sección');
+  }
+};
+
+
+export const getAgregos = async (productoId: string): Promise<Agrego[]> => {
+  try {
+    const response = await api.get(`/productos/${productoId}/agregos`);
+    return response.data;
+  } catch (error) {
+    console.error('Error al obtener agregos:', error);
+    throw new Error('No se pudieron cargar los agregos');
+  }
+};
+
+export const guardarAgregos = async (productoId: string, agregos: Agrego[]): Promise<void> => {
+  try {
+    await api.put(`/productos/${productoId}/agregos`, { agregos });
+  } catch (error) {
+    console.error('Error al guardar agregos:', error);
+    throw new Error('No se pudieron guardar los agregos');
+  }
+};
+
+export const getCostos = async (productoId: string): Promise<Costo[]> => {
+  try {
+    const response = await api.get(`/productos/${productoId}/costos`);
+    return response.data;
+  } catch (error) {
+    console.error('Error al obtener costos:', error);
+    throw new Error('No se pudieron cargar los costos');
+  }
+};
+
+export const guardarCostos = async (productoId: string, costos: Costo[]): Promise<void> => {
+  try {
+    await api.put(`/productos/${productoId}/costos`, { costos });
+  } catch (error) {
+    console.error('Error al guardar costos:', error);
+    throw new Error('No se pudieron guardar los costos');
   }
 };

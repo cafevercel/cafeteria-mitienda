@@ -17,6 +17,20 @@ interface ParametroVendedor {
     cantidad: number;
 }
 
+// Nueva interface para agregos
+interface Agrego {
+    id?: number;
+    nombre: string;
+    precio: number;
+}
+
+// Nueva interface para costos
+interface Costo {
+    id?: number;
+    nombre: string;
+    precio: number;
+}
+
 const obtenerProductoConParametros = async (productoId: string) => {
     const result = await query(`
             SELECT 
@@ -26,6 +40,8 @@ const obtenerProductoConParametros = async (productoId: string) => {
                 p.cantidad,
                 p.foto,
                 p.tiene_parametros,
+                p.tiene_agrego,
+                p.tiene_costo,
                 p.precio_compra,
                 p.porcentaje_ganancia as "porcentajeGanancia",
                 p.seccion,
@@ -37,9 +53,31 @@ const obtenerProductoConParametros = async (productoId: string) => {
                         )
                     ) FILTER (WHERE pp.id IS NOT NULL),
                     '[]'::json
-                ) as parametros
+                ) as parametros,
+                COALESCE(
+                    json_agg(
+                        json_build_object(
+                            'id', a.id,
+                            'nombre', a.nombre,
+                            'precio', a.precio
+                        )
+                    ) FILTER (WHERE a.id IS NOT NULL),
+                    '[]'::json
+                ) as agregos,
+                COALESCE(
+                    json_agg(
+                        json_build_object(
+                            'id', c.id,
+                            'nombre', c.nombre,
+                            'precio', c.precio
+                        )
+                    ) FILTER (WHERE c.id IS NOT NULL),
+                    '[]'::json
+                ) as costos
             FROM productos p
             LEFT JOIN producto_parametros pp ON p.id = pp.producto_id
+            LEFT JOIN agregos a ON p.id = a.producto_id
+            LEFT JOIN costos c ON p.id = c.producto_id
             WHERE p.id = $1
             GROUP BY p.id
     `, [productoId]);
@@ -62,6 +100,17 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
         const precioCompra = formData.get('precio_compra') as string;
         const porcentajeGanancia = formData.get('porcentajeGanancia') as string;
         const seccion = formData.get('seccion') as string;
+
+        // EXISTENTE: Manejar agregos
+        const tieneAgrego = formData.get('tiene_agrego') === 'true';
+        const agregosRaw = formData.get('agregos') as string;
+        const agregos: Agrego[] = agregosRaw ? JSON.parse(agregosRaw) : [];
+
+        // NUEVO: Manejar costos
+        const tieneCosto = formData.get('tiene_costo') === 'true';
+        const costosRaw = formData.get('costos') as string;
+        const costos: Costo[] = costosRaw ? JSON.parse(costosRaw) : [];
+
         const currentProduct = await query('SELECT * FROM productos WHERE id = $1', [id]);
 
         if (currentProduct.rows.length === 0) {
@@ -74,30 +123,34 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
         await query('BEGIN');
 
         try {
-            // 1. Actualizar producto principal
+            // 1. Actualizar producto principal (AGREGAR tiene_costo)
             let updateQuery: string;
             let updateParams: any[];
 
             if (tieneParametros) {
-                updateQuery = 'UPDATE productos SET nombre = $1, precio = $2, foto = $3, tiene_parametros = $4, precio_compra = $5, porcentaje_ganancia = $6, seccion = $7 WHERE id = $8 RETURNING *';
+                updateQuery = 'UPDATE productos SET nombre = $1, precio = $2, foto = $3, tiene_parametros = $4, tiene_agrego = $5, tiene_costo = $6, precio_compra = $7, porcentaje_ganancia = $8, seccion = $9 WHERE id = $10 RETURNING *';
                 updateParams = [
                     nombre,
                     Number(precio),
                     nuevaFotoUrl,
                     tieneParametros,
+                    tieneAgrego,
+                    tieneCosto, // NUEVO
                     precioCompra ? Number(precioCompra) : currentProduct.rows[0].precio_compra || 0,
                     porcentajeGanancia ? Number(porcentajeGanancia) : currentProduct.rows[0].porcentaje_ganancia || 0,
                     seccion || '',
                     id
                 ];
             } else {
-                updateQuery = 'UPDATE productos SET nombre = $1, precio = $2, cantidad = $3, foto = $4, tiene_parametros = $5, precio_compra = $6, porcentaje_ganancia = $7, seccion = $8 WHERE id = $9 RETURNING *';
+                updateQuery = 'UPDATE productos SET nombre = $1, precio = $2, cantidad = $3, foto = $4, tiene_parametros = $5, tiene_agrego = $6, tiene_costo = $7, precio_compra = $8, porcentaje_ganancia = $9, seccion = $10 WHERE id = $11 RETURNING *';
                 updateParams = [
                     nombre,
                     Number(precio),
                     Number(cantidad),
                     nuevaFotoUrl,
                     tieneParametros,
+                    tieneAgrego,
+                    tieneCosto, // NUEVO
                     precioCompra ? Number(precioCompra) : currentProduct.rows[0].precio_compra || 0,
                     porcentajeGanancia ? Number(porcentajeGanancia) : currentProduct.rows[0].porcentaje_ganancia || 0,
                     seccion || '',
@@ -107,21 +160,18 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 
             const result = await query(updateQuery, updateParams);
 
-            // 2. Obtener los parámetros antiguos del producto principal para mapeo
+            // 2-4. Manejar parámetros (código existente)...
             const parametrosAntiguosResult = await query(
                 'SELECT nombre FROM producto_parametros WHERE producto_id = $1',
                 [id]
             );
 
-            // Convertir explícitamente los resultados al tipo deseado
             const parametrosAntiguos: ParametroAntiguo[] = parametrosAntiguosResult.rows.map(row => ({
                 nombre: row.nombre as string
             }));
 
-            // Crear un mapa para relacionar índices de parámetros antiguos con nuevos
             const mapeoParametros: Record<string, string> = {};
             if (parametrosAntiguos.length > 0 && parametros.length > 0) {
-                // Mapear por posición si tienen la misma longitud
                 if (parametrosAntiguos.length === parametros.length) {
                     for (let i = 0; i < parametrosAntiguos.length; i++) {
                         mapeoParametros[parametrosAntiguos[i].nombre] = parametros[i].nombre;
@@ -129,10 +179,8 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
                 }
             }
 
-            // 3. Eliminar parámetros antiguos del producto principal
             await query('DELETE FROM producto_parametros WHERE producto_id = $1', [id]);
 
-            // 4. Insertar nuevos parámetros para el producto principal
             if (tieneParametros && parametros.length > 0) {
                 for (const param of parametros) {
                     await query(
@@ -142,7 +190,35 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
                 }
             }
 
-            // 5. Actualizar nombres en transaccion_parametros si hay mapeo de parámetros
+            // 5. Manejar agregos (código existente)
+            await query('DELETE FROM agregos WHERE producto_id = $1', [id]);
+
+            if (tieneAgrego && agregos.length > 0) {
+                for (const agrego of agregos) {
+                    if (agrego.nombre && agrego.nombre.trim() !== '') {
+                        await query(
+                            'INSERT INTO agregos (producto_id, nombre, precio) VALUES ($1, $2, $3)',
+                            [id, agrego.nombre.trim(), agrego.precio || 0]
+                        );
+                    }
+                }
+            }
+
+            // NUEVO: 6. Manejar costos
+            await query('DELETE FROM costos WHERE producto_id = $1', [id]);
+
+            if (tieneCosto && costos.length > 0) {
+                for (const costo of costos) {
+                    if (costo.nombre && costo.nombre.trim() !== '') {
+                        await query(
+                            'INSERT INTO costos (producto_id, nombre, precio) VALUES ($1, $2, $3)',
+                            [id, costo.nombre.trim(), costo.precio || 0]
+                        );
+                    }
+                }
+            }
+
+            // 7-8. Actualizar transacciones y parámetros de usuario (código existente)...
             if (Object.keys(mapeoParametros).length > 0) {
                 for (const nombreAntiguo in mapeoParametros) {
                     const nombreNuevo = mapeoParametros[nombreAntiguo];
@@ -159,7 +235,6 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
                 }
             }
 
-            // 6. Actualizar nombres de parámetros en usuario_producto_parametros (SOLO NOMBRES, NO CANTIDADES)
             if (Object.keys(mapeoParametros).length > 0) {
                 for (const nombreAntiguo in mapeoParametros) {
                     const nombreNuevo = mapeoParametros[nombreAntiguo];
@@ -172,12 +247,8 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
                 }
             }
 
-            // 7. Si se eliminaron parámetros del producto principal, eliminar también de vendedores
             if (tieneParametros && parametros.length > 0) {
-                // Obtener nombres de parámetros actuales
                 const nombresParametrosActuales = parametros.map(p => p.nombre);
-
-                // Eliminar parámetros de vendedores que ya no existen en el producto principal
                 await query(`
                     DELETE FROM usuario_producto_parametros 
                     WHERE producto_id = $1 
@@ -185,7 +256,6 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
                     [id, ...nombresParametrosActuales]
                 );
             } else if (!tieneParametros) {
-                // Si el producto ya no tiene parámetros, eliminar todos los parámetros de vendedores
                 await query(
                     'DELETE FROM usuario_producto_parametros WHERE producto_id = $1',
                     [id]
@@ -210,9 +280,6 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     }
 }
 
-// ... resto del código (DELETE y GET permanecen igual)
-
-
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
     try {
         const { id } = params;
@@ -231,61 +298,64 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
                 return NextResponse.json({ error: 'Producto no encontrado' }, { status: 404 });
             }
 
-            // 2. Eliminar merma_parametros primero
+            // NUEVO: 2. Eliminar costos del producto
+            await query(
+                'DELETE FROM costos WHERE producto_id = $1',
+                [id]
+            );
+
+            // 3. Eliminar agregos del producto (existente)
+            await query(
+                'DELETE FROM agregos WHERE producto_id = $1',
+                [id]
+            );
+
+            // 4-12. Resto del código de eliminación existente...
             await query(
                 'DELETE FROM merma_parametros WHERE merma_id IN (SELECT id FROM merma WHERE producto_id = $1)',
                 [id]
             );
 
-            // 3. Eliminar registros de merma
             await query(
                 'DELETE FROM merma WHERE producto_id = $1',
                 [id]
             );
 
-            // 4. Eliminar parámetros de producto para vendedores
             await query(
                 'DELETE FROM usuario_producto_parametros WHERE producto_id = $1',
                 [id]
             );
 
-            // 5. Eliminar producto de vendedores
             await query(
                 'DELETE FROM usuario_productos WHERE producto_id = $1',
                 [id]
             );
 
-            // 6. Eliminar parámetros de producto principal
             await query(
                 'DELETE FROM producto_parametros WHERE producto_id = $1',
                 [id]
             );
 
-            // 7. Eliminar parámetros en transacciones
             await query(
                 'DELETE FROM transaccion_parametros WHERE transaccion_id IN (SELECT id FROM transacciones WHERE producto = $1)',
                 [id]
             );
 
-            // 8. Eliminar transacciones
             await query(
                 'DELETE FROM transacciones WHERE producto = $1',
                 [id]
             );
 
-            // 9. Eliminar venta_parametros antes de eliminar ventas
             await query(
                 'DELETE FROM venta_parametros WHERE venta_id IN (SELECT id FROM ventas WHERE producto = $1)',
                 [id]
             );
 
-            // 10. Eliminar registros de ventas relacionados con este producto
             await query(
                 'DELETE FROM ventas WHERE producto = $1',
                 [id]
             );
 
-            // 11. Eliminar el producto
             await query(
                 'DELETE FROM productos WHERE id = $1',
                 [id]
