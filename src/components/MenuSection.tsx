@@ -569,7 +569,7 @@ const MenuSectionComponent = () => {
                             {hasChanges && (
                                 <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                                     <p className="text-sm text-yellow-800">
-                                        ⚠️ Tienes cambios sin guardar. No olvides hacer clic en &quot;Guardar Orden&quot;.
+                                        ⚠️ Tienes cambios sin guardar. No olvides hacer clic en 'Guardar Orden';.
                                     </p>
                                 </div>
                             )}
