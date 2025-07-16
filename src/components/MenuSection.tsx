@@ -835,7 +835,7 @@ const MenuSectionComponent = () => {
 
                                     {editingAgregos.length === 0 ? (
                                         <p className="text-sm text-green-700 text-center py-4">
-                                            No hay agregos. Haz clic en "Agregar" para añadir uno.
+                                            No hay agregos. Haz clic en &quot;Agregar&quot; para añadir uno.
                                         </p>
                                     ) : (
                                         <div className="space-y-3">
@@ -909,7 +909,7 @@ const MenuSectionComponent = () => {
 
                                     {editingCostos.length === 0 ? (
                                         <p className="text-sm text-orange-700 text-center py-4">
-                                            No hay costos. Haz clic en "Agregar" para añadir uno.
+                                            No hay costos. Haz clic en &quot;Agregar&quot; para añadir uno.
                                         </p>
                                     ) : (
                                         <div className="space-y-3">
