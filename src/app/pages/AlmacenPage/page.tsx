@@ -1282,6 +1282,15 @@ export default function AlmacenPage() {
       formData.append('precio_compra', (editedProduct.precio_compra || 0).toString());
       formData.append('porcentajeGanancia', (editedProduct.porcentajeGanancia || 0).toString());
       formData.append('seccion', editedProduct.seccion || ''); // Agregar esta línea
+      formData.append('tiene_agrego', (editedProduct.tiene_agrego || false).toString());
+      formData.append('tiene_costo', (editedProduct.tiene_costo || false).toString());
+
+      if (editedProduct.agregos) {
+        formData.append('agregos', JSON.stringify(editedProduct.agregos));
+      }
+      if (editedProduct.costos) {
+        formData.append('costos', JSON.stringify(editedProduct.costos));
+      }
 
       if (editedProduct.parametros) {
         formData.append('parametros', JSON.stringify(editedProduct.parametros));

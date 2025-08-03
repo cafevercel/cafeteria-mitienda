@@ -154,10 +154,17 @@ export default function ProductDialog({
       foto: product.foto || '',
       precio_compra: product.precio_compra || 0,
       porcentajeGanancia: product.porcentajeGanancia || 0,
+
+      // ✅ AGREGAR ESTOS CAMPOS:
+      tiene_agrego: product.tiene_agrego || false,
+      tiene_costo: product.tiene_costo || false,
+      agregos: product.agregos || [],
+      costos: product.costos || [],
     });
     setImageUrl(product.foto || '');
     setMostrarPorcentajeGanancia(tienePorcentajeGanancia);
   }, [product]);
+
 
   // Función para calcular la cantidad total disponible
   const getTotalCantidad = useCallback(() => {
@@ -241,7 +248,6 @@ export default function ProductDialog({
   // Guardar cambios en el producto
   const handleEdit = async () => {
     try {
-      // Solo verificamos la imagen si se está intentando subir una nueva
       if (imageUrl !== product.foto && !imageUrl) {
         toast({
           title: "Advertencia",
@@ -253,12 +259,18 @@ export default function ProductDialog({
 
       const updatedProduct: Producto = {
         ...editedProduct,
-        foto: imageUrl || product.foto, // Usar la foto existente si no hay nueva
+        foto: imageUrl || product.foto,
         tiene_parametros: editedProduct.tieneParametros || false,
         tieneParametros: editedProduct.tieneParametros || false,
         parametros: editedProduct.tieneParametros ? editedProduct.parametros : [],
         precio_compra: editedProduct.precio_compra || 0,
         porcentajeGanancia: mostrarPorcentajeGanancia ? (editedProduct.porcentajeGanancia || 0) : 0,
+
+        // ✅ AGREGAR ESTOS CAMPOS:
+        tiene_agrego: editedProduct.tiene_agrego || false,
+        tiene_costo: editedProduct.tiene_costo || false,
+        agregos: editedProduct.agregos || [],
+        costos: editedProduct.costos || [],
       };
 
       console.log('Producto a guardar:', updatedProduct);
@@ -278,6 +290,7 @@ export default function ProductDialog({
       });
     }
   };
+
 
   // Manejo de la entrega del producto
   const handleDeliver = async () => {
