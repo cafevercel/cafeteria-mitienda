@@ -5,14 +5,13 @@ export async function GET() {
     try {
         const result = await query(`
             SELECT 
-                up.id,
-                up.producto_id,
+                p.id,
                 p.nombre,
                 p.precio,
                 p.precio_compra,
                 p.foto,
                 p.tiene_parametros,
-                up.cantidad,
+                COALESCE(up.cantidad, 0) as cantidad,
                 -- Obtener parámetros si existen
                 COALESCE(
                     (SELECT json_agg(
@@ -25,14 +24,13 @@ export async function GET() {
                     WHERE upp.producto_id = p.id),
                     '[]'::json
                 ) as parametros
-            FROM usuario_productos up
-            INNER JOIN productos p ON up.producto_id = p.id
+            FROM productos p
+            LEFT JOIN usuario_productos up ON p.id = up.producto_id
             WHERE up.cocina = true
             ORDER BY p.nombre
         `);
 
         return NextResponse.json(result.rows);
-
     } catch (error) {
         console.error('Error fetching cocina products:', error);
         return NextResponse.json({
@@ -40,3 +38,4 @@ export async function GET() {
         }, { status: 500 });
     }
 }
+
