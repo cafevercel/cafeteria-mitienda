@@ -11,22 +11,32 @@ export async function GET() {
                 p.precio_compra,
                 p.foto,
                 p.tiene_parametros,
-                COALESCE(up.cantidad, 0) as cantidad,
-                -- Obtener parámetros si existen
-                COALESCE(
-                    (SELECT json_agg(
-                        json_build_object(
-                            'nombre', upp.nombre,
-                            'cantidad', upp.cantidad
-                        )
+                p.seccion,
+                (
+                    SELECT COALESCE(up.cantidad, 0)
+                    FROM usuario_productos up 
+                    WHERE up.producto_id = p.id AND up.cocina = true
+                    LIMIT 1
+                ) as cantidad,
+                (
+                    SELECT COALESCE(
+                        json_agg(
+                            json_build_object(
+                                'nombre', upp.nombre,
+                                'cantidad', upp.cantidad
+                            )
+                        ),
+                        '[]'::json
                     )
                     FROM usuario_producto_parametros upp 
-                    WHERE upp.producto_id = p.id),
-                    '[]'::json
+                    WHERE upp.producto_id = p.id
                 ) as parametros
             FROM productos p
-            LEFT JOIN usuario_productos up ON p.id = up.producto_id
-            WHERE up.cocina = true
+            WHERE EXISTS (
+                SELECT 1 
+                FROM usuario_productos up 
+                WHERE up.producto_id = p.id AND up.cocina = true
+            )
             ORDER BY p.nombre
         `);
 
@@ -38,4 +48,5 @@ export async function GET() {
         }, { status: 500 });
     }
 }
+
 
