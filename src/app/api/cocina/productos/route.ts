@@ -11,13 +11,8 @@ export async function GET() {
                 p.precio_compra,
                 p.foto,
                 p.tiene_parametros,
-                p.seccion,
-                (
-                    SELECT COALESCE(up.cantidad, 0)
-                    FROM usuario_productos up 
-                    WHERE up.producto_id = p.id AND up.cocina = true
-                    LIMIT 1
-                ) as cantidad,
+                COALESCE(up.cantidad, 0) as cantidad,
+                -- Obtener parámetros si existen
                 (
                     SELECT COALESCE(
                         json_agg(
@@ -32,11 +27,8 @@ export async function GET() {
                     WHERE upp.producto_id = p.id
                 ) as parametros
             FROM productos p
-            WHERE EXISTS (
-                SELECT 1 
-                FROM usuario_productos up 
-                WHERE up.producto_id = p.id AND up.cocina = true
-            )
+            LEFT JOIN usuario_productos up ON (p.id = up.producto_id AND up.cocina = true)
+            WHERE up.id IS NOT NULL  -- Solo productos que tienen registro de cocina
             ORDER BY p.nombre
         `);
 
@@ -48,5 +40,3 @@ export async function GET() {
         }, { status: 500 });
     }
 }
-
-
