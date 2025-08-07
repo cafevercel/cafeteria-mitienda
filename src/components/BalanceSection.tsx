@@ -336,6 +336,9 @@ export default function BalanceSection() {
         cantidad: parseFloat(ingreso.cantidad.toString())
       }))
 
+      // ✅ NUEVO: Identificar qué gastos directos deben eliminarse
+      const gastosDirectosIds = gastosDelPeriodo.map(gasto => gasto.id)
+
       const nuevoBalance = {
         fechaInicio: fechaInicioNormalizada,
         fechaFin: fechaFinNormalizada,
@@ -345,15 +348,22 @@ export default function BalanceSection() {
         ingresos: ingresosProcesados,
         totalIngresos,
         gananciaNeta,
-        fechaCreacion: new Date().toISOString()
+        fechaCreacion: new Date().toISOString(),
+        gastosDirectosIds // ✅ NUEVO: Enviar IDs de gastos a eliminar
       }
 
       const balanceGuardado = await crearBalance(nuevoBalance)
       setBalances(prevBalances => [balanceGuardado, ...prevBalances])
 
+      // ✅ NUEVO: Actualizar la lista de gastos existentes eliminando los que se convirtieron en gastos de balance
+      setGastosExistentes(prevGastos =>
+        prevGastos.filter(gasto => !gastosDirectosIds.includes(gasto.id))
+      )
+
       setFechaInicio('')
       setFechaFin('')
       setGastosNuevos([{ nombre: '', cantidad: '' }])
+      setIngresosNuevos([{ nombre: '', cantidad: '' }])
       setPaso(1)
       setCrearDialogOpen(false)
 
@@ -372,6 +382,7 @@ export default function BalanceSection() {
       setIsSubmitting(false)
     }
   }
+
 
   const eliminarBalanceHandler = async () => {
     if (!balanceSeleccionado) return;

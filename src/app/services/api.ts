@@ -725,7 +725,7 @@ export const getBalances = async (): Promise<Balance[]> => {
   }
 };
 
-export const crearBalance = async (balance: Omit<Balance, 'id'>): Promise<Balance> => {
+export const crearBalance = async (balance: Omit<Balance, 'id'> & { gastosDirectosIds?: string[] }): Promise<Balance> => {
   try {
     const response = await api.post('/balances', balance);
     return response.data;
@@ -734,6 +734,7 @@ export const crearBalance = async (balance: Omit<Balance, 'id'>): Promise<Balanc
     throw new Error('No se pudo crear el balance');
   }
 };
+
 
 export const eliminarBalance = async (balanceId: string): Promise<void> => {
   try {
@@ -900,8 +901,8 @@ export const getGastosDetallados = async (): Promise<Array<{
 };
 
 // Agregar esta nueva función para obtener gastos combinados
-export const getGastosCombinados = async (): Promise<Array<{ 
-  fecha: string; 
+export const getGastosCombinados = async (): Promise<Array<{
+  fecha: string;
   gastos: Array<{
     nombre: string;
     cantidad: number;
@@ -911,8 +912,8 @@ export const getGastosCombinados = async (): Promise<Array<{
     fechaFin?: string;
     gastoId?: string;
     fechaCreacion?: string;
-  }>; 
-  total: number 
+  }>;
+  total: number
 }>> => {
   try {
     const response = await api.get('/balances/gastos-combinados');
