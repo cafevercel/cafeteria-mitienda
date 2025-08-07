@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 
+// ✅ Agregar por seguridad
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
     try {
-        // Consulta corregida - misma lógica que cafetería pero filtrando cocina = true
+        // ✅ CAMBIO CRÍTICO: Usar LEFT JOIN como cafetería
         const result = await query(`
             SELECT 
                 p.id,
@@ -12,20 +15,17 @@ export async function GET() {
                 p.precio_compra,
                 p.foto,
                 p.tiene_parametros,
-                -- Para productos con parámetros, usar la suma de parámetros
-                -- Para productos sin parámetros, usar la cantidad directa
                 CASE 
                     WHEN p.tiene_parametros = true THEN 
                         COALESCE(
                             (SELECT SUM(upp_sum.cantidad) 
-                             FROM usuario_producto_parametros upp_sum 
-                             WHERE upp_sum.producto_id = p.id), 
+                                FROM usuario_producto_parametros upp_sum 
+                                WHERE upp_sum.producto_id = p.id), 
                             0
                         )
                     ELSE 
                         COALESCE(up.cantidad, 0)
                 END as cantidad,
-                -- Obtener parámetros si existen
                 COALESCE(
                     (SELECT json_agg(
                         json_build_object(
