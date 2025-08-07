@@ -4,7 +4,7 @@ import { query } from '@/lib/db';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { productoId, cantidad, tipo, parametros } = body;
+    const { productoId, cantidad, tipo, parametros, esCocina } = body; // ✅ AGREGAR esCocina
 
     console.log('Request body:', body);
 
@@ -57,10 +57,10 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Registrar la transacción
+      // ✅ Registrar la transacción con información de destino
       const transactionResult = await query(
         'INSERT INTO transacciones (producto, cantidad, tipo, desde, hacia, fecha) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
-        [productoId, cantidad, tipo, null, null, new Date()]
+        [productoId, cantidad, tipo, 'Almacen', esCocina ? 'Cocina' : 'Cafeteria', new Date()]
       );
 
       const transaccionId = transactionResult.rows[0].id;
@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
         throw new Error('No se pudo obtener el precio del producto');
       }
 
-      // ✅ MANEJAR usuario_productos según el tipo de producto
+      // ✅ MANEJAR usuario_productos según el tipo de producto CON campo cocina
       const existingProduct = await query(
         'SELECT * FROM usuario_productos WHERE producto_id = $1',
         [productoId]
@@ -94,27 +94,27 @@ export async function POST(request: NextRequest) {
         if (existingProduct.rows.length === 0) {
           // Solo crear el registro, el trigger calculará la cantidad
           await query(
-            'INSERT INTO usuario_productos (producto_id, cantidad, precio) VALUES ($1, $2, $3)',
-            [productoId, 0, productPrice] // Cantidad 0, el trigger la calculará
+            'INSERT INTO usuario_productos (producto_id, cantidad, precio, cocina) VALUES ($1, $2, $3, $4)',
+            [productoId, 0, productPrice, esCocina || false] // ✅ AGREGAR campo cocina
           );
         } else {
-          // Solo actualizar precio, NO cantidad
+          // Solo actualizar precio y campo cocina, NO cantidad
           await query(
-            'UPDATE usuario_productos SET precio = $1 WHERE producto_id = $2',
-            [productPrice, productoId]
+            'UPDATE usuario_productos SET precio = $1, cocina = $2 WHERE producto_id = $3',
+            [productPrice, esCocina || false, productoId] // ✅ AGREGAR campo cocina
           );
         }
       } else {
         // ✅ Para productos SIN parámetros: SÍ actualizar cantidad directamente
         if (existingProduct.rows.length > 0) {
           await query(
-            'UPDATE usuario_productos SET cantidad = cantidad + $1, precio = $2 WHERE producto_id = $3',
-            [cantidad, productPrice, productoId]
+            'UPDATE usuario_productos SET cantidad = cantidad + $1, precio = $2, cocina = $3 WHERE producto_id = $4',
+            [cantidad, productPrice, esCocina || false, productoId] // ✅ AGREGAR campo cocina
           );
         } else {
           await query(
-            'INSERT INTO usuario_productos (producto_id, cantidad, precio) VALUES ($1, $2, $3)',
-            [productoId, cantidad, productPrice]
+            'INSERT INTO usuario_productos (producto_id, cantidad, precio, cocina) VALUES ($1, $2, $3, $4)',
+            [productoId, cantidad, productPrice, esCocina || false] // ✅ AGREGAR campo cocina
           );
         }
       }
@@ -152,8 +152,9 @@ export async function POST(request: NextRequest) {
       await query('COMMIT');
 
       return NextResponse.json({
-        message: 'Producto entregado exitosamente',
-        transaction: transactionResult.rows[0]
+        message: `Producto entregado ${esCocina ? 'a cocina' : 'a cafetería'} exitosamente`,
+        transaction: transactionResult.rows[0],
+        destino: esCocina ? 'Cocina' : 'Cafeteria' // ✅ INFORMACIÓN ADICIONAL
       });
 
     } catch (error) {
@@ -168,7 +169,6 @@ export async function POST(request: NextRequest) {
     }
   }
 }
-
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);

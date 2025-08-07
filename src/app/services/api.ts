@@ -1,5 +1,7 @@
+//api.ts
+
 import axios from 'axios';
-import { Venta, Vendedor, Transaccion, VentaParametro, IngresoBalance, Gasto, Producto, GastoBalance, Balance, MenuSection, Agrego, Costo } from '@/types';
+import { Venta, Vendedor, Transaccion, VentaParametro, IngresoBalance, Gasto, Producto, GastoBalance, Balance, MenuSection, Agrego, Costo, ProductoCocina } from '@/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
 
@@ -274,17 +276,20 @@ export const editarProducto = async (id: string, formData: FormData) => {
 };
 
 
+// Reemplazar la función existente
 export const entregarProducto = async (
   productoId: string,
   cantidad: number,
-  parametros?: Array<{ nombre: string; cantidad: number }>
+  parametros?: Array<{ nombre: string; cantidad: number }>,
+  esCocina: boolean = false // NUEVO PARÁMETRO
 ) => {
   try {
     const response = await api.post('/transacciones', {
       productoId,
       cantidad,
       tipo: 'Entrega',
-      parametros
+      parametros,
+      esCocina // NUEVO CAMPO
     });
     return response.data;
   } catch (error) {
@@ -292,6 +297,7 @@ export const entregarProducto = async (
     throw new Error('Error al entregar el producto');
   }
 };
+
 
 export const getTransacciones = async () => {
   const response = await api.get('/transacciones');
@@ -831,5 +837,110 @@ export const guardarCostos = async (productoId: string, costos: Costo[]): Promis
   } catch (error) {
     console.error('Error al guardar costos:', error);
     throw new Error('No se pudieron guardar los costos');
+  }
+};
+
+
+// Agregar estas funciones al final de api.ts
+
+export const getProductosCocina = async (): Promise<ProductoCocina[]> => {
+  try {
+    const response = await api.get('/cocina/productos');
+    return response.data;
+  } catch (error) {
+    console.error('Error al obtener productos de cocina:', error);
+    throw new Error('No se pudieron cargar los productos de cocina');
+  }
+};
+
+export const reducirProductoCocina = async (
+  productoId: string,
+  cantidad: number,
+  parametros?: Array<{ nombre: string; cantidad: number }>
+): Promise<void> => {
+  try {
+    const response = await api.post('/cocina/reducir', {
+      productoId,
+      cantidad,
+      parametros
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error al reducir producto de cocina:', error);
+    throw new Error('Error al reducir el producto de cocina');
+  }
+};
+
+
+export const getGastosFromBalances = async (): Promise<Array<{ fecha: string; gastos: GastoBalance[]; total: number }>> => {
+  try {
+    const response = await api.get('/balances/gastos');
+    return response.data;
+  } catch (error) {
+    console.error('Error al obtener gastos de balances:', error);
+    throw new Error('No se pudieron obtener los gastos de los balances');
+  }
+};
+
+
+export const getGastosDetallados = async (): Promise<Array<{
+  balanceId: string;
+  fechaInicio: string;
+  fechaFin: string;
+  gastos: GastoBalance[];
+  totalGastos: number;
+}>> => {
+  try {
+    const response = await api.get('/balances/gastos-detallados');
+    return response.data;
+  } catch (error) {
+    console.error('Error al obtener gastos detallados:', error);
+    throw new Error('No se pudieron obtener los gastos detallados');
+  }
+};
+
+// Agregar esta nueva función para obtener gastos combinados
+export const getGastosCombinados = async (): Promise<Array<{ 
+  fecha: string; 
+  gastos: Array<{
+    nombre: string;
+    cantidad: number;
+    tipo: 'balance' | 'directo';
+    balanceId?: string;
+    fechaInicio?: string;
+    fechaFin?: string;
+    gastoId?: string;
+    fechaCreacion?: string;
+  }>; 
+  total: number 
+}>> => {
+  try {
+    const response = await api.get('/balances/gastos-combinados');
+    return response.data;
+  } catch (error) {
+    console.error('Error al obtener gastos combinados:', error);
+    throw new Error('No se pudieron obtener los gastos combinados');
+  }
+};
+
+
+// Funciones para gastos directos
+export const createGasto = async (gasto: { nombre: string; cantidad: number }) => {
+  try {
+    const response = await api.post('/gastos', gasto);
+    return response.data;
+  } catch (error) {
+    console.error('Error al crear gasto:', error);
+    throw new Error('No se pudo crear el gasto');
+  }
+};
+
+export const deleteGasto = async (id: string) => {
+  try {
+    const response = await api.delete(`/gastos/${id}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error al eliminar gasto:', error);
+    throw new Error('No se pudo eliminar el gasto');
   }
 };

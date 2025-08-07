@@ -1,5 +1,19 @@
 // src/types/index.ts
 
+
+export interface ProductoCocina {
+  id: string;
+  producto_id: string;
+  nombre: string;
+  precio: number;
+  precio_compra: number;
+  cantidad: number;
+  foto?: string | null;
+  tiene_parametros: boolean;
+  parametros?: Parametro[];
+}
+
+
 export interface VentaSemana {
   fechaInicio: string
   fechaFin: string

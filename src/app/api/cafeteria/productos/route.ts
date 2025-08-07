@@ -39,6 +39,7 @@ export async function GET(request: NextRequest) {
                 ) as parametros
             FROM productos p
             LEFT JOIN usuario_productos up ON p.id = up.producto_id
+            WHERE up.cocina IS NOT TRUE OR up.cocina IS NULL
             ORDER BY p.id
         `);
 
@@ -92,9 +93,9 @@ export async function POST(request: NextRequest) {
             // 2. 🔧 ARREGLADO: Insertar inventario SOLO si NO tiene parámetros
             if (!tieneParametros && cantidad && Number(cantidad) > 0) {
                 await query(
-                    `INSERT INTO usuario_productos (producto_id, cantidad) 
-                     VALUES ($1, $2)`,
-                    [productoId, Number(cantidad)]
+                    `INSERT INTO usuario_productos (producto_id, cantidad, cocina) 
+                     VALUES ($1, $2, $3)`,
+                    [productoId, Number(cantidad), false] // cocina = false por defecto
                 );
             }
 
@@ -146,7 +147,7 @@ export async function POST(request: NextRequest) {
                     ) as parametros
                 FROM productos p
                 LEFT JOIN usuario_productos up ON p.id = up.producto_id
-                WHERE p.id = $1
+                WHERE p.id = $1 AND (up.cocina IS NOT TRUE OR up.cocina IS NULL)
             `, [productoId]);
 
             return NextResponse.json(productoCompleto.rows[0]);
@@ -212,11 +213,11 @@ export async function PUT(request: NextRequest) {
                 // Si NO tiene parámetros, actualizar/insertar en usuario_productos
                 if (cantidad !== null && cantidad !== undefined) {
                     await query(
-                        `INSERT INTO usuario_productos (producto_id, cantidad) 
-                         VALUES ($1, $2)
+                        `INSERT INTO usuario_productos (producto_id, cantidad, cocina) 
+                         VALUES ($1, $2, $3)
                          ON CONFLICT (producto_id) 
-                         DO UPDATE SET cantidad = EXCLUDED.cantidad`,
-                        [Number(id), Number(cantidad)]
+                         DO UPDATE SET cantidad = EXCLUDED.cantidad, cocina = EXCLUDED.cocina`,
+                        [Number(id), Number(cantidad), false] // cocina = false por defecto
                     );
                 }
             }
@@ -275,7 +276,7 @@ export async function PUT(request: NextRequest) {
                     ) as parametros
                 FROM productos p
                 LEFT JOIN usuario_productos up ON p.id = up.producto_id
-                WHERE p.id = $1
+                WHERE p.id = $1 AND (up.cocina IS NOT TRUE OR up.cocina IS NULL)
             `, [Number(id)]);
 
             return NextResponse.json(productoActualizado.rows[0]);

@@ -92,6 +92,7 @@ export async function GET() {
     FROM productos p
     JOIN usuario_productos up ON p.id = up.producto_id
     LEFT JOIN usuario_producto_parametros upp ON p.id = upp.producto_id
+    WHERE up.cocina IS NOT TRUE
     GROUP BY p.id, p.nombre, p.precio, p.foto, p.tiene_parametros, p.porcentaje_ganancia, up.cantidad
     ORDER BY p.nombre
   `);
@@ -185,7 +186,7 @@ export async function POST(request: NextRequest) {
     FROM productos p
     JOIN usuario_productos up ON p.id = up.producto_id
     LEFT JOIN usuario_producto_parametros upp ON p.id = upp.producto_id
-    WHERE up.usuario_id = $1
+    WHERE up.usuario_id = $1 AND up.cocina IS NOT TRUE
     GROUP BY p.id, p.nombre, p.precio, p.foto, p.tiene_parametros, 
              p.porcentaje_ganancia, up.cantidad, up.fecha_agregado
     ORDER BY up.fecha_agregado DESC
@@ -196,7 +197,7 @@ export async function POST(request: NextRequest) {
     SELECT COUNT(DISTINCT p.id) as total
     FROM productos p
     JOIN usuario_productos up ON p.id = up.producto_id
-    WHERE up.usuario_id = $1
+    WHERE up.usuario_id = $1 AND up.cocina IS NOT TRUE
   `, [usuarioId]);
 
     const total = parseInt(countResult.rows[0]?.total || '0');
@@ -294,7 +295,6 @@ export async function PUT(request: NextRequest) {
       const tieneParametros = productoExiste.rows[0].tiene_parametros;
 
       // Verificar si ya existe la relación usuario-producto
-      // Verificar si ya existe la relación usuario-producto
       const relacionExiste = await query(
         'SELECT id FROM usuario_productos WHERE usuario_id = $1 AND producto_id = $2',
         [usuarioId, productoId]
@@ -305,8 +305,8 @@ export async function PUT(request: NextRequest) {
         if (relacionExiste.rows.length === 0) {
           // Solo crear la relación - el trigger calculará la cantidad
           await query(
-            'INSERT INTO usuario_productos (usuario_id, producto_id, cantidad) VALUES ($1, $2, $3)',
-            [usuarioId, productoId, 0] // Cantidad inicial 0, el trigger la calculará
+            'INSERT INTO usuario_productos (usuario_id, producto_id, cantidad, cocina) VALUES ($1, $2, $3, $4)',
+            [usuarioId, productoId, 0, false] // Cantidad inicial 0, cocina false por defecto
           );
         }
         // Si ya existe la relación, no hacer nada aquí - el trigger se encargará
@@ -319,8 +319,8 @@ export async function PUT(request: NextRequest) {
           );
         } else {
           await query(
-            'INSERT INTO usuario_productos (usuario_id, producto_id, cantidad) VALUES ($1, $2, $3)',
-            [usuarioId, productoId, cantidad]
+            'INSERT INTO usuario_productos (usuario_id, producto_id, cantidad, cocina) VALUES ($1, $2, $3, $4)',
+            [usuarioId, productoId, cantidad, false] // cocina false por defecto
           );
         }
       }
@@ -330,19 +330,18 @@ export async function PUT(request: NextRequest) {
         // Eliminar parámetros existentes del usuario específico
         await query(
           'DELETE FROM usuario_producto_parametros WHERE producto_id = $1 AND usuario_id = $2',
-          [productoId, usuarioId] // ← También necesitas filtrar por usuario
+          [productoId, usuarioId]
         );
 
         // Insertar nuevos parámetros
         for (const param of parametros) {
           await query(
             'INSERT INTO usuario_producto_parametros (producto_id, usuario_id, nombre, cantidad) VALUES ($1, $2, $3, $4)',
-            [productoId, usuarioId, param.nombre, param.cantidad] // ← Incluir usuario_id
+            [productoId, usuarioId, param.nombre, param.cantidad]
           );
         }
         // ✅ El trigger automáticamente calculará usuario_productos.cantidad
       }
-
 
       await query('COMMIT');
 
@@ -369,7 +368,7 @@ export async function PUT(request: NextRequest) {
       FROM productos p
       JOIN usuario_productos up ON p.id = up.producto_id
       LEFT JOIN usuario_producto_parametros upp ON p.id = upp.producto_id
-      WHERE up.usuario_id = $1 AND p.id = $2
+      WHERE up.usuario_id = $1 AND p.id = $2 AND up.cocina IS NOT TRUE
       GROUP BY p.id, p.nombre, p.precio, p.foto, p.tiene_parametros, 
                p.porcentaje_ganancia, up.cantidad, up.fecha_agregado
     `, [usuarioId, productoId]);
@@ -423,10 +422,10 @@ export async function DELETE(request: NextRequest) {
     await query('BEGIN');
 
     try {
-      // Eliminar parámetros del producto
+      // Eliminar parámetros del producto específico del usuario
       await query(
-        'DELETE FROM usuario_producto_parametros WHERE producto_id = $1',
-        [productoId]
+        'DELETE FROM usuario_producto_parametros WHERE producto_id = $1 AND usuario_id = $2',
+        [productoId, usuarioId]
       );
 
       // Eliminar relación usuario-producto

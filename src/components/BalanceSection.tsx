@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { getAllVentas, getInventario, getGastos, crearBalance, eliminarBalance, getBalances, editarBalance } from '@/app/services/api'
 import { Venta, Producto, Gasto, Balance, GastoBalance, IngresoBalance } from '@/types'
-import { Wallet, Plus, X, Calendar, ChevronRight, FileText, Trash2, Edit } from 'lucide-react'
+import { Wallet, Plus, X, Calendar, ChevronRight, FileText, Trash2, Edit, Eye } from 'lucide-react'
 import { toast } from "@/hooks/use-toast"
 
 interface VentaDia {
@@ -19,6 +19,14 @@ interface VentaDia {
   ventas: Venta[]
   total: number
   ganancia: number
+}
+
+interface GastoExistente {
+  id: string
+  nombre: string
+  cantidad: number
+  fecha: string
+  fechaCreacion?: string
 }
 
 const formatDate = (dateString: string): string => {
@@ -45,11 +53,9 @@ const formatPrice = (price: number | string | undefined): string => {
 
 const formatRangoFechas = (fechaInicio: string, fechaFin: string): string => {
   try {
-    // Si las fechas son iguales, mostrar solo una fecha
     if (fechaInicio === fechaFin) {
       return formatDate(fechaInicio)
     }
-    // Si son diferentes, mostrar el rango
     return `${formatDate(fechaInicio)} - ${formatDate(fechaFin)}`
   } catch (error) {
     console.error('Error al formatear rango de fechas:', error)
@@ -60,10 +66,7 @@ const formatRangoFechas = (fechaInicio: string, fechaFin: string): string => {
 const normalizarFecha = (fechaString: string): string => {
   if (!fechaString) return fechaString;
 
-  // Crear la fecha en la zona horaria local sin conversión UTC
   const fecha = new Date(fechaString + 'T00:00:00');
-
-  // Formatear como YYYY-MM-DD
   const year = fecha.getFullYear();
   const month = String(fecha.getMonth() + 1).padStart(2, '0');
   const day = String(fecha.getDate()).padStart(2, '0');
@@ -71,10 +74,11 @@ const normalizarFecha = (fechaString: string): string => {
   return `${year}-${month}-${day}`;
 }
 
-
 export default function BalanceSection() {
   const [ventasDiarias, setVentasDiarias] = useState<VentaDia[]>([])
   const [balances, setBalances] = useState<Balance[]>([])
+  const [gastosExistentes, setGastosExistentes] = useState<GastoExistente[]>([])
+  const [gastosDelPeriodo, setGastosDelPeriodo] = useState<GastoExistente[]>([])
   const [crearDialogOpen, setCrearDialogOpen] = useState(false)
   const [detalleDialogOpen, setDetalleDialogOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -98,10 +102,11 @@ export default function BalanceSection() {
     const fetchData = async () => {
       setIsLoading(true)
       try {
-        // Cargar ventas, productos y balances existentes
-        const [ventas, inventario, balancesData] = await Promise.all([
+        // Cargar ventas, productos, gastos y balances existentes
+        const [ventas, inventario, gastos, balancesData] = await Promise.all([
           getAllVentas(),
           getInventario(),
+          getGastos(),
           getBalances()
         ])
 
@@ -109,6 +114,16 @@ export default function BalanceSection() {
         const ventasPorDia = calcularVentasDiarias(ventas, inventario)
         setVentasDiarias(ventasPorDia)
         setBalances(balancesData)
+
+        // Procesar gastos existentes
+        const gastosFormateados = gastos.map(gasto => ({
+          id: gasto.id.toString(),
+          nombre: gasto.nombre,
+          cantidad: gasto.cantidad,
+          fecha: normalizarFecha(gasto.fecha.split('T')[0]),
+          fechaCreacion: gasto.fecha
+        }))
+        setGastosExistentes(gastosFormateados)
       } catch (err) {
         setError('Error al cargar los datos')
         console.error(err)
@@ -124,6 +139,31 @@ export default function BalanceSection() {
 
     fetchData()
   }, [])
+
+  // Efecto para cargar gastos del período cuando cambien las fechas
+  useEffect(() => {
+    if (fechaInicio && fechaFin) {
+      const gastosFiltrados = gastosExistentes.filter(gasto => {
+        return gasto.fecha >= fechaInicio && gasto.fecha <= fechaFin
+      })
+      setGastosDelPeriodo(gastosFiltrados)
+
+      // Si no estamos en modo edición, cargar automáticamente los gastos
+      if (!modoEdicion) {
+        const gastosFormateados = gastosFiltrados.map(gasto => ({
+          nombre: gasto.nombre,
+          cantidad: gasto.cantidad.toString()
+        }))
+
+        // Si hay gastos del período, agregarlos a los gastos nuevos
+        if (gastosFormateados.length > 0) {
+          setGastosNuevos([...gastosFormateados, { nombre: '', cantidad: '' }])
+        }
+      }
+    } else {
+      setGastosDelPeriodo([])
+    }
+  }, [fechaInicio, fechaFin, gastosExistentes, modoEdicion])
 
   const agregarIngresoField = () => {
     setIngresosNuevos([...ingresosNuevos, { nombre: '', cantidad: '' }])
@@ -154,7 +194,6 @@ export default function BalanceSection() {
     const ventasPorDia: { [key: string]: VentaDia } = {}
 
     ventas.forEach(venta => {
-      // Usar la función de normalización
       const fechaKey = normalizarFecha(venta.fecha.split('T')[0])
 
       if (!ventasPorDia[fechaKey]) {
@@ -166,19 +205,13 @@ export default function BalanceSection() {
         }
       }
 
-      // Buscar el producto para obtener su precio de compra y porcentaje de ganancia
       const producto = productos.find(p => p.id === venta.producto)
-
-      // Obtener el precio de venta y precio de compra
       const precioCompra = producto?.precio_compra || 0
       const precioVenta = parseFloat(venta.precio_unitario.toString())
 
-      // Calcular la ganancia bruta para esta venta
       let gananciaUnitaria = precioVenta - precioCompra
 
-      // Aplicar el descuento del porcentaje de ganancia si existe
       if (producto?.porcentajeGanancia) {
-        // El porcentaje se aplica al precio de venta, no a la ganancia
         const descuentoPorcentaje = precioVenta * (producto.porcentajeGanancia / 100)
         gananciaUnitaria = gananciaUnitaria - descuentoPorcentaje
       }
@@ -213,11 +246,9 @@ export default function BalanceSection() {
 
   const calcularGananciaBruta = (fechaInicio: string, fechaFin: string, tipo: 'periodo' | 'dia' = 'periodo'): number => {
     if (tipo === 'dia') {
-      // Para un día específico
       const diaSeleccionado = ventasDiarias.find(dia => dia.fecha === fechaInicio)
       return diaSeleccionado ? diaSeleccionado.ganancia : 0
     } else {
-      // Para período (lógica actual)
       return ventasDiarias
         .filter(dia => {
           const fecha = dia.fecha
@@ -226,7 +257,6 @@ export default function BalanceSection() {
         .reduce((sum, dia) => sum + dia.ganancia, 0)
     }
   }
-
 
   const calcularTotalGastos = (gastos: GastoBalance[]): number => {
     return gastos.reduce((sum, gasto) => {
@@ -237,12 +267,14 @@ export default function BalanceSection() {
     }, 0)
   }
 
+  const calcularTotalGastosExistentes = (gastos: GastoExistente[]): number => {
+    return gastos.reduce((sum, gasto) => sum + gasto.cantidad, 0)
+  }
+
   const crearNuevoBalance = async () => {
-    // Normalizar fechas antes de validar
     const fechaInicioNormalizada = normalizarFecha(fechaInicio)
     const fechaFinNormalizada = normalizarFecha(fechaFin)
 
-    // Validar ingresos
     const ingresosInvalidos = ingresosNuevos.some(
       ingreso => !ingreso.nombre || !ingreso.cantidad || isNaN(parseFloat(ingreso.cantidad.toString()))
     )
@@ -256,7 +288,6 @@ export default function BalanceSection() {
       return
     }
 
-    // Validaciones
     if (!fechaInicioNormalizada || !fechaFinNormalizada) {
       toast({
         title: "Error",
@@ -275,7 +306,6 @@ export default function BalanceSection() {
       return
     }
 
-    // Validar que todos los gastos tengan nombre y cantidad válida
     const gastosInvalidos = gastosNuevos.some(
       gasto => !gasto.nombre || !gasto.cantidad || isNaN(parseFloat(gasto.cantidad.toString()))
     )
@@ -294,7 +324,7 @@ export default function BalanceSection() {
       const gananciaBruta = calcularGananciaBruta(fechaInicioNormalizada, fechaFinNormalizada, tipoSeleccion)
       const totalGastos = calcularTotalGastos(gastosNuevos)
       const totalIngresos = calcularTotalIngresos(ingresosNuevos)
-      const gananciaNeta = gananciaBruta + totalIngresos - totalGastos  // ← CAMBIO AQUÍ
+      const gananciaNeta = gananciaBruta + totalIngresos - totalGastos
 
       const gastosProcesados = gastosNuevos.map(gasto => ({
         nombre: gasto.nombre,
@@ -312,19 +342,15 @@ export default function BalanceSection() {
         gananciaBruta,
         gastos: gastosProcesados,
         totalGastos,
-        ingresos: ingresosProcesados,  // ← NUEVO
-        totalIngresos,                 // ← NUEVO
+        ingresos: ingresosProcesados,
+        totalIngresos,
         gananciaNeta,
         fechaCreacion: new Date().toISOString()
       }
 
-      // Guardar en la base de datos
       const balanceGuardado = await crearBalance(nuevoBalance)
-
-      // Actualizar el estado
       setBalances(prevBalances => [balanceGuardado, ...prevBalances])
 
-      // Resetear el formulario
       setFechaInicio('')
       setFechaFin('')
       setGastosNuevos([{ nombre: '', cantidad: '' }])
@@ -375,14 +401,12 @@ export default function BalanceSection() {
     setEditandoBalance(balance)
     setModoEdicion(true)
 
-    // Detectar automáticamente el tipo de balance
     const esDiaUnico = balance.fechaInicio === balance.fechaFin
     setTipoSeleccion(esDiaUnico ? 'dia' : 'periodo')
 
     setFechaInicio(balance.fechaInicio)
     setFechaFin(balance.fechaFin)
 
-    // Si es un día único, también setear fechaSeleccionada
     if (esDiaUnico) {
       setFechaSeleccionada(balance.fechaInicio)
     }
@@ -391,8 +415,8 @@ export default function BalanceSection() {
       cantidad: g.cantidad.toString()
     })))
     setPaso(1)
-    setDetalleDialogOpen(false) // Cerrar el dialog de detalle
-    setCrearDialogOpen(true) // Abrir el dialog de creación/edición
+    setDetalleDialogOpen(false)
+    setCrearDialogOpen(true)
     setIngresosNuevos(balance.ingresos?.map(i => ({
       nombre: i.nombre,
       cantidad: i.cantidad.toString()
@@ -402,11 +426,9 @@ export default function BalanceSection() {
   const guardarEdicion = async () => {
     if (!editandoBalance) return;
 
-    // Normalizar fechas antes de validar
     const fechaInicioNormalizada = normalizarFecha(fechaInicio)
     const fechaFinNormalizada = normalizarFecha(fechaFin)
 
-    // Validaciones básicas
     if (!fechaInicioNormalizada || !fechaFinNormalizada) {
       toast({
         title: "Error",
@@ -425,7 +447,6 @@ export default function BalanceSection() {
       return
     }
 
-    // Validar gastos
     const gastosInvalidos = gastosNuevos.some(
       gasto => !gasto.nombre || !gasto.cantidad || isNaN(parseFloat(gasto.cantidad.toString()))
     )
@@ -439,7 +460,6 @@ export default function BalanceSection() {
       return
     }
 
-    // Validar ingresos
     const ingresosInvalidos = ingresosNuevos.some(
       ingreso => !ingreso.nombre || !ingreso.cantidad || isNaN(parseFloat(ingreso.cantidad.toString()))
     )
@@ -481,17 +501,14 @@ export default function BalanceSection() {
         gananciaNeta
       }
 
-      // Llamar a la API de edición
       const balanceGuardado = await editarBalance(editandoBalance.id, balanceActualizado)
 
-      // Actualizar el estado
       setBalances(prevBalances =>
         prevBalances.map(balance =>
           balance.id === editandoBalance.id ? balanceGuardado : balance
         )
       )
 
-      // Resetear el formulario
       cancelarEdicion()
 
       toast({
@@ -510,12 +527,11 @@ export default function BalanceSection() {
     }
   }
 
-
   const cancelarEdicion = () => {
     setEditandoBalance(null)
     setModoEdicion(false)
-    setTipoSeleccion('periodo') // Agregar esta línea
-    setFechaSeleccionada('') // Agregar esta línea
+    setTipoSeleccion('periodo')
+    setFechaSeleccionada('')
     setFechaInicio('')
     setFechaFin('')
     setGastosNuevos([{ nombre: '', cantidad: '' }])
@@ -523,7 +539,6 @@ export default function BalanceSection() {
     setCrearDialogOpen(false)
     setIngresosNuevos([{ nombre: '', cantidad: '' }])
   }
-
 
   const abrirDetalleBalance = (balance: Balance) => {
     setBalanceSeleccionado(balance)
@@ -536,8 +551,8 @@ export default function BalanceSection() {
     } else {
       setCrearDialogOpen(false)
       setPaso(1)
-      setTipoSeleccion('periodo') // Agregar esta línea
-      setFechaSeleccionada('') // Agregar esta línea
+      setTipoSeleccion('periodo')
+      setFechaSeleccionada('')
       setFechaInicio('')
       setFechaFin('')
       setGastosNuevos([{ nombre: '', cantidad: '' }])
@@ -576,7 +591,6 @@ export default function BalanceSection() {
                     <p className="font-medium">
                       Balance {formatRangoFechas(balance.fechaInicio, balance.fechaFin)}
                     </p>
-
                     <p className="text-xs text-gray-500">
                       Creado el {formatDate(balance.fechaCreacion)}
                     </p>
@@ -603,9 +617,10 @@ export default function BalanceSection() {
       </Button>
 
       {/* Dialog para ver detalle de balance */}
+      {/* Dialog para ver detalle de balance */}
       <Dialog open={detalleDialogOpen} onOpenChange={setDetalleDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-[500px] max-h-[90vh] flex flex-col">
+          <DialogHeader className="flex-shrink-0">
             <DialogTitle className="flex items-center gap-2">
               <FileText className="h-5 w-5 text-blue-500" />
               Balance {balanceSeleccionado && formatRangoFechas(balanceSeleccionado.fechaInicio, balanceSeleccionado.fechaFin)}
@@ -613,8 +628,8 @@ export default function BalanceSection() {
           </DialogHeader>
 
           {balanceSeleccionado && (
-            <div className="space-y-4">
-              <div className="text-sm text-gray-600 border-b pb-2">
+            <div className="flex-1 overflow-y-auto space-y-4 py-2">
+              <div className="text-sm text-gray-600 border-b pb-2 flex-shrink-0">
                 <span className="font-medium">
                   {balanceSeleccionado.fechaInicio === balanceSeleccionado.fechaFin
                     ? `Balance del día ${formatDate(balanceSeleccionado.fechaInicio)}`
@@ -622,23 +637,28 @@ export default function BalanceSection() {
                   }
                 </span>
               </div>
-              <div className="flex justify-between items-center border-b pb-2">
+
+              <div className="flex justify-between items-center border-b pb-2 flex-shrink-0">
                 <span className="font-medium">Ganancia Bruta:</span>
                 <span className="text-green-600 font-semibold">${formatPrice(balanceSeleccionado.gananciaBruta)}</span>
               </div>
 
-              <div>
+              <div className="flex-shrink-0">
                 <h3 className="font-medium mb-2">Ingresos Extras:</h3>
-                <div className="space-y-2 pl-2 max-h-[200px] overflow-y-auto">
+                <div className="space-y-2 pl-2 max-h-[150px] overflow-y-auto border rounded-md p-2 bg-gray-50">
                   {(balanceSeleccionado.ingresos && Array.isArray(balanceSeleccionado.ingresos)
                     ? balanceSeleccionado.ingresos
                     : []
-                  ).map((ingreso, index) => (
-                    <div key={index} className="flex justify-between items-center">
-                      <span>{ingreso.nombre}</span>
-                      <span className="text-blue-600">+${formatPrice(ingreso.cantidad)}</span>
-                    </div>
-                  )) || <p className="text-gray-500 text-sm">Sin ingresos extras</p>}
+                  ).length > 0 ? (
+                    (balanceSeleccionado.ingresos || []).map((ingreso, index) => (
+                      <div key={index} className="flex justify-between items-center">
+                        <span className="text-sm">{ingreso.nombre}</span>
+                        <span className="text-blue-600 text-sm">+${formatPrice(ingreso.cantidad)}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-gray-500 text-sm">Sin ingresos extras</p>
+                  )}
                 </div>
                 <div className="flex justify-between items-center border-t mt-2 pt-2">
                   <span className="font-medium">Total Ingresos:</span>
@@ -646,14 +666,13 @@ export default function BalanceSection() {
                 </div>
               </div>
 
-
-              <div>
+              <div className="flex-shrink-0">
                 <h3 className="font-medium mb-2">Gastos:</h3>
-                <div className="space-y-2 pl-2 max-h-[200px] overflow-y-auto">
+                <div className="space-y-2 pl-2 max-h-[150px] overflow-y-auto border rounded-md p-2 bg-gray-50">
                   {balanceSeleccionado.gastos.map((gasto, index) => (
                     <div key={index} className="flex justify-between items-center">
-                      <span>{gasto.nombre}</span>
-                      <span className="text-red-600">-${formatPrice(gasto.cantidad)}</span>
+                      <span className="text-sm">{gasto.nombre}</span>
+                      <span className="text-red-600 text-sm">-${formatPrice(gasto.cantidad)}</span>
                     </div>
                   ))}
                 </div>
@@ -663,35 +682,39 @@ export default function BalanceSection() {
                 </div>
               </div>
 
-              <Separator />
+              <Separator className="flex-shrink-0" />
 
-              <div className="flex justify-between items-center pt-2">
+              <div className="flex justify-between items-center pt-2 flex-shrink-0">
                 <span className="font-bold text-lg">Ganancia Neta:</span>
                 <span className={`text-2xl font-bold ${balanceSeleccionado.gananciaNeta >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                   ${formatPrice(balanceSeleccionado.gananciaNeta)}
                 </span>
               </div>
-
-              <DialogFooter className="mt-4 flex justify-between">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => iniciarEdicion(balanceSeleccionado)}
-                >
-                  <Edit className="h-4 w-4 mr-2" /> Editar Balance
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => setConfirmarEliminarDialogOpen(true)}
-                >
-                  <Trash2 className="h-4 w-4 mr-2" /> Eliminar Balance
-                </Button>
-              </DialogFooter>
             </div>
           )}
+
+          <DialogFooter className="flex-shrink-0 mt-4 flex flex-col sm:flex-row gap-2 sm:justify-between">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => balanceSeleccionado && iniciarEdicion(balanceSeleccionado)}
+              className="w-full sm:w-auto"
+            >
+              <Edit className="h-4 w-4 mr-2" /> Editar Balance
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setConfirmarEliminarDialogOpen(true)}
+              className="w-full sm:w-auto"
+            >
+              <Trash2 className="h-4 w-4 mr-2" /> Eliminar Balance
+            </Button>
+          </DialogFooter>
+
         </DialogContent>
       </Dialog>
+
 
       {/* Dialog para confirmar eliminación */}
       <Dialog open={confirmarEliminarDialogOpen} onOpenChange={setConfirmarEliminarDialogOpen}>
@@ -719,7 +742,6 @@ export default function BalanceSection() {
         </DialogContent>
       </Dialog>
 
-      {/* Dialog para crear balance */}
       {/* Dialog para crear/editar balance */}
       <Dialog open={crearDialogOpen} onOpenChange={modoEdicion ? cancelarEdicion : cerrarCrearDialog}>
         <DialogContent className="sm:max-w-[500px]">
@@ -812,6 +834,35 @@ export default function BalanceSection() {
                   </div>
                 )}
 
+              {/* Mostrar gastos existentes del período */}
+              {gastosDelPeriodo.length > 0 && (
+                <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Eye className="h-4 w-4 text-blue-600" />
+                    <h4 className="font-medium text-blue-800">
+                      Gastos ya registrados en este {tipoSeleccion === 'dia' ? 'día' : 'período'}:
+                    </h4>
+                  </div>
+                  <div className="space-y-1 max-h-32 overflow-y-auto">
+                    {gastosDelPeriodo.map((gasto, index) => (
+                      <div key={index} className="flex justify-between items-center text-sm">
+                        <span className="text-blue-700">{gasto.nombre}</span>
+                        <span className="text-blue-600 font-medium">${formatPrice(gasto.cantidad)}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex justify-between items-center border-t border-blue-200 mt-2 pt-2">
+                    <span className="font-medium text-blue-800">Total:</span>
+                    <span className="font-bold text-blue-600">
+                      ${formatPrice(calcularTotalGastosExistentes(gastosDelPeriodo))}
+                    </span>
+                  </div>
+                  <p className="text-xs text-blue-600 mt-1">
+                    Estos gastos se incluirán automáticamente en el siguiente paso.
+                  </p>
+                </div>
+              )}
+
               <DialogFooter className="mt-4">
                 {modoEdicion && (
                   <Button
@@ -835,12 +886,20 @@ export default function BalanceSection() {
             </div>
           )}
 
-
           {paso === 2 && (
             <div className="space-y-4 py-4">
               <h3 className="font-medium">
                 Paso 2: {modoEdicion ? 'Modifica' : 'Registra'} los gastos
               </h3>
+
+              {/* Mostrar información de gastos precargados */}
+              {!modoEdicion && gastosDelPeriodo.length > 0 && (
+                <div className="mb-4 p-2 bg-blue-50 rounded border border-blue-200">
+                  <p className="text-xs text-blue-600">
+                    Se han cargado automáticamente {gastosDelPeriodo.length} gasto(s) ya registrado(s) para este período.
+                  </p>
+                </div>
+              )}
 
               <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2">
                 {gastosNuevos.map((gasto, index) => (
@@ -897,7 +956,6 @@ export default function BalanceSection() {
                     <span>Ganancia Neta:</span>
                     <span className={calcularGananciaBruta(fechaInicio, fechaFin, tipoSeleccion) - calcularTotalGastos(gastosNuevos) >= 0 ? 'text-green-600' : 'text-red-600'}>
                       ${formatPrice(calcularGananciaBruta(fechaInicio, fechaFin, tipoSeleccion) - calcularTotalGastos(gastosNuevos))}
-
                     </span>
                   </div>
                 </div>
@@ -929,7 +987,6 @@ export default function BalanceSection() {
                   </Button>
                 </div>
               </DialogFooter>
-
             </div>
           )}
 
@@ -1037,7 +1094,6 @@ export default function BalanceSection() {
               </DialogFooter>
             </div>
           )}
-
         </DialogContent>
       </Dialog>
     </div>

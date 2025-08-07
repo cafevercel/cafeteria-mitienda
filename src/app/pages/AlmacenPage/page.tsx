@@ -12,6 +12,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import CocinaSection from '@/components/CocinaSection'
+import GastosSection from '@/components/GastosSection'
 import { Checkbox } from "@/components/ui/checkbox"
 import { Menu, ArrowUpDown, Plus, Truck, UserPlus, FileSpreadsheet, Trash2, X, Minus, Loader2, MoreVertical, Eye, Edit, DollarSign, Search, TrendingUp, Calendar } from "lucide-react"
 import {
@@ -276,7 +278,7 @@ export default function AlmacenPage() {
   const [selectedProduct, setSelectedProduct] = useState<Producto | null>(null)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   // En AlmacenPage.tsx, actualizar el estado:
-  const [activeSection, setActiveSection] = useState<'productos' | 'cafeteria' | 'vendedores' | 'ventas' | 'balance' | 'menu'>('productos')
+  const [activeSection, setActiveSection] = useState<'productos' | 'cafeteria' | 'cocina' | 'vendedores' | 'gastos' | 'ventas' | 'balance' | 'menu'>('productos')
   const [showMassDeliveryDialog, setShowMassDeliveryDialog] = useState(false)
   const [selectedProducts, setSelectedProducts] = useState<{
     [productId: string]: {
@@ -751,10 +753,12 @@ export default function AlmacenPage() {
     return producto.cantidad; // Si no tiene parámetros, usar la cantidad directa
   };
 
+  // Reemplazar la función existente
   const handleProductDelivery = async (
     productId: string,
     cantidad: number,
-    parametros?: Array<{ nombre: string; cantidad: number }>
+    parametros?: Array<{ nombre: string; cantidad: number }>,
+    esCocina: boolean = false // NUEVO PARÁMETRO
   ) => {
     try {
       if (!productId) {
@@ -766,11 +770,11 @@ export default function AlmacenPage() {
         return;
       }
 
-      await entregarProducto(productId, cantidad, parametros);
+      await entregarProducto(productId, cantidad, parametros, esCocina);
 
       toast({
         title: "Éxito",
-        description: "Producto entregado correctamente",
+        description: `Producto entregado a ${esCocina ? 'cocina' : 'cafetería'} correctamente`,
       });
 
       // Actualizar inventario
@@ -784,6 +788,7 @@ export default function AlmacenPage() {
       });
     }
   };
+
 
   const handleMassDelivery = async () => {
     try {
@@ -1530,6 +1535,26 @@ export default function AlmacenPage() {
               </Button>
               <Button
                 variant="ghost"
+                className={activeSection === 'cocina' ? 'bg-orange-100 text-orange-800' : 'text-orange-700 hover:bg-orange-50 hover:text-orange-800'}
+                onClick={() => {
+                  setActiveSection('cocina')
+                  setIsMenuOpen(false)
+                }}
+              >
+                Cocina
+              </Button>
+              <Button
+                variant="ghost"
+                className={activeSection === 'gastos' ? 'bg-orange-100 text-orange-800' : 'text-orange-700 hover:bg-orange-50 hover:text-orange-800'}
+                onClick={() => {
+                  setActiveSection('gastos')
+                  setIsMenuOpen(false)
+                }}
+              >
+                Gastos
+              </Button>
+              <Button
+                variant="ghost"
                 className={activeSection === 'vendedores' ? 'bg-orange-100 text-orange-800' : 'text-orange-700 hover:bg-orange-50 hover:text-orange-800'}
                 onClick={() => {
                   setActiveSection('vendedores')
@@ -1930,8 +1955,13 @@ export default function AlmacenPage() {
         </div>
       )}
 
+      {activeSection === 'cocina' && (
+        <CocinaSection />
+      )}
 
-
+      {activeSection === 'gastos' && (
+        <GastosSection />
+      )}
 
       {activeSection === 'ventas' && (
         <SalesSection userRole="Almacen" />
@@ -2685,7 +2715,6 @@ export default function AlmacenPage() {
       </AlertDialog>
 
 
-
       {selectedProduct && (
         <ProductDialog
           product={{ ...selectedProduct, foto: selectedProduct.foto || '' }}
@@ -2693,10 +2722,13 @@ export default function AlmacenPage() {
           vendedores={vendedores}
           onEdit={handleEditProduct}
           onDelete={handleDeleteProduct}
-          onDeliver={(productId, cantidadTotal, parametros) => handleProductDelivery(productId, cantidadTotal, parametros)}
-          seccionesExistentes={seccionesExistentes} // Agregar esta línea
+          onDeliver={(productId, cantidadTotal, parametros, esCocina) =>
+            handleProductDelivery(productId, cantidadTotal, parametros, esCocina)
+          }
+          seccionesExistentes={seccionesExistentes}
         />
       )}
+
 
 
       {vendedorSeleccionado && (
