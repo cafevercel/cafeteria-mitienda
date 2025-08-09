@@ -277,11 +277,12 @@ export const editarProducto = async (id: string, formData: FormData) => {
 
 
 // Reemplazar la función existente
+// En api.ts, reemplaza la función existente
 export const entregarProducto = async (
   productoId: string,
   cantidad: number,
   parametros?: Array<{ nombre: string; cantidad: number }>,
-  esCocina: boolean = false // NUEVO PARÁMETRO
+  esCocina: boolean = false
 ) => {
   try {
     const response = await api.post('/transacciones', {
@@ -289,7 +290,7 @@ export const entregarProducto = async (
       cantidad,
       tipo: 'Entrega',
       parametros,
-      esCocina // NUEVO CAMPO
+      esCocina
     });
     return response.data;
   } catch (error) {
@@ -297,6 +298,7 @@ export const entregarProducto = async (
     throw new Error('Error al entregar el producto');
   }
 };
+
 
 
 export const getTransacciones = async () => {
@@ -936,9 +938,11 @@ export const createGasto = async (gasto: { nombre: string; cantidad: number }) =
   }
 };
 
+// En api.ts - Modificar la función existente
 export const deleteGasto = async (id: string) => {
   try {
-    const response = await api.delete(`/gastos/${id}`);
+    // ✅ NUEVO: Usar endpoint específico para eliminar gastos de cocina
+    const response = await api.delete(`/gastos/cocina?id=${id}`);
     return response.data;
   } catch (error) {
     console.error('Error al eliminar gasto:', error);

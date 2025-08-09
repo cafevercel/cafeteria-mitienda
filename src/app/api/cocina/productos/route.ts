@@ -1,12 +1,11 @@
+// api/cocina/productos/route.ts - Reemplaza completamente
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 
-// ✅ Agregar por seguridad
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
     try {
-        // ✅ CAMBIO CRÍTICO: Usar LEFT JOIN como cafetería
         const result = await query(`
             SELECT 
                 p.id,
@@ -18,28 +17,32 @@ export async function GET() {
                 CASE 
                     WHEN p.tiene_parametros = true THEN 
                         COALESCE(
-                            (SELECT SUM(upp_sum.cantidad) 
-                                FROM usuario_producto_parametros upp_sum 
-                                WHERE upp_sum.producto_id = p.id), 
+                            (SELECT SUM(cp.cantidad) 
+                                FROM cocina_parametros cp 
+                                WHERE cp.producto_id = p.id), 
                             0
                         )
                     ELSE 
-                        COALESCE(up.cantidad, 0)
+                        COALESCE(c.cantidad, 0)
                 END as cantidad,
-                COALESCE(
-                    (SELECT json_agg(
-                        json_build_object(
-                            'nombre', upp_params.nombre,
-                            'cantidad', upp_params.cantidad
+                CASE 
+                    WHEN p.tiene_parametros = true THEN
+                        COALESCE(
+                            (SELECT json_agg(
+                                json_build_object(
+                                    'nombre', cp.nombre,
+                                    'cantidad', cp.cantidad
+                                )
+                            )
+                            FROM cocina_parametros cp 
+                            WHERE cp.producto_id = p.id),
+                            '[]'::json
                         )
-                    )
-                    FROM usuario_producto_parametros upp_params 
-                    WHERE upp_params.producto_id = p.id),
-                    '[]'::json
-                ) as parametros
+                    ELSE '[]'::json
+                END as parametros
             FROM productos p
-            LEFT JOIN usuario_productos up ON p.id = up.producto_id
-            WHERE up.cocina = true
+            LEFT JOIN cocina c ON p.id = c.producto_id
+            WHERE c.producto_id IS NOT NULL
             ORDER BY p.nombre
         `);
 

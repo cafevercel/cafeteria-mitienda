@@ -6,9 +6,12 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Minus, Search, ArrowUpDown, Loader2 } from "lucide-react"
-import { ProductoCocina } from '@/types'
-import { getProductosCocina, reducirProductoCocina } from '@/app/services/api'
+import { format, parseISO, isValid } from 'date-fns'
+import { es } from 'date-fns/locale'
+import { ProductoCocina, Transaccion, Producto } from '@/types'
+import { getProductosCocina, reducirProductoCocina, getTransacciones, getInventario } from '@/app/services/api'
 import { toast } from "@/hooks/use-toast"
 
 interface ReduceDialogState {
@@ -18,10 +21,27 @@ interface ReduceDialogState {
     parametrosAReducir: Record<string, number>;
 }
 
+const formatDate = (dateString: string): string => {
+    try {
+        const date = parseISO(dateString)
+        if (!isValid(date)) {
+            return 'Fecha inválida'
+        }
+        return format(date, 'dd/MM/yyyy HH:mm', { locale: es })
+    } catch (error) {
+        console.error(`Error formatting date: ${dateString}`, error)
+        return 'Error en fecha'
+    }
+}
+
 export default function CocinaSection() {
     const [productos, setProductos] = useState<ProductoCocina[]>([])
+    const [transacciones, setTransacciones] = useState<Transaccion[]>([])
+    const [productosInventario, setProductosInventario] = useState<Producto[]>([])
     const [loading, setLoading] = useState(true)
+    const [loadingTransacciones, setLoadingTransacciones] = useState(true)
     const [searchTerm, setSearchTerm] = useState("")
+    const [searchTermTransacciones, setSearchTermTransacciones] = useState("")
     const [sortBy, setSortBy] = useState<'nombre' | 'cantidad'>('nombre')
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
     const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({})
@@ -51,9 +71,37 @@ export default function CocinaSection() {
         }
     }, [])
 
+    const fetchTransacciones = useCallback(async () => {
+        try {
+            setLoadingTransacciones(true)
+            const [transaccionesData, inventarioData] = await Promise.all([
+                getTransacciones(),
+                getInventario()
+            ])
+
+            // Filtrar solo las transacciones hacia "Cocina"
+            const transaccionesCocina = transaccionesData.filter(
+                (transaccion: Transaccion) => transaccion.hacia === 'Cocina'
+            )
+
+            setTransacciones(transaccionesCocina)
+            setProductosInventario(inventarioData)
+        } catch (error) {
+            console.error('Error al cargar transacciones:', error)
+            toast({
+                title: "Error",
+                description: "No se pudieron cargar las transacciones",
+                variant: "destructive",
+            })
+        } finally {
+            setLoadingTransacciones(false)
+        }
+    }, [])
+
     useEffect(() => {
         fetchProductosCocina()
-    }, [fetchProductosCocina])
+        fetchTransacciones()
+    }, [fetchProductosCocina, fetchTransacciones])
 
     const handleSort = (key: 'nombre' | 'cantidad') => {
         if (sortBy === key) {
@@ -106,7 +154,6 @@ export default function CocinaSection() {
             let parametrosArray: Array<{ nombre: string; cantidad: number }> | undefined
 
             if (producto.tiene_parametros && producto.parametros) {
-                // Para productos con parámetros
                 parametrosArray = Object.entries(parametrosAReducir)
                     .filter(([_, cantidad]) => cantidad > 0)
                     .map(([nombre, cantidad]) => ({ nombre, cantidad }))
@@ -129,7 +176,6 @@ export default function CocinaSection() {
                 parametrosArray
             )
 
-            // Actualizar la lista de productos
             await fetchProductosCocina()
 
             toast({
@@ -158,6 +204,11 @@ export default function CocinaSection() {
         return producto.cantidad
     }
 
+    const getProductName = (productoId: string) => {
+        const producto = productosInventario.find(p => p.id === productoId || p.id.toString() === productoId)
+        return producto?.nombre || `${productoId}`
+    }
+
     const filteredAndSortedProducts = productos
         .filter(producto =>
             producto.nombre.toLowerCase().includes(searchTerm.toLowerCase())
@@ -176,148 +227,238 @@ export default function CocinaSection() {
             }
         })
 
-    if (loading) {
+    const filteredTransacciones = transacciones.filter((transaccion) => {
+        if (!searchTermTransacciones.trim()) return true
+
+        const nombreProducto = getProductName(transaccion.producto)
+        const searchLower = searchTermTransacciones.toLowerCase()
+
         return (
-            <div className="flex justify-center items-center h-64">
-                <Loader2 className="h-8 w-8 animate-spin" />
-            </div>
+            nombreProducto.toLowerCase().includes(searchLower) ||
+            transaccion.tipo.toLowerCase().includes(searchLower) ||
+            formatDate(transaccion.fecha).includes(searchTermTransacciones) ||
+            transaccion.producto.toString().toLowerCase().includes(searchLower) ||
+            transaccion.desde.toLowerCase().includes(searchLower)
         )
-    }
+    })
 
     return (
         <div className="space-y-4">
             <Card>
                 <CardHeader>
-                    <CardTitle className="text-orange-800">Productos en Cocina</CardTitle>
-
-                    {/* Barra de búsqueda */}
-                    <div className="flex flex-col sm:flex-row gap-4">
-                        <div className="relative flex-1">
-                            <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                            <Input
-                                placeholder="Buscar productos..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="pl-10"
-                            />
-                        </div>
-
-                        {/* Botones de ordenamiento */}
-                        <div className="flex gap-2">
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleSort('nombre')}
-                                className="flex items-center gap-1"
-                            >
-                                Nombre
-                                <ArrowUpDown className="h-3 w-3" />
-                            </Button>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleSort('cantidad')}
-                                className="flex items-center gap-1"
-                            >
-                                Cantidad
-                                <ArrowUpDown className="h-3 w-3" />
-                            </Button>
-                        </div>
-                    </div>
+                    <CardTitle className="text-orange-800">Gestión de Cocina</CardTitle>
                 </CardHeader>
-
                 <CardContent>
-                    {filteredAndSortedProducts.length === 0 ? (
-                        <div className="text-center py-8 text-gray-500">
-                            <p className="text-lg font-medium">No hay productos en cocina</p>
-                            <p className="text-sm">No se encontraron productos que coincidan con la búsqueda</p>
-                        </div>
-                    ) : (
-                        <div className="space-y-2">
-                            {filteredAndSortedProducts.map((producto) => {
-                                const cantidadTotal = calcularCantidadTotal(producto)
-                                const isExpanded = expandedProducts.has(producto.id)
-                                const tieneParametros = producto.tiene_parametros && producto.parametros && producto.parametros.length > 0
-                                const sinStock = cantidadTotal === 0
+                    <Tabs defaultValue="productos" className="w-full">
+                        <TabsList className="grid w-full grid-cols-2">
+                            <TabsTrigger value="productos">Productos</TabsTrigger>
+                            <TabsTrigger value="transacciones">Transacciones</TabsTrigger>
+                        </TabsList>
 
-                                return (
-                                    <div
-                                        key={producto.id}
-                                        className={`border rounded-lg p-3 ${sinStock ? 'bg-red-50 border-red-200' : 'bg-white'}`}
+                        {/* Pestaña de Productos */}
+                        <TabsContent value="productos" className="space-y-4">
+                            {/* Barra de búsqueda para productos */}
+                            <div className="flex flex-col sm:flex-row gap-4">
+                                <div className="relative flex-1">
+                                    <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                                    <Input
+                                        placeholder="Buscar productos..."
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                        className="pl-10"
+                                    />
+                                </div>
+
+                                <div className="flex gap-2">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleSort('nombre')}
+                                        className="flex items-center gap-1"
                                     >
-                                        <div
-                                            className={`flex items-center gap-3 ${tieneParametros ? 'cursor-pointer' : ''}`}
-                                            onClick={() => tieneParametros && toggleProductExpansion(producto.id)}
-                                        >
-                                            {/* Imagen del producto */}
-                                            <div className="w-12 h-12 relative rounded-md overflow-hidden flex-shrink-0">
-                                                <Image
-                                                    src={imageErrors[producto.id] ? '/placeholder.svg' : (producto.foto || '/placeholder.svg')}
-                                                    alt={producto.nombre}
-                                                    fill
-                                                    className="object-cover"
-                                                    onError={() => {
-                                                        setImageErrors(prev => ({
-                                                            ...prev,
-                                                            [producto.id]: true
-                                                        }))
-                                                    }}
-                                                />
-                                            </div>
+                                        Nombre
+                                        <ArrowUpDown className="h-3 w-3" />
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleSort('cantidad')}
+                                        className="flex items-center gap-1"
+                                    >
+                                        Cantidad
+                                        <ArrowUpDown className="h-3 w-3" />
+                                    </Button>
+                                </div>
+                            </div>
 
-                                            {/* Información del producto */}
-                                            <div className="flex-1 min-w-0">
-                                                <h3 className={`font-medium ${sinStock ? 'text-red-600' : 'text-gray-900'}`}>
-                                                    {producto.nombre}
-                                                </h3>
-                                                <div className="flex flex-wrap gap-4 text-sm text-gray-600">
-                                                    <span>Precio: ${Number(producto.precio).toFixed(2)}</span>
-                                                    <span className={sinStock ? 'text-red-600 font-semibold' : ''}>
-                                                        Cantidad: {cantidadTotal}
-                                                    </span>
+                            {loading ? (
+                                <div className="flex justify-center items-center h-64">
+                                    <Loader2 className="h-8 w-8 animate-spin" />
+                                </div>
+                            ) : filteredAndSortedProducts.length === 0 ? (
+                                <div className="text-center py-8 text-gray-500">
+                                    <p className="text-lg font-medium">No hay productos en cocina</p>
+                                    <p className="text-sm">No se encontraron productos que coincidan con la búsqueda</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-2">
+                                    {filteredAndSortedProducts.map((producto) => {
+                                        const cantidadTotal = calcularCantidadTotal(producto)
+                                        const isExpanded = expandedProducts.has(producto.id)
+                                        const tieneParametros = producto.tiene_parametros && producto.parametros && producto.parametros.length > 0
+                                        const sinStock = cantidadTotal === 0
+
+                                        return (
+                                            <div
+                                                key={producto.id}
+                                                className={`border rounded-lg p-3 ${sinStock ? 'bg-red-50 border-red-200' : 'bg-white'}`}
+                                            >
+                                                <div
+                                                    className={`flex items-center gap-3 ${tieneParametros ? 'cursor-pointer' : ''}`}
+                                                    onClick={() => tieneParametros && toggleProductExpansion(producto.id)}
+                                                >
+                                                    <div className="w-12 h-12 relative rounded-md overflow-hidden flex-shrink-0">
+                                                        <Image
+                                                            src={imageErrors[producto.id] ? '/placeholder.svg' : (producto.foto || '/placeholder.svg')}
+                                                            alt={producto.nombre}
+                                                            fill
+                                                            className="object-cover"
+                                                            onError={() => {
+                                                                setImageErrors(prev => ({
+                                                                    ...prev,
+                                                                    [producto.id]: true
+                                                                }))
+                                                            }}
+                                                        />
+                                                    </div>
+
+                                                    <div className="flex-1 min-w-0">
+                                                        <h3 className={`font-medium ${sinStock ? 'text-red-600' : 'text-gray-900'}`}>
+                                                            {producto.nombre}
+                                                        </h3>
+                                                        <div className="flex flex-wrap gap-4 text-sm text-gray-600">
+                                                            <span>Precio: ${Number(producto.precio).toFixed(2)}</span>
+                                                            <span className={sinStock ? 'text-red-600 font-semibold' : ''}>
+                                                                Cantidad: {cantidadTotal}
+                                                            </span>
+                                                        </div>
+                                                        {tieneParametros && (
+                                                            <p className="text-xs text-blue-500">
+                                                                {isExpanded ? 'Ocultar parámetros' : 'Ver parámetros'} ({producto.parametros?.length || 0})
+                                                            </p>
+                                                        )}
+                                                    </div>
+
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation()
+                                                            openReduceDialog(producto)
+                                                        }}
+                                                        disabled={sinStock}
+                                                        className="flex-shrink-0"
+                                                    >
+                                                        <Minus className="h-4 w-4" />
+                                                    </Button>
                                                 </div>
-                                                {tieneParametros && (
-                                                    <p className="text-xs text-blue-500">
-                                                        {isExpanded ? 'Ocultar parámetros' : 'Ver parámetros'} ({producto.parametros?.length || 0})
-                                                    </p>
+
+                                                {isExpanded && tieneParametros && (
+                                                    <div className="mt-3 pl-15 border-t pt-3">
+                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                            {producto.parametros?.map((parametro, idx) => (
+                                                                <div key={idx} className="bg-gray-50 p-2 rounded border">
+                                                                    <div className="font-medium text-sm">{parametro.nombre}</div>
+                                                                    <div className={`text-sm ${parametro.cantidad === 0 ? 'text-red-600 font-semibold' : 'text-gray-700'}`}>
+                                                                        Cantidad: {parametro.cantidad}
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
                                                 )}
                                             </div>
+                                        )
+                                    })}
+                                </div>
+                            )}
+                        </TabsContent>
 
-                                            {/* Botón de reducir */}
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={(e) => {
-                                                    e.stopPropagation()
-                                                    openReduceDialog(producto)
-                                                }}
-                                                disabled={sinStock}
-                                                className="flex-shrink-0"
-                                            >
-                                                <Minus className="h-4 w-4" />
-                                            </Button>
-                                        </div>
+                        {/* Pestaña de Transacciones */}
+                        <TabsContent value="transacciones" className="space-y-4">
+                            {/* Barra de búsqueda para transacciones */}
+                            <div className="relative">
+                                <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                                <Input
+                                    placeholder="Buscar transacciones..."
+                                    value={searchTermTransacciones}
+                                    onChange={(e) => setSearchTermTransacciones(e.target.value)}
+                                    className="pl-10"
+                                />
+                            </div>
 
-                                        {/* Parámetros expandidos */}
-                                        {isExpanded && tieneParametros && (
-                                            <div className="mt-3 pl-15 border-t pt-3">
-                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                                    {producto.parametros?.map((parametro, idx) => (
-                                                        <div key={idx} className="bg-gray-50 p-2 rounded border">
-                                                            <div className="font-medium text-sm">{parametro.nombre}</div>
-                                                            <div className={`text-sm ${parametro.cantidad === 0 ? 'text-red-600 font-semibold' : 'text-gray-700'}`}>
-                                                                Cantidad: {parametro.cantidad}
-                                                            </div>
+                            {loadingTransacciones ? (
+                                <div className="flex justify-center items-center h-64">
+                                    <Loader2 className="h-8 w-8 animate-spin" />
+                                </div>
+                            ) : filteredTransacciones.length === 0 ? (
+                                <div className="text-center py-8 text-gray-500">
+                                    <p className="text-lg font-medium">No hay transacciones hacia cocina</p>
+                                    <p className="text-sm">
+                                        {searchTermTransacciones ? 'No se encontraron transacciones que coincidan con la búsqueda' : 'No se han registrado transacciones hacia cocina'}
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="space-y-3">
+                                    {filteredTransacciones.map((transaccion) => (
+                                        <Card key={transaccion.id} className="p-4">
+                                            <div className="flex items-start gap-4">
+                                                <div className="flex-1">
+                                                    <div className="flex justify-between items-start">
+                                                        <div>
+                                                            <h3 className="font-medium text-sm">
+                                                                {getProductName(transaccion.producto)}
+                                                            </h3>
+                                                            <p className="text-xs text-gray-500">
+                                                                Cantidad: {transaccion.cantidad}
+                                                            </p>
+                                                            <p className="text-xs text-gray-500">
+                                                                Desde: {transaccion.desde}
+                                                            </p>
+                                                            <p className="text-xs text-gray-500">
+                                                                Precio: ${Number(transaccion.precio).toFixed(2)}
+                                                            </p>
+                                                            {transaccion.parametros && transaccion.parametros.length > 0 && (
+                                                                <div className="mt-1">
+                                                                    <p className="text-xs text-gray-500">Parámetros:</p>
+                                                                    <ul className="text-xs text-gray-500 list-disc list-inside">
+                                                                        {transaccion.parametros.map((param, idx) => (
+                                                                            <li key={idx}>
+                                                                                {param.nombre}: {param.cantidad}
+                                                                            </li>
+                                                                        ))}
+                                                                    </ul>
+                                                                </div>
+                                                            )}
                                                         </div>
-                                                    ))}
+                                                        <div className="text-right">
+                                                            <span className={`text-xs px-2 py-1 rounded-full ${transaccion.tipo === 'Entrega' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                                                                }`}>
+                                                                {transaccion.tipo}
+                                                            </span>
+                                                            <p className="text-xs text-gray-500 mt-1">
+                                                                {formatDate(transaccion.fecha)}
+                                                            </p>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
-                                        )}
-                                    </div>
-                                )
-                            })}
-                        </div>
-                    )}
+                                        </Card>
+                                    ))}
+                                </div>
+                            )}
+                        </TabsContent>
+                    </Tabs>
                 </CardContent>
             </Card>
 

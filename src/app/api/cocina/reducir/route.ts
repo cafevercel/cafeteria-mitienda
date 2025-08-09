@@ -1,3 +1,4 @@
+// api/cocina/reducir/route.ts - Versión actualizada para tabla cocina
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 
@@ -11,7 +12,6 @@ export async function POST(request: NextRequest) {
             }, { status: 400 });
         }
 
-        // Iniciar transacción
         await query('BEGIN');
 
         try {
@@ -22,10 +22,10 @@ export async function POST(request: NextRequest) {
                     p.nombre, 
                     p.precio_compra, 
                     p.tiene_parametros, 
-                    up.cantidad as cantidad_inventario
+                    c.cantidad as cantidad_inventario
                 FROM productos p
-                INNER JOIN usuario_productos up ON p.id = up.producto_id
-                WHERE p.id = $1 AND up.cocina = true
+                INNER JOIN cocina c ON p.id = c.producto_id
+                WHERE p.id = $1
             `, [productoId]);
 
             if (productoResult.rows.length === 0) {
@@ -42,13 +42,13 @@ export async function POST(request: NextRequest) {
 
             // 2. Procesar según el tipo de producto
             if (producto.tiene_parametros && parametros && parametros.length > 0) {
-                // ✅ Para productos con parámetros
+                // ✅ Para productos con parámetros - usar cocina_parametros
                 for (const param of parametros) {
                     if (param.cantidad > 0) {
                         // Verificar stock disponible
                         const stockResult = await query(`
                             SELECT cantidad 
-                            FROM usuario_producto_parametros 
+                            FROM cocina_parametros 
                             WHERE producto_id = $1 AND nombre = $2
                         `, [productoId, param.nombre]);
 
@@ -60,11 +60,10 @@ export async function POST(request: NextRequest) {
                         }
 
                         // Reducir cantidad
-                        const updateResult = await query(`
-                            UPDATE usuario_producto_parametros 
+                        await query(`
+                            UPDATE cocina_parametros 
                             SET cantidad = cantidad - $1
                             WHERE producto_id = $2 AND nombre = $3
-                            RETURNING cantidad
                         `, [param.cantidad, productoId, param.nombre]);
 
                         cantidadTotal += param.cantidad;
@@ -80,7 +79,7 @@ export async function POST(request: NextRequest) {
                 }
 
             } else {
-                // ✅ Para productos sin parámetros
+                // ✅ Para productos sin parámetros - usar tabla cocina
                 if (producto.cantidad_inventario < cantidad) {
                     await query('ROLLBACK');
                     return NextResponse.json({
@@ -89,9 +88,9 @@ export async function POST(request: NextRequest) {
                 }
 
                 const updateResult = await query(`
-                    UPDATE usuario_productos 
+                    UPDATE cocina 
                     SET cantidad = cantidad - $1
-                    WHERE producto_id = $2 AND cocina = true
+                    WHERE producto_id = $2
                     RETURNING cantidad
                 `, [cantidad, productoId]);
 
@@ -106,7 +105,7 @@ export async function POST(request: NextRequest) {
                 detalleConsumo.push(`Cantidad: ${cantidad}`);
             }
 
-            // 3. Calcular y registrar el gasto
+            // 3. Calcular y registrar el gasto (MANTENER IGUAL)
             const gastoTotal = cantidadTotal * precioCompra;
             const nombreGasto = `Consumo cocina: ${producto.nombre}${detalleConsumo.length > 0 ? ` (${detalleConsumo.join(', ')})` : ''}`;
             
@@ -115,7 +114,6 @@ export async function POST(request: NextRequest) {
                 VALUES ($1, $2, CURRENT_TIMESTAMP)
             `, [nombreGasto, gastoTotal]);
 
-            // Confirmar transacción
             await query('COMMIT');
 
             return NextResponse.json({

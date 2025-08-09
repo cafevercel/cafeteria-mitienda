@@ -1,10 +1,12 @@
+//api/transacciones/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 
+// api/transacciones/route.ts - Reemplaza la función POST
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { productoId, cantidad, tipo, parametros, esCocina } = body; // ✅ AGREGAR esCocina
+    const { productoId, cantidad, tipo, parametros, esCocina } = body;
 
     console.log('Request body:', body);
 
@@ -16,7 +18,7 @@ export async function POST(request: NextRequest) {
 
     try {
       const productoResult = await query(
-        'SELECT tiene_parametros, cantidad as stock_actual FROM productos WHERE id = $1',
+        'SELECT tiene_parametros, cantidad as stock_actual, precio FROM productos WHERE id = $1',
         [productoId]
       );
 
@@ -24,29 +26,28 @@ export async function POST(request: NextRequest) {
         throw new Error('Producto no encontrado');
       }
 
-      const { tiene_parametros, stock_actual } = productoResult.rows[0];
+      const { tiene_parametros, stock_actual, precio } = productoResult.rows[0];
 
-      // ✅ SOLO actualizar stock principal para productos SIN parámetros
+      // Validar stock y actualizar inventario principal
       if (tiene_parametros) {
         if (!parametros || !Array.isArray(parametros) || parametros.length === 0) {
           throw new Error('Este producto requiere parámetros. Por favor, especifique los parámetros.');
         }
 
-        console.log('Parámetros recibidos:', parametros);
-
-        // Calcular la cantidad total a descontar del stock principal
         const cantidadTotalParametros = parametros.reduce((sum, param) => sum + param.cantidad, 0);
 
-        // Validar stock principal
         if (stock_actual < cantidadTotalParametros) {
           throw new Error('Stock total insuficiente');
         }
 
-        // ✅ Para productos CON parámetros: NO actualizar productos.cantidad
-        // El trigger se encargará cuando actualicemos producto_parametros
-
+        // Actualizar parámetros en inventario principal
+        for (const param of parametros) {
+          await query(
+            'UPDATE producto_parametros SET cantidad = cantidad - $1 WHERE producto_id = $2 AND nombre = $3',
+            [param.cantidad, productoId, param.nombre]
+          );
+        }
       } else {
-        // ✅ Para productos SIN parámetros: SÍ actualizar productos.cantidad
         if (stock_actual < cantidad) {
           throw new Error('Stock insuficiente');
         }
@@ -57,7 +58,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // ✅ Registrar la transacción con información de destino
+      // Registrar la transacción
       const transactionResult = await query(
         'INSERT INTO transacciones (producto, cantidad, tipo, desde, hacia, fecha) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
         [productoId, cantidad, tipo, 'Almacen', esCocina ? 'Cocina' : 'Cafeteria', new Date()]
@@ -65,7 +66,7 @@ export async function POST(request: NextRequest) {
 
       const transaccionId = transactionResult.rows[0].id;
 
-      // Registrar los parámetros de la transacción
+      // Registrar parámetros de la transacción
       if (tiene_parametros && parametros && parametros.length > 0) {
         for (const param of parametros) {
           await query(
@@ -76,76 +77,75 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      const productResult = await query('SELECT precio FROM productos WHERE id = $1', [productoId]);
-      const productPrice = productResult.rows[0]?.precio;
+      // ✅ CAMBIO PRINCIPAL: Manejar destino según esCocina
+      if (esCocina) {
+        // ✅ NUEVO: Insertar en tabla cocina
+        await query(
+          'INSERT INTO cocina (producto_id, cantidad, precio, cocina) VALUES ($1, $2, $3, $4)',
+          [productoId, cantidad, precio, true]
+        );
 
-      if (!productPrice) {
-        throw new Error('No se pudo obtener el precio del producto');
-      }
-
-      // ✅ MANEJAR usuario_productos según el tipo de producto CON campo cocina
-      const existingProduct = await query(
-        'SELECT * FROM usuario_productos WHERE producto_id = $1',
-        [productoId]
-      );
-
-      if (tiene_parametros) {
-        // ✅ Para productos CON parámetros: NO actualizar cantidad directamente
-        if (existingProduct.rows.length === 0) {
-          // Solo crear el registro, el trigger calculará la cantidad
-          await query(
-            'INSERT INTO usuario_productos (producto_id, cantidad, precio, cocina) VALUES ($1, $2, $3, $4)',
-            [productoId, 0, productPrice, esCocina || false] // ✅ AGREGAR campo cocina
-          );
-        } else {
-          // Solo actualizar precio y campo cocina, NO cantidad
-          await query(
-            'UPDATE usuario_productos SET precio = $1, cocina = $2 WHERE producto_id = $3',
-            [productPrice, esCocina || false, productoId] // ✅ AGREGAR campo cocina
-          );
-        }
-      } else {
-        // ✅ Para productos SIN parámetros: SÍ actualizar cantidad directamente
-        if (existingProduct.rows.length > 0) {
-          await query(
-            'UPDATE usuario_productos SET cantidad = cantidad + $1, precio = $2, cocina = $3 WHERE producto_id = $4',
-            [cantidad, productPrice, esCocina || false, productoId] // ✅ AGREGAR campo cocina
-          );
-        } else {
-          await query(
-            'INSERT INTO usuario_productos (producto_id, cantidad, precio, cocina) VALUES ($1, $2, $3, $4)',
-            [productoId, cantidad, productPrice, esCocina || false] // ✅ AGREGAR campo cocina
-          );
-        }
-      }
-
-      // ✅ Actualizar parámetros (esto disparará el trigger automáticamente)
-      if (tiene_parametros && parametros && parametros.length > 0) {
-        for (const param of parametros) {
-          // ✅ Actualizar stock de parámetros en producto_parametros
-          await query(
-            'UPDATE producto_parametros SET cantidad = cantidad - $1 WHERE producto_id = $2 AND nombre = $3',
-            [param.cantidad, productoId, param.nombre]
-          );
-
-          // ✅ Actualizar parámetros de usuario (esto dispara el trigger)
-          const existingParam = await query(
-            'SELECT * FROM usuario_producto_parametros WHERE producto_id = $1 AND nombre = $2',
-            [productoId, param.nombre]
-          );
-
-          if (existingParam.rows.length > 0) {
+        // Si tiene parámetros, también insertar los parámetros en cocina
+        if (tiene_parametros && parametros && parametros.length > 0) {
+          // Necesitarás crear una tabla cocina_parametros similar a usuario_producto_parametros
+          for (const param of parametros) {
             await query(
-              'UPDATE usuario_producto_parametros SET cantidad = cantidad + $1 WHERE producto_id = $2 AND nombre = $3',
-              [param.cantidad, productoId, param.nombre]
-            );
-          } else {
-            await query(
-              'INSERT INTO usuario_producto_parametros (producto_id, nombre, cantidad) VALUES ($1, $2, $3)',
+              'INSERT INTO cocina_parametros (producto_id, nombre, cantidad) VALUES ($1, $2, $3) ON CONFLICT (producto_id, nombre) DO UPDATE SET cantidad = cocina_parametros.cantidad + $3',
               [productoId, param.nombre, param.cantidad]
             );
           }
-          // ✅ El trigger automáticamente actualizará usuario_productos.cantidad
+        }
+      } else {
+        // Mantener lógica existente para cafetería (usuario_productos)
+        const existingProduct = await query(
+          'SELECT * FROM usuario_productos WHERE producto_id = $1',
+          [productoId]
+        );
+
+        if (tiene_parametros) {
+          if (existingProduct.rows.length === 0) {
+            await query(
+              'INSERT INTO usuario_productos (producto_id, cantidad, precio, cocina) VALUES ($1, $2, $3, $4)',
+              [productoId, 0, precio, false]
+            );
+          } else {
+            await query(
+              'UPDATE usuario_productos SET precio = $1, cocina = $2 WHERE producto_id = $3',
+              [precio, false, productoId]
+            );
+          }
+
+          // Actualizar parámetros de usuario
+          for (const param of parametros) {
+            const existingParam = await query(
+              'SELECT * FROM usuario_producto_parametros WHERE producto_id = $1 AND nombre = $2',
+              [productoId, param.nombre]
+            );
+
+            if (existingParam.rows.length > 0) {
+              await query(
+                'UPDATE usuario_producto_parametros SET cantidad = cantidad + $1 WHERE producto_id = $2 AND nombre = $3',
+                [param.cantidad, productoId, param.nombre]
+              );
+            } else {
+              await query(
+                'INSERT INTO usuario_producto_parametros (producto_id, nombre, cantidad) VALUES ($1, $2, $3)',
+                [productoId, param.nombre, param.cantidad]
+              );
+            }
+          }
+        } else {
+          if (existingProduct.rows.length > 0) {
+            await query(
+              'UPDATE usuario_productos SET cantidad = cantidad + $1, precio = $2, cocina = $3 WHERE producto_id = $4',
+              [cantidad, precio, false, productoId]
+            );
+          } else {
+            await query(
+              'INSERT INTO usuario_productos (producto_id, cantidad, precio, cocina) VALUES ($1, $2, $3, $4)',
+              [productoId, cantidad, precio, false]
+            );
+          }
         }
       }
 
@@ -154,7 +154,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         message: `Producto entregado ${esCocina ? 'a cocina' : 'a cafetería'} exitosamente`,
         transaction: transactionResult.rows[0],
-        destino: esCocina ? 'Cocina' : 'Cafeteria' // ✅ INFORMACIÓN ADICIONAL
+        destino: esCocina ? 'Cocina' : 'Cafeteria'
       });
 
     } catch (error) {
@@ -169,6 +169,7 @@ export async function POST(request: NextRequest) {
     }
   }
 }
+
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);

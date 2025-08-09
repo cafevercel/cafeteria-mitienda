@@ -52,11 +52,18 @@ export default function TransaccionesList({ transacciones, searchTerm, vendedorI
     return producto?.nombre || productoId // Si no encuentra el producto, muestra el ID
   }
 
-  // Filtrar transacciones con búsqueda mejorada
+  // Filtrar transacciones excluyendo las que van hacia "Cocina" y aplicando búsqueda
   const filteredTransacciones = useMemo(() => {
-    if (!searchTerm.trim()) return transacciones
+    // Primero filtrar las transacciones que NO van hacia "Cocina"
+    const transaccionesSinCocina = transacciones.filter((transaccion) => {
+      return transaccion.hacia !== 'Cocina'
+    })
 
-    return transacciones.filter((transaccion) => {
+    // Si no hay término de búsqueda, devolver las transacciones sin cocina
+    if (!searchTerm.trim()) return transaccionesSinCocina
+
+    // Aplicar filtro de búsqueda sobre las transacciones ya filtradas
+    return transaccionesSinCocina.filter((transaccion) => {
       const nombreProducto = getProductName(transaccion.producto)
       const searchLower = searchTerm.toLowerCase()
       
