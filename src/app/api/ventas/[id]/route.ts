@@ -1,3 +1,5 @@
+//ventas/[id]/route.ts
+
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 
@@ -91,6 +93,7 @@ export async function DELETE(
   }
 }
 
+
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -98,6 +101,8 @@ export async function PUT(
   const ventaId = params.id;
   const body = await request.json();
   const { productoId, cantidad, fecha, parametros, vendedorId } = body;
+
+  console.log('📝 Editando venta:', { ventaId, productoId, cantidad, fecha, parametros, vendedorId });
 
   if (!productoId || !cantidad || !fecha || !vendedorId) {
     return NextResponse.json({ error: 'Faltan datos requeridos' }, { status: 400 });
@@ -119,12 +124,15 @@ export async function PUT(
     }
 
     const ventaOriginal = ventaOriginalResult.rows[0];
+    console.log('📋 Venta original:', ventaOriginal);
 
     // Obtener parámetros originales de la venta
     const parametrosOriginalesResult = await query(
       'SELECT * FROM venta_parametros WHERE venta_id = $1',
       [ventaId]
     );
+
+    console.log('📊 Parámetros originales:', parametrosOriginalesResult.rows);
 
     // Verificar información del producto original y nuevo
     const productoOriginalResult = await query(
@@ -133,25 +141,34 @@ export async function PUT(
     );
 
     const productoNuevoResult = await query(
-      `SELECT p.precio, p.tiene_parametros, up.cantidad as stock_disponible 
+      `SELECT p.precio, p.tiene_parametros
        FROM productos p 
-       JOIN usuario_productos up ON p.id = up.producto_id 
        WHERE p.id = $1`,
       [productoId]
     );
 
     if (productoNuevoResult.rows.length === 0) {
       await query('ROLLBACK');
-      return NextResponse.json({ error: 'Producto no encontrado en el inventario' }, { status: 404 });
+      return NextResponse.json({ error: 'Producto no encontrado' }, { status: 404 });
     }
 
     const tieneParametrosOriginal = productoOriginalResult.rows[0]?.tiene_parametros;
-    const { precio: precioUnitario, stock_disponible, tiene_parametros: tieneParametrosNuevo } = productoNuevoResult.rows[0];
+    const { precio: precioUnitario, tiene_parametros: tieneParametrosNuevo } = productoNuevoResult.rows[0];
+
+    console.log('🔍 Tipos de productos:', {
+      tieneParametrosOriginal,
+      tieneParametrosNuevo,
+      productoOriginalId: ventaOriginal.producto,
+      productoNuevoId: productoId
+    });
 
     // PASO 1: Restaurar stock del producto original
+    console.log('🔄 Restaurando stock del producto original...');
+
     if (tieneParametrosOriginal && parametrosOriginalesResult.rows.length > 0) {
       // Restaurar parámetros del producto original
       for (const param of parametrosOriginalesResult.rows) {
+        console.log(`📈 Restaurando parámetro: ${param.parametro} +${param.cantidad}`);
         await query(
           `INSERT INTO usuario_producto_parametros 
            (producto_id, nombre, cantidad)
@@ -163,34 +180,59 @@ export async function PUT(
       }
     } else {
       // Restaurar cantidad del producto original sin parámetros
+      console.log(`📈 Restaurando producto sin parámetros: +${ventaOriginal.cantidad}`);
       await query(
         'UPDATE usuario_productos SET cantidad = cantidad + $1 WHERE producto_id = $2',
         [ventaOriginal.cantidad, ventaOriginal.producto]
       );
     }
 
-    // PASO 2: Verificar stock del nuevo producto
-    if (tieneParametrosNuevo && parametros) {
+    // PASO 2: Verificar stock del nuevo producto DESPUÉS de la restauración
+    console.log('🔍 Verificando stock del nuevo producto...');
+
+    if (tieneParametrosNuevo && parametros && parametros.length > 0) {
+      // Para productos con parámetros
       for (const param of parametros) {
-        const stockParam = await query(
+        const stockParamResult = await query(
           `SELECT cantidad FROM usuario_producto_parametros 
            WHERE producto_id = $1 AND nombre = $2`,
           [productoId, param.nombre]
         );
 
-        if (!stockParam.rows.length || stockParam.rows[0].cantidad < param.cantidad) {
+        const stockDisponible = stockParamResult.rows[0]?.cantidad || 0;
+        console.log(`📊 Stock parámetro ${param.nombre}: ${stockDisponible}, requerido: ${param.cantidad}`);
+
+        if (stockDisponible < param.cantidad) {
           await query('ROLLBACK');
           return NextResponse.json({
-            error: `Stock insuficiente para el parámetro ${param.nombre}`
+            error: `Stock insuficiente para el parámetro ${param.nombre}. Disponible: ${stockDisponible}, Requerido: ${param.cantidad}`
           }, { status: 400 });
         }
       }
-    } else if (!tieneParametrosNuevo && stock_disponible < cantidad) {
-      await query('ROLLBACK');
-      return NextResponse.json({ error: 'Stock insuficiente' }, { status: 400 });
+    } else {
+      // Para productos sin parámetros
+      const stockResult = await query(
+        'SELECT cantidad FROM usuario_productos WHERE producto_id = $1',
+        [productoId]
+      );
+
+      const stockDisponible = stockResult.rows[0]?.cantidad || 0;
+      console.log(`📊 Stock producto: ${stockDisponible}, requerido: ${cantidad}`);
+
+      if (stockDisponible < cantidad) {
+        await query('ROLLBACK');
+        return NextResponse.json({
+          error: `Stock insuficiente. Disponible: ${stockDisponible}, Requerido: ${cantidad}`
+        }, { status: 400 });
+      }
     }
 
-    // PASO 3: Actualizar la venta
+    // PASO 3: Eliminar parámetros antiguos
+    console.log('🗑️ Eliminando parámetros antiguos...');
+    await query('DELETE FROM venta_parametros WHERE venta_id = $1', [ventaId]);
+
+    // PASO 4: Actualizar la venta
+    console.log('💾 Actualizando venta...');
     const ventaActualizadaResult = await query(
       `UPDATE ventas 
        SET producto = $1, cantidad = $2, precio_unitario = $3, total = $4, fecha = $5
@@ -206,11 +248,10 @@ export async function PUT(
       ]
     );
 
-    // PASO 4: Eliminar parámetros antiguos
-    await query('DELETE FROM venta_parametros WHERE venta_id = $1', [ventaId]);
+    // PASO 5: Reducir stock del nuevo producto e insertar nuevos parámetros
+    console.log('📉 Reduciendo stock del nuevo producto...');
 
-    // PASO 5: Reducir stock del nuevo producto
-    if (tieneParametrosNuevo && parametros) {
+    if (tieneParametrosNuevo && parametros && parametros.length > 0) {
       for (const param of parametros) {
         // Insertar nuevos parámetros de la venta
         await query(
@@ -226,6 +267,8 @@ export async function PUT(
            WHERE producto_id = $2 AND nombre = $3`,
           [param.cantidad, productoId, param.nombre]
         );
+
+        console.log(`📉 Reducido parámetro ${param.nombre}: -${param.cantidad}`);
       }
     } else {
       // Para productos sin parámetros
@@ -233,9 +276,11 @@ export async function PUT(
         'UPDATE usuario_productos SET cantidad = cantidad - $1 WHERE producto_id = $2',
         [cantidad, productoId]
       );
+      console.log(`📉 Reducido producto: -${cantidad}`);
     }
 
     await query('COMMIT');
+    console.log('✅ Venta editada exitosamente');
 
     // Crear respuesta con encabezados anti-caché
     const response = NextResponse.json(ventaActualizadaResult.rows[0]);
@@ -247,7 +292,10 @@ export async function PUT(
     return response;
   } catch (error) {
     await query('ROLLBACK');
-    console.error('Error al editar venta:', error);
-    return NextResponse.json({ error: 'Error al editar venta' }, { status: 500 });
+    console.error('❌ Error al editar venta:', error);
+    return NextResponse.json({
+      error: 'Error interno del servidor al editar venta',
+      details: error instanceof Error ? error.message : 'Error desconocido'
+    }, { status: 500 });
   }
 }

@@ -374,18 +374,24 @@ export const editarVenta = async (
       productoId,
       cantidad,
       fecha,
-      parametros,
+      parametros: parametros || [], // ✅ Asegurar que no sea undefined
       vendedorId
     };
-    console.log('Enviando datos de edición de venta:', requestBody);
+
+    console.log('📤 Enviando datos de edición de venta:', requestBody);
 
     const response = await api.put(`/ventas/${ventaId}`, requestBody);
     return response.data;
   } catch (error) {
-    console.error('Error al editar la venta:', error);
+    console.error('❌ Error al editar la venta:', error);
+
     if (axios.isAxiosError(error) && error.response) {
-      throw new Error(`Error al editar la venta: ${error.response.data.error || error.response.data.message || 'Ocurrió un error'}`);
+      const errorMessage = error.response.data.error || error.response.data.message || 'Ocurrió un error';
+      const errorDetails = error.response.data.details || '';
+
+      throw new Error(`Error al editar la venta: ${errorMessage}${errorDetails ? ` - ${errorDetails}` : ''}`);
     }
+
     throw new Error('Error al editar la venta');
   }
 };

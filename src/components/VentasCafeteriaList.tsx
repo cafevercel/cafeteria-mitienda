@@ -190,6 +190,15 @@ export default function VentasCafeteriaList({ searchTerm }: VentasCafeteriaListP
   const confirmEditSale = async () => {
     if (!ventaAEditar) return
 
+    console.log('🔧 Datos de edición:', {
+      ventaId: ventaAEditar.id,
+      productoId: editForm.productoId,
+      cantidad: editForm.cantidad,
+      fecha: editForm.fecha,
+      parametros: editForm.parametros,
+      vendedorId: ventaAEditar.vendedor
+    });
+
     setIsEditing(true)
     try {
       await editarVenta(
