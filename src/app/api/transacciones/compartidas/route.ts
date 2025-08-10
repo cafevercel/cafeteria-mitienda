@@ -15,6 +15,7 @@ export async function GET(request: NextRequest) {
         t.fecha, 
         p.precio,
         p.tiene_parametros,
+        t.es_cocina,
         COALESCE(
           json_agg(
             json_build_object(
@@ -27,7 +28,7 @@ export async function GET(request: NextRequest) {
       FROM transacciones t 
       JOIN productos p ON t.producto = p.id 
       LEFT JOIN transaccion_parametros tp ON t.id = tp.transaccion_id
-      GROUP BY t.id, p.nombre, t.cantidad, t.tipo, t.desde, t.hacia, t.fecha, p.precio, p.tiene_parametros
+      GROUP BY t.id, p.nombre, t.cantidad, t.tipo, t.desde, t.hacia, t.fecha, p.precio, p.tiene_parametros, t.es_cocina
       ORDER BY t.fecha DESC
     `;
 
@@ -109,6 +110,7 @@ export async function POST(request: NextRequest) {
           t.fecha, 
           p.precio,
           p.tiene_parametros,
+          t.es_cocina,
           COALESCE(
             json_agg(
               json_build_object(
@@ -122,7 +124,7 @@ export async function POST(request: NextRequest) {
         JOIN productos p ON t.producto = p.id 
         LEFT JOIN transaccion_parametros tp ON t.id = tp.transaccion_id
         WHERE t.id = $1
-        GROUP BY t.id, p.nombre, t.cantidad, t.tipo, t.desde, t.hacia, t.fecha, p.precio, p.tiene_parametros
+        GROUP BY t.id, p.nombre, t.cantidad, t.tipo, t.desde, t.hacia, t.fecha, p.precio, p.tiene_parametros, t.es_cocina
       `, [transaccionId]);
 
       return NextResponse.json(transaccionCompleta.rows[0]);
@@ -203,6 +205,7 @@ export async function PUT(request: NextRequest) {
           t.fecha, 
           p.precio,
           p.tiene_parametros,
+          t.es_cocina,
           COALESCE(
             json_agg(
               json_build_object(
@@ -216,7 +219,7 @@ export async function PUT(request: NextRequest) {
         JOIN productos p ON t.producto = p.id 
         LEFT JOIN transaccion_parametros tp ON t.id = tp.transaccion_id
         WHERE t.id = $1
-        GROUP BY t.id, p.nombre, t.cantidad, t.tipo, t.desde, t.hacia, t.fecha, p.precio, p.tiene_parametros
+        GROUP BY t.id, p.nombre, t.cantidad, t.tipo, t.desde, t.hacia, t.fecha, p.precio, p.tiene_parametros, t.es_cocina
       `, [Number(id)]);
 
       return NextResponse.json(transaccionActualizada.rows[0]);

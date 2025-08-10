@@ -52,19 +52,26 @@ export default function TransaccionesList({ transacciones, searchTerm, vendedorI
     return producto?.nombre || productoId
   }
 
-  // ✅ FILTRO: Excluir transacciones de cocina
   const filteredTransacciones = useMemo(() => {
-    // Excluir transacciones relacionadas con cocina
+    console.log('🔍 Total transacciones recibidas:', transacciones.length)
+
+    // ✅ FILTRO CORREGIDO - Solo comparar con boolean
     const transaccionesSinCocina = transacciones.filter((transaccion) => {
       const esCocina = transaccion.es_cocina
-      const haciaCocina = transaccion.hacia?.toLowerCase().includes('cocina')
-      const desdeCocina = transaccion.desde?.toLowerCase().includes('cocina')
 
-      // Excluir si es transacción de cocina
-      return !(esCocina === true || haciaCocina || desdeCocina)
+      console.log(`🔍 Transacción ${transaccion.id}:`, {
+        es_cocina: esCocina,
+        tipo_es_cocina: typeof esCocina,
+        hacia: transaccion.hacia,
+        desde: transaccion.desde
+      })
+
+      // ✅ SOLO COMPARAR CON BOOLEAN
+      return esCocina !== true
     })
 
-    // Si no hay término de búsqueda, devolver las transacciones filtradas
+    console.log('🔍 Transacciones después del filtro:', transaccionesSinCocina.length)
+
     if (!searchTerm.trim()) return transaccionesSinCocina
 
     // Aplicar búsqueda
@@ -83,6 +90,8 @@ export default function TransaccionesList({ transacciones, searchTerm, vendedorI
       )
     })
   }, [transacciones, searchTerm, productos])
+
+
 
   if (filteredTransacciones.length === 0) {
     return (
@@ -123,8 +132,8 @@ export default function TransaccionesList({ transacciones, searchTerm, vendedorI
                 </div>
                 <div className="text-right">
                   <span className={`text-xs px-2 py-1 rounded-full ${transaccion.tipo === 'Entrega'
-                      ? 'bg-green-100 text-green-800'
-                      : 'bg-red-100 text-red-800'
+                    ? 'bg-green-100 text-green-800'
+                    : 'bg-red-100 text-red-800'
                     }`}>
                     {transaccion.tipo}
                   </span>
