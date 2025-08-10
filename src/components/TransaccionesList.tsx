@@ -28,7 +28,7 @@ const formatDate = (dateString: string): string => {
 
 export default function TransaccionesList({ transacciones, searchTerm, vendedorId }: TransaccionesListProps) {
   const [productos, setProductos] = useState<Producto[]>([])
-  
+
   useEffect(() => {
     const fetchProductos = async () => {
       try {
@@ -42,42 +42,42 @@ export default function TransaccionesList({ transacciones, searchTerm, vendedorI
         console.error('Error al cargar productos:', error)
       }
     }
-    
+
     fetchProductos()
   }, [])
 
   // Función para obtener el nombre del producto
   const getProductName = (productoId: string) => {
     const producto = productos.find(p => p.id === productoId || p.id.toString() === productoId)
-    return producto?.nombre || productoId // Si no encuentra el producto, muestra el ID
+    return producto?.nombre || productoId
   }
 
-  // Filtrar transacciones excluyendo las que van hacia "Cocina" y aplicando búsqueda
+  // ✅ FILTRO: Excluir transacciones de cocina
   const filteredTransacciones = useMemo(() => {
-    // Primero filtrar las transacciones que NO van hacia "Cocina"
+    // Excluir transacciones relacionadas con cocina
     const transaccionesSinCocina = transacciones.filter((transaccion) => {
-      return transaccion.hacia !== 'Cocina'
+      const esCocina = transaccion.es_cocina
+      const haciaCocina = transaccion.hacia?.toLowerCase().includes('cocina')
+      const desdeCocina = transaccion.desde?.toLowerCase().includes('cocina')
+
+      // Excluir si es transacción de cocina
+      return !(esCocina === true || haciaCocina || desdeCocina)
     })
 
-    // Si no hay término de búsqueda, devolver las transacciones sin cocina
+    // Si no hay término de búsqueda, devolver las transacciones filtradas
     if (!searchTerm.trim()) return transaccionesSinCocina
 
-    // Aplicar filtro de búsqueda sobre las transacciones ya filtradas
+    // Aplicar búsqueda
     return transaccionesSinCocina.filter((transaccion) => {
       const nombreProducto = getProductName(transaccion.producto)
       const searchLower = searchTerm.toLowerCase()
-      
+
       return (
-        // Buscar por nombre de producto
         nombreProducto.toLowerCase().includes(searchLower) ||
-        // Buscar por tipo de transacción
         transaccion.tipo.toLowerCase().includes(searchLower) ||
-        // Buscar por fecha
         formatDate(transaccion.fecha).includes(searchTerm) ||
-        // Buscar por ID de producto
         transaccion.producto.toString().toLowerCase().includes(searchLower) ||
-        // Buscar en parámetros si existen
-        (transaccion.parametros && transaccion.parametros.some(param => 
+        (transaccion.parametros && transaccion.parametros.some(param =>
           param.nombre.toLowerCase().includes(searchLower)
         ))
       )
@@ -122,12 +122,16 @@ export default function TransaccionesList({ transacciones, searchTerm, vendedorI
                   )}
                 </div>
                 <div className="text-right">
-                  <span className={`text-xs px-2 py-1 rounded-full ${
-                    transaccion.tipo === 'Entrega' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                  }`}>
+                  <span className={`text-xs px-2 py-1 rounded-full ${transaccion.tipo === 'Entrega'
+                      ? 'bg-green-100 text-green-800'
+                      : 'bg-red-100 text-red-800'
+                    }`}>
                     {transaccion.tipo}
                   </span>
                   <p className="text-xs text-gray-500 mt-1">{formatDate(transaccion.fecha)}</p>
+                  <p className="text-xs text-gray-400">
+                    {transaccion.desde} → {transaccion.hacia}
+                  </p>
                 </div>
               </div>
             </div>

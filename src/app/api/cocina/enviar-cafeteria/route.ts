@@ -6,7 +6,7 @@ export async function POST(request: NextRequest) {
         const body = await request.json();
         const { productoId, cantidad, parametros } = body;
 
-        console.log('Enviando a almacén:', body);
+        console.log('Enviando a cafetería:', body);
 
         if (!productoId || cantidad === undefined || cantidad === null) {
             return NextResponse.json({ error: 'Faltan datos requeridos' }, { status: 400 });
@@ -64,41 +64,75 @@ export async function POST(request: NextRequest) {
                 );
             }
 
-            // Devolver al almacén (inventario principal)
+            // Agregar a cafetería (usuario_productos/usuario_producto_parametros)
             if (tiene_parametros && parametros && parametros.length > 0) {
-                // Devolver parámetros al almacén
+                // Agregar parámetros a cafetería
                 for (const param of parametros) {
                     await query(
-                        `INSERT INTO producto_parametros (producto_id, nombre, cantidad) 
-             VALUES ($1, $2, $3) 
-             ON CONFLICT (producto_id, nombre) 
-             DO UPDATE SET cantidad = producto_parametros.cantidad + $3`,
+                        `INSERT INTO usuario_producto_parametros (producto_id, nombre, cantidad) 
+                         VALUES ($1, $2, $3) 
+                         ON CONFLICT (producto_id, nombre) 
+                         DO UPDATE SET cantidad = usuario_producto_parametros.cantidad + $3`,
                         [productoId, param.nombre, param.cantidad]
                     );
                 }
             } else {
-                // Devolver cantidad normal al almacén
-                await query(
-                    'UPDATE productos SET cantidad = cantidad + $1 WHERE id = $2',
-                    [cantidad, productoId]
+                // Agregar cantidad normal a cafetería
+                // Verificar si ya existe el producto en usuario_productos
+                const existingProduct = await query(
+                    'SELECT cantidad FROM usuario_productos WHERE producto_id = $1 AND (cocina IS NOT TRUE OR cocina IS NULL)',
+                    [productoId]
                 );
+
+                if (existingProduct.rows.length > 0) {
+                    // Si existe, actualizar cantidad
+                    await query(
+                        'UPDATE usuario_productos SET cantidad = cantidad + $1 WHERE producto_id = $2 AND (cocina IS NOT TRUE OR cocina IS NULL)',
+                        [cantidad, productoId]
+                    );
+                } else {
+                    // Si no existe, crear nuevo registro
+                    await query(
+                        'INSERT INTO usuario_productos (producto_id, cantidad, precio, cocina) VALUES ($1, $2, $3, $4)',
+                        [productoId, cantidad, 0, false] // precio = 0 por defecto
+                    );
+                }
             }
 
-            // Registrar transacción de tipo "Baja" (devolución)
-            const transactionResult = await query(
+            // 🔥 REGISTRO 1: BAJA en cocina (es_cocina = TRUE) - CORREGIDO ✅
+            const transactionBaja = await query(
                 'INSERT INTO transacciones (producto, cantidad, tipo, desde, hacia, fecha, es_cocina) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
-                [productoId, cantidad, 'Baja', 'Cocina', 'Almacen', new Date(), true]
+                [productoId, cantidad, 'Baja', 'Cocina', 'Cafeteria', new Date(), true]
+                //                                  ↑        ↑
+                //                               desde    hacia
+                //                          CORREGIDO: Cocina → Cafeteria ✅
             );
 
-            const transaccionId = transactionResult.rows[0].id;
+            const transaccionBajaId = transactionBaja.rows[0].id;
 
-            // Registrar parámetros de la transacción si los hay
+            // 🔥 REGISTRO 2: ENTREGA a cafetería (es_cocina = FALSE)
+            const transactionEntrega = await query(
+                'INSERT INTO transacciones (producto, cantidad, tipo, desde, hacia, fecha, es_cocina) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
+                [productoId, cantidad, 'Entrega', 'Cocina', 'Cafeteria', new Date(), false]
+            );
+
+            const transaccionEntregaId = transactionEntrega.rows[0].id;
+
+            // Registrar parámetros para AMBAS transacciones si los hay
             if (tiene_parametros && parametros && parametros.length > 0) {
                 for (const param of parametros) {
+                    // Parámetros para transacción de BAJA
                     await query(
                         `INSERT INTO transaccion_parametros (transaccion_id, nombre, cantidad) 
-             VALUES ($1, $2, $3)`,
-                        [transaccionId, param.nombre, param.cantidad]
+                         VALUES ($1, $2, $3)`,
+                        [transaccionBajaId, param.nombre, param.cantidad]
+                    );
+
+                    // Parámetros para transacción de ENTREGA
+                    await query(
+                        `INSERT INTO transaccion_parametros (transaccion_id, nombre, cantidad) 
+                         VALUES ($1, $2, $3)`,
+                        [transaccionEntregaId, param.nombre, param.cantidad]
                     );
                 }
             }
@@ -106,8 +140,11 @@ export async function POST(request: NextRequest) {
             await query('COMMIT');
 
             return NextResponse.json({
-                message: `Se enviaron ${cantidad} unidades de ${nombre} de vuelta al almacén`,
-                transaction: transactionResult.rows[0]
+                message: `Se enviaron ${cantidad} unidades de ${nombre} a cafetería`,
+                transactions: {
+                    baja: transactionBaja.rows[0],
+                    entrega: transactionEntrega.rows[0]
+                }
             });
 
         } catch (error) {
@@ -115,15 +152,15 @@ export async function POST(request: NextRequest) {
             throw error;
         }
     } catch (error) {
-        console.error('Error al enviar producto a almacén:', error);
+        console.error('Error al enviar producto a cafetería:', error);
         if (error instanceof Error) {
             return NextResponse.json({
-                error: 'Error al enviar producto a almacén',
+                error: 'Error al enviar producto a cafetería',
                 details: error.message
             }, { status: 500 });
         } else {
             return NextResponse.json({
-                error: 'Error desconocido al enviar producto a almacén'
+                error: 'Error desconocido al enviar producto a cafetería'
             }, { status: 500 });
         }
     }

@@ -37,7 +37,8 @@ import {
   verificarNombreProducto,
   getVendedorProductos,
   getVendedorVentas,
-  getVendedorTransacciones
+  getVendedorTransacciones,
+  enviarCafeteriaACocina
 } from '../../services/api'
 import ProductDialog from '@/components/ProductDialog'
 import VendorDialog from '@/components/VendedorDialog'
@@ -309,7 +310,7 @@ export default function AlmacenPage() {
   const [quantityToReduce, setQuantityToReduce] = useState(0)
   const [parameterQuantities, setParameterQuantities] = useState<Record<string, number>>({})
   const [showDestinationDialog, setShowDestinationDialog] = useState(false)
-  const [selectedDestination, setSelectedDestination] = useState<'almacen' | 'merma' | null>(null)
+  const [selectedDestination, setSelectedDestination] = useState<'almacen' | 'merma' | 'cocina' | null>(null)
   const [cafeteriaFilterOption, setCafeteriaFilterOption] = useState<'todos' | 'pocos' | 'sin-existencias'>('todos')
   const [cafeteriaProductos, setCafeteriaProductos] = useState<Producto[]>([])
   const [cafeteriaSortBy, setCafeteriaSortBy] = useState<'nombre' | 'precio' | 'cantidadCaf' | 'cantidadAlm'>('nombre')
@@ -2874,12 +2875,18 @@ export default function AlmacenPage() {
           <DialogHeader>
             <DialogTitle>Enviar a:</DialogTitle>
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4"> {/* Cambiar de grid-cols-2 a grid-cols-3 */}
             <Button
               variant={selectedDestination === 'almacen' ? 'default' : 'outline'}
               onClick={() => setSelectedDestination('almacen')}
             >
               Almacén
+            </Button>
+            <Button
+              variant={selectedDestination === 'cocina' ? 'default' : 'outline'}
+              onClick={() => setSelectedDestination('cocina')}
+            >
+              Cocina
             </Button>
             <Button
               variant={selectedDestination === 'merma' ? 'default' : 'outline'}
@@ -2915,27 +2922,34 @@ export default function AlmacenPage() {
                     : undefined;
 
                   if (selectedDestination === 'merma') {
-                    // Enviar a merma usando una cadena vacía como el ID de vendedor
+                    // Enviar a merma
                     await handleProductMerma(
                       productToReduce.id,
-                      '',  // No usar cafeteriaVendorId, sino simplemente enviar una cadena vacía
+                      '',
                       productToReduce.tiene_parametros ? 0 : quantityToReduce,
                       parametrosReduccion
                     );
-
-                    // Actualizar inmediatamente la interfaz para cafetería
-                    if (activeSection === 'cafeteria') {
-                      const updatedProducts = await getProductosCafeteria();
-                      setCafeteriaProductos(updatedProducts);
-                      setProductosVendedor(updatedProducts);
-                    }
                   } else if (selectedDestination === 'almacen') {
-                    // Devolver al almacén usando la función específica para cafetería
+                    // Devolver al almacén
                     await handleReduceCafeteriaProduct(
                       productToReduce.id,
                       productToReduce.tiene_parametros ? 0 : quantityToReduce,
                       parametrosReduccion
                     );
+                  } else if (selectedDestination === 'cocina') {
+                    // NUEVA FUNCIONALIDAD: Enviar a cocina
+                    await enviarCafeteriaACocina(
+                      productToReduce.id,
+                      productToReduce.tiene_parametros ? 0 : quantityToReduce,
+                      parametrosReduccion
+                    );
+                  }
+
+                  // Actualizar inmediatamente la interfaz para cafetería
+                  if (activeSection === 'cafeteria') {
+                    const updatedProducts = await getProductosCafeteria();
+                    setCafeteriaProductos(updatedProducts);
+                    setProductosVendedor(updatedProducts);
                   }
 
                   setShowDestinationDialog(false);
@@ -2946,13 +2960,23 @@ export default function AlmacenPage() {
 
                   toast({
                     title: "Éxito",
-                    description: `Producto ${selectedDestination === 'merma' ? 'enviado a merma' : 'reducido'} correctamente.`,
+                    description: `Producto ${selectedDestination === 'merma'
+                        ? 'enviado a merma'
+                        : selectedDestination === 'cocina'
+                          ? 'enviado a cocina'
+                          : 'devuelto al almacén'
+                      } correctamente.`,
                   });
                 } catch (error) {
                   console.error('Error al procesar la operación:', error);
                   toast({
                     title: "Error",
-                    description: `No se pudo ${selectedDestination === 'merma' ? 'enviar a merma' : 'reducir'} el producto.`,
+                    description: `No se pudo ${selectedDestination === 'merma'
+                        ? 'enviar a merma'
+                        : selectedDestination === 'cocina'
+                          ? 'enviar a cocina'
+                          : 'devolver al almacén'
+                      } el producto.`,
                     variant: "destructive",
                   });
                 } finally {

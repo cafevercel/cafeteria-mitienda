@@ -12,7 +12,7 @@ import { Minus, Search, ArrowUpDown, Loader2 } from "lucide-react"
 import { format, parseISO, isValid } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { ProductoCocina, Transaccion, Producto } from '@/types'
-import { getProductosCocina, reducirProductoCocina, getTransacciones, getInventario, enviarProductoAAlmacen } from '@/app/services/api'
+import { getProductosCocina, reducirProductoCocina, getTransacciones, getInventario, enviarProductoAAlmacen, enviarProductoACafeteria } from '@/app/services/api'
 import { toast } from "@/hooks/use-toast"
 
 interface ActionDialogState {
@@ -60,13 +60,13 @@ export default function CocinaSection() {
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
     const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({})
     const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set())
-    
+
     // Estados para los diálogos
     const [actionDialog, setActionDialog] = useState<ActionDialogState>({
         isOpen: false,
         producto: null
     })
-    
+
     const [reduceDialog, setReduceDialog] = useState<ReduceDialogState>({
         isOpen: false,
         producto: null,
@@ -106,16 +106,16 @@ export default function CocinaSection() {
         try {
             setLoadingTransacciones(true)
             const [transaccionesData, inventarioData] = await Promise.all([
-                getTransacciones(),
+                getTransacciones(), // ← Obtiene TODAS las transacciones
                 getInventario()
             ])
 
-            // Filtrar solo las transacciones hacia "Cocina"
+            // ✅ NUEVO FILTRO: Solo transacciones donde es_cocina es TRUE
             const transaccionesCocina = transaccionesData.filter(
-                (transaccion: Transaccion) => transaccion.hacia === 'Cocina'
+                (transaccion: Transaccion) => transaccion.es_cocina === true
             )
 
-            setTransacciones(transaccionesCocina)
+            setTransacciones(transaccionesCocina) // ← Solo guarda las que tienen es_cocina = true
             setProductosInventario(inventarioData)
         } catch (error) {
             console.error('Error al cargar transacciones:', error)
@@ -269,6 +269,7 @@ export default function CocinaSection() {
     }
 
     // Manejar envío de producto
+    // Manejar envío de producto
     const handleSendProduct = async () => {
         if (!sendDialog.producto || !sendDialog.destino) return
 
@@ -303,14 +304,12 @@ export default function CocinaSection() {
                     totalCantidad,
                     parametrosArray
                 )
-            } else {
-                // Lógica para enviar a cafetería (implementar si es necesario)
-                toast({
-                    title: "Info",
-                    description: "Funcionalidad de envío a cafetería pendiente de implementar",
-                    variant: "default",
-                })
-                return
+            } else if (destino === 'Cafeteria') {
+                await enviarProductoACafeteria(
+                    producto.id,
+                    totalCantidad,
+                    parametrosArray
+                )
             }
 
             await fetchProductosCocina()
@@ -333,6 +332,7 @@ export default function CocinaSection() {
             setProcessingSend(false)
         }
     }
+
 
     const calcularCantidadTotal = (producto: ProductoCocina) => {
         if (producto.tiene_parametros && producto.parametros) {
@@ -614,7 +614,7 @@ export default function CocinaSection() {
                         >
                             Gastar
                         </Button>
-                        
+
                         <Button
                             onClick={() => openSendDialog(actionDialog.producto!)}
                             className="w-full"
@@ -622,7 +622,7 @@ export default function CocinaSection() {
                         >
                             Enviar a:
                         </Button>
-                        
+
                         <Button
                             onClick={closeActionDialog}
                             className="w-full"
@@ -749,7 +749,7 @@ export default function CocinaSection() {
                             </label>
                             <Select
                                 value={sendDialog.destino}
-                                onValueChange={(value: 'Cafeteria' | 'Almacen') => 
+                                onValueChange={(value: 'Cafeteria' | 'Almacen') =>
                                     setSendDialog(prev => ({ ...prev, destino: value }))
                                 }
                             >

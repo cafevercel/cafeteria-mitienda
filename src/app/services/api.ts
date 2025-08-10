@@ -969,3 +969,50 @@ export const enviarProductoAAlmacen = async (
     throw new Error('Error al enviar el producto a almacén');
   }
 };
+
+
+// En api.ts - Agregar esta nueva función
+export const enviarProductoACafeteria = async (
+  productoId: string,
+  cantidad: number,
+  parametros?: Array<{ nombre: string; cantidad: number }>
+): Promise<void> => {
+  try {
+    const response = await api.post('/cocina/enviar-cafeteria', {
+      productoId,
+      cantidad,
+      parametros
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error al enviar producto a cafetería:', error);
+    throw new Error('Error al enviar el producto a cafetería');
+  }
+};
+
+
+// Agregar esta función a tu archivo api.ts
+export const enviarCafeteriaACocina = async (
+  productoId: string,
+  cantidad: number,
+  parametros?: Array<{ nombre: string; cantidad: number }>
+) => {
+  const response = await fetch('/api/cafeteria/enviar-cocina', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      productoId,
+      cantidad,
+      parametros
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.details || errorData.error || 'Error al enviar producto a cocina');
+  }
+
+  return response.json();
+};

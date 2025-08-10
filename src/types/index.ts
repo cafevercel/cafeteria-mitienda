@@ -142,7 +142,8 @@ export interface Transaccion {
   fecha: string;
   precio: number;
   parametro_nombre?: string;
-  parametros?: TransaccionParametro[]; // Agregar esta línea
+  parametros?: TransaccionParametro[]; // Ya existía
+  es_cocina?: boolean; // ✅ AGREGADA - Indica si la transacción es relacionada con cocina
 }
 
 

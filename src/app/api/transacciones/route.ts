@@ -1,8 +1,7 @@
-//api/transacciones/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 
-// api/transacciones/route.ts - Función POST corregida
+// api/transacciones/route.ts - Función POST (sin cambios)
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -58,10 +57,10 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Registrar la transacción
+      // ✅ CORRECCIÓN: Registrar la transacción CON CAMPO es_cocina
       const transactionResult = await query(
-        'INSERT INTO transacciones (producto, cantidad, tipo, desde, hacia, fecha) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
-        [productoId, cantidad, tipo, 'Almacen', esCocina ? 'Cocina' : 'Cafeteria', new Date()]
+        'INSERT INTO transacciones (producto, cantidad, tipo, desde, hacia, fecha, es_cocina) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
+        [productoId, cantidad, tipo, 'Almacen', esCocina ? 'Cocina' : 'Cafeteria', new Date(), esCocina || false]
       );
 
       const transaccionId = transactionResult.rows[0].id;
@@ -177,6 +176,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// ✅ GET MODIFICADO - SIN FILTROS DE es_cocina
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const vendedorId = searchParams.get('vendedorId');
@@ -194,23 +194,27 @@ export async function GET(request: NextRequest) {
         t.hacia, 
         t.fecha, 
         p.precio,
-        p.tiene_parametros
+        p.tiene_parametros,
+        t.es_cocina,
+        t.producto as producto_id
       FROM transacciones t 
       JOIN productos p ON t.producto = p.id 
     `;
 
     if (productoId) {
+      // ✅ CAMBIO: Sin filtro de es_cocina
       transacciones = await query(
         baseQuery + ' WHERE t.producto = $1 ORDER BY t.fecha DESC',
         [productoId]
       );
     } else if (vendedorId) {
+      // ✅ CAMBIO: Sin filtro de es_cocina
       transacciones = await query(
-        baseQuery + ' WHERE t.hacia = $1 OR t.desde = $1 ORDER BY t.fecha DESC',
+        baseQuery + ' WHERE (t.hacia = $1 OR t.desde = $1) ORDER BY t.fecha DESC',
         [vendedorId]
       );
     } else {
-      // Si no hay filtros, devolver todas las transacciones
+      // ✅ CAMBIO PRINCIPAL: Devolver TODAS las transacciones
       transacciones = await query(
         baseQuery + ' ORDER BY t.fecha DESC'
       );
