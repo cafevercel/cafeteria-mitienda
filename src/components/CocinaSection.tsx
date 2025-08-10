@@ -7,18 +7,32 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Minus, Search, ArrowUpDown, Loader2 } from "lucide-react"
 import { format, parseISO, isValid } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { ProductoCocina, Transaccion, Producto } from '@/types'
-import { getProductosCocina, reducirProductoCocina, getTransacciones, getInventario } from '@/app/services/api'
+import { getProductosCocina, reducirProductoCocina, getTransacciones, getInventario, enviarProductoAAlmacen } from '@/app/services/api'
 import { toast } from "@/hooks/use-toast"
+
+interface ActionDialogState {
+    isOpen: boolean;
+    producto: ProductoCocina | null;
+}
 
 interface ReduceDialogState {
     isOpen: boolean;
     producto: ProductoCocina | null;
     cantidadAReducir: number;
     parametrosAReducir: Record<string, number>;
+}
+
+interface SendDialogState {
+    isOpen: boolean;
+    producto: ProductoCocina | null;
+    destino: 'Cafeteria' | 'Almacen' | '';
+    cantidadAEnviar: number;
+    parametrosAEnviar: Record<string, number>;
 }
 
 const formatDate = (dateString: string): string => {
@@ -46,13 +60,30 @@ export default function CocinaSection() {
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
     const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({})
     const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set())
+    
+    // Estados para los diálogos
+    const [actionDialog, setActionDialog] = useState<ActionDialogState>({
+        isOpen: false,
+        producto: null
+    })
+    
     const [reduceDialog, setReduceDialog] = useState<ReduceDialogState>({
         isOpen: false,
         producto: null,
         cantidadAReducir: 0,
         parametrosAReducir: {}
     })
+
+    const [sendDialog, setSendDialog] = useState<SendDialogState>({
+        isOpen: false,
+        producto: null,
+        destino: '',
+        cantidadAEnviar: 0,
+        parametrosAEnviar: {}
+    })
+
     const [processingReduce, setProcessingReduce] = useState(false)
+    const [processingSend, setProcessingSend] = useState(false)
 
     const fetchProductosCocina = useCallback(async () => {
         try {
@@ -124,6 +155,22 @@ export default function CocinaSection() {
         })
     }
 
+    // Abrir diálogo de selección de acción
+    const openActionDialog = (producto: ProductoCocina) => {
+        setActionDialog({
+            isOpen: true,
+            producto
+        })
+    }
+
+    const closeActionDialog = () => {
+        setActionDialog({
+            isOpen: false,
+            producto: null
+        })
+    }
+
+    // Abrir diálogo de reducción (gastar)
     const openReduceDialog = (producto: ProductoCocina) => {
         setReduceDialog({
             isOpen: true,
@@ -131,6 +178,7 @@ export default function CocinaSection() {
             cantidadAReducir: 0,
             parametrosAReducir: {}
         })
+        closeActionDialog()
     }
 
     const closeReduceDialog = () => {
@@ -142,6 +190,29 @@ export default function CocinaSection() {
         })
     }
 
+    // Abrir diálogo de envío
+    const openSendDialog = (producto: ProductoCocina) => {
+        setSendDialog({
+            isOpen: true,
+            producto,
+            destino: '',
+            cantidadAEnviar: 0,
+            parametrosAEnviar: {}
+        })
+        closeActionDialog()
+    }
+
+    const closeSendDialog = () => {
+        setSendDialog({
+            isOpen: false,
+            producto: null,
+            destino: '',
+            cantidadAEnviar: 0,
+            parametrosAEnviar: {}
+        })
+    }
+
+    // Manejar reducción de producto (gastar)
     const handleReduceProduct = async () => {
         if (!reduceDialog.producto) return
 
@@ -194,6 +265,72 @@ export default function CocinaSection() {
             })
         } finally {
             setProcessingReduce(false)
+        }
+    }
+
+    // Manejar envío de producto
+    const handleSendProduct = async () => {
+        if (!sendDialog.producto || !sendDialog.destino) return
+
+        const { producto, destino, cantidadAEnviar, parametrosAEnviar } = sendDialog
+
+        try {
+            setProcessingSend(true)
+
+            let totalCantidad = cantidadAEnviar
+            let parametrosArray: Array<{ nombre: string; cantidad: number }> | undefined
+
+            if (producto.tiene_parametros && producto.parametros) {
+                parametrosArray = Object.entries(parametrosAEnviar)
+                    .filter(([_, cantidad]) => cantidad > 0)
+                    .map(([nombre, cantidad]) => ({ nombre, cantidad }))
+
+                totalCantidad = parametrosArray.reduce((sum, p) => sum + p.cantidad, 0)
+            }
+
+            if (totalCantidad <= 0) {
+                toast({
+                    title: "Error",
+                    description: "Debe especificar una cantidad mayor a 0",
+                    variant: "destructive",
+                })
+                return
+            }
+
+            if (destino === 'Almacen') {
+                await enviarProductoAAlmacen(
+                    producto.id,
+                    totalCantidad,
+                    parametrosArray
+                )
+            } else {
+                // Lógica para enviar a cafetería (implementar si es necesario)
+                toast({
+                    title: "Info",
+                    description: "Funcionalidad de envío a cafetería pendiente de implementar",
+                    variant: "default",
+                })
+                return
+            }
+
+            await fetchProductosCocina()
+
+            toast({
+                title: "Éxito",
+                description: `Se envió ${totalCantidad} unidades de ${producto.nombre} a ${destino}`,
+            })
+
+            closeSendDialog()
+
+        } catch (error) {
+            console.error('Error al enviar producto:', error)
+            toast({
+                title: "Error",
+                description: "No se pudo enviar el producto",
+                variant: "destructive",
+            })
+        } finally {
+            setProcessingSend(false)
         }
     }
 
@@ -354,7 +491,7 @@ export default function CocinaSection() {
                                                         size="sm"
                                                         onClick={(e) => {
                                                             e.stopPropagation()
-                                                            openReduceDialog(producto)
+                                                            openActionDialog(producto)
                                                         }}
                                                         disabled={sinStock}
                                                         className="flex-shrink-0"
@@ -462,17 +599,52 @@ export default function CocinaSection() {
                 </CardContent>
             </Card>
 
-            {/* Dialog para reducir producto */}
+            {/* Dialog para seleccionar acción */}
+            <Dialog open={actionDialog.isOpen} onOpenChange={(open) => !open && closeActionDialog()}>
+                <DialogContent className="max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle>Seleccionar acción - {actionDialog.producto?.nombre}</DialogTitle>
+                    </DialogHeader>
+
+                    <div className="space-y-3">
+                        <Button
+                            onClick={() => openReduceDialog(actionDialog.producto!)}
+                            className="w-full"
+                            variant="destructive"
+                        >
+                            Gastar
+                        </Button>
+                        
+                        <Button
+                            onClick={() => openSendDialog(actionDialog.producto!)}
+                            className="w-full"
+                            variant="outline"
+                        >
+                            Enviar a:
+                        </Button>
+                        
+                        <Button
+                            onClick={closeActionDialog}
+                            className="w-full"
+                            variant="secondary"
+                        >
+                            Cancelar
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Dialog para reducir producto (gastar) */}
             <Dialog open={reduceDialog.isOpen} onOpenChange={(open) => !open && closeReduceDialog()}>
                 <DialogContent className="max-w-md">
                     <DialogHeader>
-                        <DialogTitle>Reducir cantidad - {reduceDialog.producto?.nombre}</DialogTitle>
+                        <DialogTitle>Gastar - {reduceDialog.producto?.nombre}</DialogTitle>
                     </DialogHeader>
 
                     <div className="space-y-4">
                         {reduceDialog.producto?.tiene_parametros && reduceDialog.producto.parametros ? (
                             <div className="space-y-3">
-                                <p className="text-sm text-gray-600">Especifique la cantidad a reducir para cada parámetro:</p>
+                                <p className="text-sm text-gray-600">Especifique la cantidad a gastar para cada parámetro:</p>
                                 <div className="space-y-2 max-h-60 overflow-y-auto">
                                     {reduceDialog.producto.parametros
                                         .filter(param => param.cantidad > 0)
@@ -503,13 +675,13 @@ export default function CocinaSection() {
                                         ))}
                                 </div>
                                 <div className="text-sm text-gray-600">
-                                    Total a reducir: {Object.values(reduceDialog.parametrosAReducir).reduce((a, b) => a + b, 0)}
+                                    Total a gastar: {Object.values(reduceDialog.parametrosAReducir).reduce((a, b) => a + b, 0)}
                                 </div>
                             </div>
                         ) : (
                             <div className="space-y-2">
                                 <label className="block text-sm font-medium text-gray-700">
-                                    Cantidad a reducir:
+                                    Cantidad a gastar:
                                 </label>
                                 <Input
                                     type="number"
@@ -554,7 +726,130 @@ export default function CocinaSection() {
                                         Procesando...
                                     </>
                                 ) : (
-                                    'Confirmar Reducción'
+                                    'Confirmar Gasto'
+                                )}
+                            </Button>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Dialog para enviar producto */}
+            <Dialog open={sendDialog.isOpen} onOpenChange={(open) => !open && closeSendDialog()}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Enviar - {sendDialog.producto?.nombre}</DialogTitle>
+                    </DialogHeader>
+
+                    <div className="space-y-4">
+                        {/* Selector de destino */}
+                        <div className="space-y-2">
+                            <label className="block text-sm font-medium text-gray-700">
+                                Enviar a:
+                            </label>
+                            <Select
+                                value={sendDialog.destino}
+                                onValueChange={(value: 'Cafeteria' | 'Almacen') => 
+                                    setSendDialog(prev => ({ ...prev, destino: value }))
+                                }
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Seleccionar destino" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="Cafeteria">Cafetería</SelectItem>
+                                    <SelectItem value="Almacen">Almacén</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* Cantidad a enviar */}
+                        {sendDialog.producto?.tiene_parametros && sendDialog.producto.parametros ? (
+                            <div className="space-y-3">
+                                <p className="text-sm text-gray-600">Especifique la cantidad a enviar para cada parámetro:</p>
+                                <div className="space-y-2 max-h-60 overflow-y-auto">
+                                    {sendDialog.producto.parametros
+                                        .filter(param => param.cantidad > 0)
+                                        .map((parametro, idx) => (
+                                            <div key={idx} className="flex items-center justify-between p-2 border rounded">
+                                                <div>
+                                                    <p className="font-medium text-sm">{parametro.nombre}</p>
+                                                    <p className="text-xs text-gray-500">Disponible: {parametro.cantidad}</p>
+                                                </div>
+                                                <Input
+                                                    type="number"
+                                                    className="w-20"
+                                                    min={0}
+                                                    max={parametro.cantidad}
+                                                    value={sendDialog.parametrosAEnviar[parametro.nombre] || 0}
+                                                    onChange={(e) => {
+                                                        const value = Math.max(0, Math.min(Number(e.target.value), parametro.cantidad))
+                                                        setSendDialog(prev => ({
+                                                            ...prev,
+                                                            parametrosAEnviar: {
+                                                                ...prev.parametrosAEnviar,
+                                                                [parametro.nombre]: value
+                                                            }
+                                                        }))
+                                                    }}
+                                                />
+                                            </div>
+                                        ))}
+                                </div>
+                                <div className="text-sm text-gray-600">
+                                    Total a enviar: {Object.values(sendDialog.parametrosAEnviar).reduce((a, b) => a + b, 0)}
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="space-y-2">
+                                <label className="block text-sm font-medium text-gray-700">
+                                    Cantidad a enviar:
+                                </label>
+                                <Input
+                                    type="number"
+                                    min={0}
+                                    max={sendDialog.producto?.cantidad || 0}
+                                    value={sendDialog.cantidadAEnviar}
+                                    onChange={(e) => {
+                                        const value = Math.max(0, Math.min(Number(e.target.value), sendDialog.producto?.cantidad || 0))
+                                        setSendDialog(prev => ({
+                                            ...prev,
+                                            cantidadAEnviar: value
+                                        }))
+                                    }}
+                                    placeholder="Ingrese la cantidad"
+                                />
+                                <p className="text-sm text-gray-500">
+                                    Disponible: {sendDialog.producto?.cantidad || 0}
+                                </p>
+                            </div>
+                        )}
+
+                        <div className="flex justify-end gap-2 pt-4">
+                            <Button
+                                variant="outline"
+                                onClick={closeSendDialog}
+                                disabled={processingSend}
+                            >
+                                Cancelar
+                            </Button>
+                            <Button
+                                onClick={handleSendProduct}
+                                disabled={
+                                    processingSend ||
+                                    !sendDialog.destino ||
+                                    (sendDialog.producto?.tiene_parametros
+                                        ? Object.values(sendDialog.parametrosAEnviar).reduce((a, b) => a + b, 0) <= 0
+                                        : sendDialog.cantidadAEnviar <= 0)
+                                }
+                            >
+                                {processingSend ? (
+                                    <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        Enviando...
+                                    </>
+                                ) : (
+                                    'Confirmar Envío'
                                 )}
                             </Button>
                         </div>

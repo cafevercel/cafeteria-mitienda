@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 
-// api/transacciones/route.ts - Reemplaza la función POST
+// api/transacciones/route.ts - Función POST corregida
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -77,20 +77,27 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // ✅ CAMBIO PRINCIPAL: Manejar destino según esCocina
+      // ✅ SOLUCIÓN CORREGIDA: Manejar destino según esCocina
       if (esCocina) {
-        // ✅ NUEVO: Insertar en tabla cocina
+        // ✅ CORRECCIÓN PRINCIPAL: Usar ON CONFLICT para evitar duplicados
         await query(
-          'INSERT INTO cocina (producto_id, cantidad, precio, cocina) VALUES ($1, $2, $3, $4)',
+          `INSERT INTO cocina (producto_id, cantidad, precio, cocina) 
+           VALUES ($1, $2, $3, $4) 
+           ON CONFLICT (producto_id) 
+           DO UPDATE SET 
+             cantidad = cocina.cantidad + $2, 
+             precio = $3`,
           [productoId, cantidad, precio, true]
         );
 
         // Si tiene parámetros, también insertar los parámetros en cocina
         if (tiene_parametros && parametros && parametros.length > 0) {
-          // Necesitarás crear una tabla cocina_parametros similar a usuario_producto_parametros
           for (const param of parametros) {
             await query(
-              'INSERT INTO cocina_parametros (producto_id, nombre, cantidad) VALUES ($1, $2, $3) ON CONFLICT (producto_id, nombre) DO UPDATE SET cantidad = cocina_parametros.cantidad + $3',
+              `INSERT INTO cocina_parametros (producto_id, nombre, cantidad) 
+               VALUES ($1, $2, $3) 
+               ON CONFLICT (producto_id, nombre) 
+               DO UPDATE SET cantidad = cocina_parametros.cantidad + $3`,
               [productoId, param.nombre, param.cantidad]
             );
           }
@@ -169,7 +176,6 @@ export async function POST(request: NextRequest) {
     }
   }
 }
-
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);

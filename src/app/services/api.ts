@@ -949,3 +949,23 @@ export const deleteGasto = async (id: string) => {
     throw new Error('No se pudo eliminar el gasto');
   }
 };
+
+
+// En api.ts - Agregar esta nueva función
+export const enviarProductoAAlmacen = async (
+  productoId: string,
+  cantidad: number,
+  parametros?: Array<{ nombre: string; cantidad: number }>
+): Promise<void> => {
+  try {
+    const response = await api.post('/cocina/enviar-almacen', {
+      productoId,
+      cantidad,
+      parametros
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error al enviar producto a almacén:', error);
+    throw new Error('Error al enviar el producto a almacén');
+  }
+};
