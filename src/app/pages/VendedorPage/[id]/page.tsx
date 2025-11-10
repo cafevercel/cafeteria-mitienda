@@ -1277,39 +1277,21 @@ const ParametrosDialog = ({
                     </span>
                   </div>
                   <div className="flex items-center space-x-2 flex-shrink-0">
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => {
+                    <Input
+                      type="number"
+                      min="0"
+                      max={cantidadMaxima}
+                      value={param.cantidad}
+                      onChange={(e) => {
+                        const valor = parseInt(e.target.value) || 0;
+                        const valorAjustado = Math.max(0, Math.min(valor, cantidadMaxima));
                         const newParams = [...parametros];
-                        newParams[index].cantidad = Math.max(0, param.cantidad - 1);
+                        newParams[index].cantidad = valorAjustado;
                         setParametros(newParams);
                       }}
-                      disabled={param.cantidad <= 0}
-                    >
-                      <Minus className="h-3 w-3" />
-                    </Button>
-                    <span className="min-w-[2rem] text-center text-sm font-medium">
-                      {param.cantidad}
-                    </span>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => {
-                        const newParams = [...parametros];
-                        // No permitir exceder la cantidad máxima disponible
-                        newParams[index].cantidad = Math.min(
-                          param.cantidad + 1,
-                          cantidadMaxima
-                        );
-                        setParametros(newParams);
-                      }}
-                      disabled={param.cantidad >= cantidadMaxima}
-                    >
-                      <Plus className="h-3 w-3" />
-                    </Button>
+                      className="w-20 h-8 text-center"
+                    />
+                    <span className="text-xs text-gray-500">/ {cantidadMaxima}</span>
                   </div>
                 </div>
               );
@@ -1735,37 +1717,26 @@ export default function VendedorPage() {
                                 </p>
                                 <p className="text-sm text-gray-500">Precio: ${formatPrice(producto.precio)}</p>
 
-                                {/* Selector de cantidad para productos sin parámetros */}
                                 {!producto.tiene_parametros && selectedProductIds.includes(producto.id) && (
                                   <div className="flex items-center space-x-2 mt-2">
-                                    <Button
-                                      variant="outline"
-                                      size="icon"
-                                      onClick={(e) => {
+                                    <label className="text-sm text-gray-600">Cantidad:</label>
+                                    <Input
+                                      type="number"
+                                      min="1"
+                                      max={producto.cantidad}
+                                      value={productosEnDialogo.find(p => p.id === producto.id)?.cantidad || 1}
+                                      onChange={(e) => {
                                         e.stopPropagation();
-                                        ajustarCantidadEnDialogo(producto.id, -1);
+                                        const valor = parseInt(e.target.value) || 1;
+                                        const valorAjustado = Math.max(1, Math.min(valor, producto.cantidad));
+                                        setProductosEnDialogo(prev => prev.map(p =>
+                                          p.id === producto.id ? { ...p, cantidad: valorAjustado } : p
+                                        ));
                                       }}
-                                      className="h-6 w-6"
-                                    >
-                                      <Minus className="h-3 w-3" />
-                                    </Button>
-                                    <span>
-                                      {productosEnDialogo.find(p => p.id === producto.id)?.cantidad || 1}
-                                    </span>
-                                    <Button
-                                      variant="outline"
-                                      size="icon"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        ajustarCantidadEnDialogo(producto.id, 1);
-                                      }}
-                                      className="h-6 w-6"
-                                      disabled={
-                                        (productosEnDialogo.find(p => p.id === producto.id)?.cantidad || 1) >= producto.cantidad
-                                      }
-                                    >
-                                      <Plus className="h-3 w-3" />
-                                    </Button>
+                                      className="w-20 h-8 text-center"
+                                      onClick={(e) => e.stopPropagation()}
+                                    />
+                                    <span className="text-xs text-gray-500">/ {producto.cantidad}</span>
                                   </div>
                                 )}
 
