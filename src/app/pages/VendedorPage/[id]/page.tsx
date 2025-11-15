@@ -1374,7 +1374,7 @@ export default function VendedorPage() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [productosEnDialogo, setProductosEnDialogo] = useState<{
     id: string;
-    cantidad: number;
+    cantidad: number | '';  // Permitir string vacío temporalmente
   }[]>([]);
 
 
@@ -1437,12 +1437,21 @@ export default function VendedorPage() {
         // Encontrar el producto para obtener la cantidad máxima disponible
         const producto = productosDisponibles.find(prod => prod.id === id);
         const cantidadMaxima = producto ? producto.cantidad : 1;
+
+        // 🔥 CONVERTIR A NÚMERO ANTES DE OPERAR
+        const cantidadActual = typeof p.cantidad === 'number' ? p.cantidad : 1;
+        const nuevaCantidad = cantidadActual + incremento;
+
         // Ajustar la cantidad sin exceder los límites
-        return { ...p, cantidad: Math.max(1, Math.min(p.cantidad + incremento, cantidadMaxima)) };
+        return {
+          ...p,
+          cantidad: Math.max(1, Math.min(nuevaCantidad, cantidadMaxima))
+        };
       }
       return p;
     }));
   };
+
 
   const handleParametrosSubmit = (parametros: ProductoParametro[]) => {
     if (!selectedProduct) return;
@@ -1478,9 +1487,13 @@ export default function VendedorPage() {
       )
       .map(producto => {
         const productoEnDialogo = productosEnDialogo.find(p => p.id === producto.id);
+        // Asegurar que la cantidad sea al menos 1
+        const cantidad = productoEnDialogo?.cantidad || 1;
+        const cantidadFinal = typeof cantidad === 'number' && cantidad > 0 ? cantidad : 1;
+
         return {
           ...producto,
-          cantidadVendida: productoEnDialogo ? productoEnDialogo.cantidad : 1
+          cantidadVendida: cantidadFinal
         };
       });
 
@@ -1497,6 +1510,7 @@ export default function VendedorPage() {
     setProductosConParametrosEnEspera([]);
     setIsDialogOpen(false);
   };
+
 
   // Añade un manejador para cuando se cierra el diálogo
   const handleDialogClose = () => {
@@ -1724,14 +1738,43 @@ export default function VendedorPage() {
                                       type="number"
                                       min="1"
                                       max={producto.cantidad}
-                                      value={productosEnDialogo.find(p => p.id === producto.id)?.cantidad || 1}
+                                      value={productosEnDialogo.find(p => p.id === producto.id)?.cantidad || ''}
                                       onChange={(e) => {
                                         e.stopPropagation();
-                                        const valor = parseInt(e.target.value) || 1;
-                                        const valorAjustado = Math.max(1, Math.min(valor, producto.cantidad));
-                                        setProductosEnDialogo(prev => prev.map(p =>
-                                          p.id === producto.id ? { ...p, cantidad: valorAjustado } : p
-                                        ));
+                                        const valor = e.target.value;
+
+                                        // Permitir campo vacío mientras escribe
+                                        if (valor === '') {
+                                          setProductosEnDialogo(prev => prev.map(p =>
+                                            p.id === producto.id ? { ...p, cantidad: '' as any } : p
+                                          ));
+                                          return;
+                                        }
+
+                                        // Permitir escribir cualquier número
+                                        const valorNumerico = parseInt(valor);
+                                        if (!isNaN(valorNumerico)) {
+                                          setProductosEnDialogo(prev => prev.map(p =>
+                                            p.id === producto.id ? { ...p, cantidad: valorNumerico } : p
+                                          ));
+                                        }
+                                      }}
+                                      onBlur={(e) => {
+                                        // Validar cuando pierde el foco
+                                        const valor = e.target.value;
+                                        const valorNumerico = parseInt(valor);
+
+                                        if (valor === '' || isNaN(valorNumerico) || valorNumerico < 1) {
+                                          // Si está vacío o es inválido, establecer en 1
+                                          setProductosEnDialogo(prev => prev.map(p =>
+                                            p.id === producto.id ? { ...p, cantidad: 1 } : p
+                                          ));
+                                        } else if (valorNumerico > producto.cantidad) {
+                                          // Si excede el máximo, ajustar al máximo
+                                          setProductosEnDialogo(prev => prev.map(p =>
+                                            p.id === producto.id ? { ...p, cantidad: producto.cantidad } : p
+                                          ));
+                                        }
                                       }}
                                       className="w-20 h-8 text-center"
                                       onClick={(e) => e.stopPropagation()}
