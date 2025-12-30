@@ -260,7 +260,7 @@ export default function GastosVendedorDialog({ isOpen, onClose, onRefresh, vende
                           <AlertDialogHeader>
                             <AlertDialogTitle>Confirmar eliminación</AlertDialogTitle>
                             <AlertDialogDescription>
-                              ¿Estás seguro de que deseas eliminar el gasto "{gasto.nombre}"?
+                              ¿Estás seguro de que deseas eliminar el gasto &quot;{gasto.nombre}&quot;?
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
