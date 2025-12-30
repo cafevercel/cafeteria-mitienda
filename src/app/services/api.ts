@@ -705,21 +705,29 @@ export const getProductosCompartidos = async (usuarioId?: string, validation?: s
 };
 
 export const getVendedorProductos = async (vendedorId: string): Promise<LocalProducto[]> => {
+  console.log('🔵 === getVendedorProductos INICIADO ===');
+  console.log('🔵 vendedorId recibido:', vendedorId);
+  console.log('🔵 Tipo:', typeof vendedorId);
+
   try {
     if (!vendedorId) {
       console.warn('⚠️ getVendedorProductos llamado sin vendedorId');
       return [];
     }
 
-    console.log('🔍 Llamando a API para obtener productos del vendedor:', vendedorId);
+    console.log('🔵 Construyendo URL...');
+    const url = `/users/productos/${vendedorId}`;
+    console.log('🔵 URL:', url);
 
-    // Usar el endpoint correcto
-    const response = await api.get(`/users/productos/${vendedorId}`);
+    console.log('🔵 Llamando a api.get...');
+    const response = await api.get(url);
 
-    console.log('📦 Respuesta recibida:', {
-      total: response.data.length,
-      conParametros: response.data.filter((p: any) => p.tiene_parametros).length
-    });
+    console.log('✅ Respuesta recibida');
+    console.log('✅ Status:', response.status);
+    console.log('✅ Data:', response.data);
+    console.log('✅ Data type:', typeof response.data);
+    console.log('✅ Is array?:', Array.isArray(response.data));
+    console.log('✅ Length:', response.data?.length);
 
     // Aseguramos que la respuesta tenga la estructura correcta
     const productos = response.data.map((producto: any) => {
@@ -730,26 +738,22 @@ export const getVendedorProductos = async (vendedorId: string): Promise<LocalPro
         parametros: producto.parametros || []
       };
 
-      // Log detallado para productos con parámetros
-      if (productoMapeado.tiene_parametros && productoMapeado.parametros.length > 0) {
-        console.log(`   📦 ${productoMapeado.nombre}:`, {
-          tiene_parametros: productoMapeado.tiene_parametros,
-          cantidad_producto: productoMapeado.cantidad,
-          parametros: productoMapeado.parametros,
-          total_parametros: productoMapeado.parametros.reduce((sum: number, p: any) => sum + (p.cantidad || 0), 0)
-        });
-      }
-
       return productoMapeado;
     });
 
+    console.log('✅ Productos mapeados:', productos.length);
+    console.log('🔵 === getVendedorProductos FINALIZADO ===');
+
     return productos;
   } catch (error) {
-    console.error('❌ Error al obtener productos del vendedor:', error);
+    console.error('❌ === ERROR en getVendedorProductos ===');
+    console.error('❌ Error:', error);
 
     if (axios.isAxiosError(error)) {
-      console.error('   Status:', error.response?.status);
-      console.error('   Detalles:', error.response?.data);
+      console.error('❌ Es un error de Axios');
+      console.error('❌ Status:', error.response?.status);
+      console.error('❌ Data:', error.response?.data);
+      console.error('❌ URL:', error.config?.url);
     }
 
     throw new Error('No se pudieron obtener los productos del vendedor');

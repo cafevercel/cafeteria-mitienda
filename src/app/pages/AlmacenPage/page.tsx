@@ -1026,22 +1026,36 @@ export default function AlmacenPage() {
   };
 
   const handleVerVendedor = async (vendedor: Vendedor, initialMode: 'view' | 'edit' | 'ventas' = 'view') => {
+    console.log('🟢 === handleVerVendedor INICIADO ===');
+    console.log('🟢 Vendedor:', vendedor);
+    console.log('🟢 Vendedor ID:', vendedor.id);
+    console.log('🟢 Initial Mode:', initialMode);
+
     try {
       setIsLoading(true);
-
-      // Primero establecemos el modo y el vendedor seleccionado
       setModeVendedor(initialMode);
       setVendedorSeleccionado(vendedor);
 
-      // ✅ SIEMPRE cargar TODOS los datos, sin importar el modo
+      console.log('🔵 Antes de Promise.allSettled');
+      console.log('🔵 Llamando a getVendedorProductos con ID:', vendedor.id);
+
       const [productosResult, ventasResult, transaccionesResult] = await Promise.allSettled([
         getVendedorProductos(vendedor.id),
         getVendedorVentas(vendedor.id),
         getVendedorTransacciones(vendedor.id)
       ]);
 
+      console.log('🟡 Promise.allSettled completado');
+      console.log('🟡 productosResult:', productosResult);
+
       // Procesar productos
       if (productosResult.status === 'fulfilled') {
+        console.log('✅ Productos fulfilled');
+        console.log('✅ Valor recibido:', productosResult.value);
+        console.log('✅ Tipo:', typeof productosResult.value);
+        console.log('✅ Es array?:', Array.isArray(productosResult.value));
+        console.log('✅ Length:', productosResult.value?.length);
+
         const productosCorregidos = productosResult.value.map(p => ({
           id: p.id,
           nombre: p.nombre,
@@ -1052,21 +1066,28 @@ export default function AlmacenPage() {
           tieneParametros: Boolean(p.tiene_parametros || p.tieneParametros),
           parametros: p.parametros || []
         }));
+
+        console.log('✅ Productos corregidos:', productosCorregidos);
+        console.log('✅ Seteando productosVendedor con:', productosCorregidos.length, 'productos');
+
         setProductosVendedor(productosCorregidos);
+
+        console.log('✅ productosVendedor actualizado');
       } else {
-        console.error('Error al obtener productos:', productosResult.reason);
+        console.error('❌ productosResult rejected');
+        console.error('❌ Razón:', productosResult.reason);
         setProductosVendedor([]);
       }
 
       // Procesar ventas
       if (ventasResult.status === 'fulfilled') {
         const ventas = ventasResult.value;
-        console.log('✅ Ventas cargadas:', ventas.length); // ← Log para debug
+        console.log('✅ Ventas cargadas:', ventas.length);
         setVentasVendedor(ventas);
         calcularVentasDiarias(ventas);
         calcularVentasSemanales(ventas);
       } else {
-        console.error('Error al obtener ventas:', ventasResult.reason);
+        console.error('❌ Error al obtener ventas:', ventasResult.reason);
         setVentasVendedor([]);
         setVentasDiarias([]);
         setVentasSemanales([]);
@@ -1074,25 +1095,28 @@ export default function AlmacenPage() {
 
       // Procesar transacciones
       if (transaccionesResult.status === 'fulfilled') {
+        console.log('✅ Transacciones cargadas:', transaccionesResult.value.length);
         setTransaccionesVendedor(transaccionesResult.value);
       } else {
-        console.error('Error al obtener transacciones:', transaccionesResult.reason);
+        console.error('❌ Error al obtener transacciones:', transaccionesResult.reason);
         setTransaccionesVendedor([]);
       }
 
-      console.log('✅ Todos los datos cargados'); // ← Log para debug
+      console.log('✅ Todos los datos procesados');
 
     } catch (error) {
-      console.error('Error al cargar datos del vendedor:', error);
+      console.error('❌ Error en handleVerVendedor:', error);
       toast({
         title: "Error",
         description: "No se pudieron cargar algunos datos del vendedor.",
         variant: "destructive",
       });
     } finally {
+      console.log('🔵 Finalizando, setIsLoading(false)');
       setIsLoading(false);
     }
   };
+
 
 
 
@@ -1359,13 +1383,15 @@ export default function AlmacenPage() {
   };
 
   const handleMostrarProductosVendedor = (vendedor: Vendedor) => {
-    setVendedorSeleccionado(vendedor);
-    setModeVendedor('productos');
+    handleVerVendedor(vendedor, 'view').then(() => {
+      setModeVendedor('productos');
+    });
   };
 
   const handleMostrarTransaccionesVendedor = (vendedor: Vendedor) => {
-    setVendedorSeleccionado(vendedor);
-    setModeVendedor('transacciones');
+    handleVerVendedor(vendedor, 'view').then(() => {
+      setModeVendedor('transacciones');
+    });
   };
 
 
