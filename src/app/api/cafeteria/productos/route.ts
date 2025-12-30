@@ -2,8 +2,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 
+async function getCafeteriaUserId() {
+    const result = await query("SELECT id FROM usuarios WHERE nombre = 'Cafetería' LIMIT 1");
+    if (result.rows.length === 0) {
+        throw new Error("Usuario 'Cafetería' no encontrado. Por favor ejecute la migración.");
+    }
+    return result.rows[0].id;
+}
+
 export async function GET(request: NextRequest) {
     try {
+        const cafeteriaUserId = await getCafeteriaUserId();
+
         // Consulta corregida - separamos la lógica de cantidad total vs parámetros
         const result = await query(`
             SELECT 
@@ -13,20 +23,20 @@ export async function GET(request: NextRequest) {
                 p.precio_compra,
                 p.foto,
                 p.tiene_parametros,
-                -- Para productos con parámetros, usar la suma de parámetros
-                -- Para productos sin parámetros, usar la cantidad directa
+                -- Para productos con parámetros, usar la suma de parámetros del usuario
+                -- Para productos sin parámetros, usar la cantidad directa del usuario
                 CASE 
                     WHEN p.tiene_parametros = true THEN 
                         COALESCE(
                             (SELECT SUM(upp_sum.cantidad) 
                              FROM usuario_producto_parametros upp_sum 
-                             WHERE upp_sum.producto_id = p.id), 
+                             WHERE upp_sum.producto_id = p.id AND upp_sum.usuario_id = $1), 
                             0
                         )
                     ELSE 
                         COALESCE(up.cantidad, 0)
                 END as cantidad,
-                -- Obtener parámetros si existen
+                -- Obtener parámetros si existen para el usuario
                 COALESCE(
                     (SELECT json_agg(
                         json_build_object(
@@ -35,14 +45,13 @@ export async function GET(request: NextRequest) {
                         )
                     )
                     FROM usuario_producto_parametros upp_params 
-                    WHERE upp_params.producto_id = p.id),
+                    WHERE upp_params.producto_id = p.id AND upp_params.usuario_id = $1),
                     '[]'::json
                 ) as parametros
             FROM productos p
-            LEFT JOIN usuario_productos up ON p.id = up.producto_id
-            WHERE up.cocina IS NOT TRUE OR up.cocina IS NULL
+            LEFT JOIN usuario_productos up ON p.id = up.producto_id AND up.usuario_id = $1
             ORDER BY p.id
-        `);
+        `, [cafeteriaUserId]);
 
         return NextResponse.json(result.rows);
 
@@ -78,6 +87,8 @@ export async function POST(request: NextRequest) {
             fotoUrl = foto;
         }
 
+        const cafeteriaUserId = await getCafeteriaUserId();
+
         // Iniciar transacción
         await query('BEGIN');
 
@@ -91,12 +102,12 @@ export async function POST(request: NextRequest) {
 
             const productoId = productoResult.rows[0].id;
 
-            // 2. 🔧 ARREGLADO: Insertar inventario SOLO si NO tiene parámetros
+            // 2. Insertar inventario SOLO si NO tiene parámetros
             if (!tieneParametros && cantidad && Number(cantidad) > 0) {
                 await query(
-                    `INSERT INTO usuario_productos (producto_id, cantidad, cocina) 
-                     VALUES ($1, $2, $3)`,
-                    [productoId, Number(cantidad), false] // cocina = false por defecto
+                    `INSERT INTO usuario_productos (usuario_id, producto_id, cantidad, precio) 
+                     VALUES ($1, $2, $3, $4)`,
+                    [cafeteriaUserId, productoId, Number(cantidad), Number(precio)]
                 );
             }
 
@@ -104,9 +115,9 @@ export async function POST(request: NextRequest) {
             if (tieneParametros && parametros.length > 0) {
                 for (const param of parametros) {
                     await query(
-                        `INSERT INTO usuario_producto_parametros (producto_id, nombre, cantidad) 
-                         VALUES ($1, $2, $3)`,
-                        [productoId, param.nombre, param.cantidad]
+                        `INSERT INTO usuario_producto_parametros (usuario_id, producto_id, nombre, cantidad) 
+                         VALUES ($1, $2, $3, $4)`,
+                        [cafeteriaUserId, productoId, param.nombre, param.cantidad]
                     );
                 }
             }
@@ -114,7 +125,7 @@ export async function POST(request: NextRequest) {
             // Confirmar transacción
             await query('COMMIT');
 
-            // 🔧 ARREGLADO: Obtener el producto completo con la lógica correcta
+            // Obtener el producto completo con la lógica correcta
             const productoCompleto = await query(`
                 SELECT 
                     p.id,
@@ -123,13 +134,12 @@ export async function POST(request: NextRequest) {
                     p.precio_compra,
                     p.foto,
                     p.tiene_parametros,
-                    -- Usar la misma lógica que en GET
                     CASE 
                         WHEN p.tiene_parametros = true THEN 
                             COALESCE(
                                 (SELECT SUM(upp_sum.cantidad) 
                                  FROM usuario_producto_parametros upp_sum 
-                                 WHERE upp_sum.producto_id = p.id), 
+                                 WHERE upp_sum.producto_id = p.id AND upp_sum.usuario_id = $2), 
                                 0
                             )
                         ELSE 
@@ -143,13 +153,13 @@ export async function POST(request: NextRequest) {
                             )
                         )
                         FROM usuario_producto_parametros upp_params 
-                        WHERE upp_params.producto_id = p.id),
+                        WHERE upp_params.producto_id = p.id AND upp_params.usuario_id = $2),
                         '[]'::json
                     ) as parametros
                 FROM productos p
-                LEFT JOIN usuario_productos up ON p.id = up.producto_id
-                WHERE p.id = $1 AND (up.cocina IS NOT TRUE OR up.cocina IS NULL)
-            `, [productoId]);
+                LEFT JOIN usuario_productos up ON p.id = up.producto_id AND up.usuario_id = $2
+                WHERE p.id = $1
+            `, [productoId, cafeteriaUserId]);
 
             return NextResponse.json(productoCompleto.rows[0]);
 
@@ -191,6 +201,8 @@ export async function PUT(request: NextRequest) {
             fotoUrl = foto;
         }
 
+        const cafeteriaUserId = await getCafeteriaUserId();
+
         // Iniciar transacción
         await query('BEGIN');
 
@@ -203,39 +215,39 @@ export async function PUT(request: NextRequest) {
                 [nombre, Number(precio), Number(precioCompra), fotoUrl, tieneParametros, Number(id)]
             );
 
-            // 2. 🔧 ARREGLADO: Manejar inventario según tipo de producto
+            // 2. Manejar inventario según tipo de producto
             if (tieneParametros) {
-                // Si ahora tiene parámetros, eliminar de usuario_productos
+                // Si ahora tiene parámetros, eliminar de usuario_productos para Cafetería
                 await query(
-                    `DELETE FROM usuario_productos WHERE producto_id = $1`,
-                    [Number(id)]
+                    `DELETE FROM usuario_productos WHERE producto_id = $1 AND usuario_id = $2`,
+                    [Number(id), cafeteriaUserId]
                 );
             } else {
                 // Si NO tiene parámetros, actualizar/insertar en usuario_productos
                 if (cantidad !== null && cantidad !== undefined) {
                     await query(
-                        `INSERT INTO usuario_productos (producto_id, cantidad, cocina) 
-                         VALUES ($1, $2, $3)
-                         ON CONFLICT (producto_id) 
-                         DO UPDATE SET cantidad = EXCLUDED.cantidad, cocina = EXCLUDED.cocina`,
-                        [Number(id), Number(cantidad), false] // cocina = false por defecto
+                        `INSERT INTO usuario_productos (usuario_id, producto_id, cantidad, precio) 
+                         VALUES ($1, $2, $3, $4)
+                         ON CONFLICT (usuario_id, producto_id) 
+                         DO UPDATE SET cantidad = EXCLUDED.cantidad, precio = EXCLUDED.precio`,
+                        [cafeteriaUserId, Number(id), Number(cantidad), Number(precio)]
                     );
                 }
             }
 
-            // 3. Eliminar parámetros existentes
+            // 3. Eliminar parámetros existentes para Cafetería
             await query(
-                `DELETE FROM usuario_producto_parametros WHERE producto_id = $1`,
-                [Number(id)]
+                `DELETE FROM usuario_producto_parametros WHERE producto_id = $1 AND usuario_id = $2`,
+                [Number(id), cafeteriaUserId]
             );
 
             // 4. Insertar nuevos parámetros si los tiene
             if (tieneParametros && parametros.length > 0) {
                 for (const param of parametros) {
                     await query(
-                        `INSERT INTO usuario_producto_parametros (producto_id, nombre, cantidad) 
-                         VALUES ($1, $2, $3)`,
-                        [Number(id), param.nombre, param.cantidad]
+                        `INSERT INTO usuario_producto_parametros (usuario_id, producto_id, nombre, cantidad) 
+                         VALUES ($1, $2, $3, $4)`,
+                        [cafeteriaUserId, Number(id), param.nombre, param.cantidad]
                     );
                 }
             }
@@ -243,7 +255,7 @@ export async function PUT(request: NextRequest) {
             // Confirmar transacción
             await query('COMMIT');
 
-            // 🔧 ARREGLADO: Obtener el producto actualizado con la lógica correcta
+            // Obtener el producto actualizado con la lógica correcta
             const productoActualizado = await query(`
                 SELECT 
                     p.id,
@@ -252,13 +264,12 @@ export async function PUT(request: NextRequest) {
                     p.precio_compra,
                     p.foto,
                     p.tiene_parametros,
-                    -- Usar la misma lógica que en GET
                     CASE 
                         WHEN p.tiene_parametros = true THEN 
                             COALESCE(
                                 (SELECT SUM(upp_sum.cantidad) 
                                  FROM usuario_producto_parametros upp_sum 
-                                 WHERE upp_sum.producto_id = p.id), 
+                                 WHERE upp_sum.producto_id = p.id AND upp_sum.usuario_id = $2), 
                                 0
                             )
                         ELSE 
@@ -272,13 +283,13 @@ export async function PUT(request: NextRequest) {
                             )
                         )
                         FROM usuario_producto_parametros upp_params 
-                        WHERE upp_params.producto_id = p.id),
+                        WHERE upp_params.producto_id = p.id AND upp_params.usuario_id = $2),
                         '[]'::json
                     ) as parametros
                 FROM productos p
-                LEFT JOIN usuario_productos up ON p.id = up.producto_id
-                WHERE p.id = $1 AND (up.cocina IS NOT TRUE OR up.cocina IS NULL)
-            `, [Number(id)]);
+                LEFT JOIN usuario_productos up ON p.id = up.producto_id AND up.usuario_id = $2
+                WHERE p.id = $1
+            `, [Number(id), cafeteriaUserId]);
 
             return NextResponse.json(productoActualizado.rows[0]);
 
@@ -310,13 +321,16 @@ export async function DELETE(request: NextRequest) {
         await query('BEGIN');
 
         try {
-            // 1. Eliminar parámetros del usuario
+            // Eliminar de TODAS las tablas relacionadas (Global delete)
+            // No solo de cafetería, porque DELETE borra el producto del sistema.
+
+            // 1. Eliminar parámetros de usuarios
             await query(
                 `DELETE FROM usuario_producto_parametros WHERE producto_id = $1`,
                 [Number(id)]
             );
 
-            // 2. Eliminar inventario del usuario
+            // 2. Eliminar inventario de usuarios
             await query(
                 `DELETE FROM usuario_productos WHERE producto_id = $1`,
                 [Number(id)]

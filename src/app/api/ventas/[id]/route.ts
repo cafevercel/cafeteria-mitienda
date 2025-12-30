@@ -19,8 +19,8 @@ export async function DELETE(
 
     // Obtener la venta
     const ventaResult = await query(
-      'SELECT * FROM ventas WHERE id = $1',
-      [ventaId]
+      'SELECT * FROM ventas WHERE id = $1 AND vendedor = $2',
+      [ventaId, vendedorId]
     );
 
     if (ventaResult.rows.length === 0) {
@@ -29,8 +29,9 @@ export async function DELETE(
     }
 
     const venta = ventaResult.rows[0];
+    console.log('Venta encontrada:', venta);
 
-    // ✅ SOLUCIÓN: Verificar si el producto tiene parámetros
+    // Verificar si el producto tiene parámetros
     const productoResult = await query(
       'SELECT tiene_parametros FROM productos WHERE id = $1',
       [venta.producto]
@@ -44,29 +45,32 @@ export async function DELETE(
       [ventaId]
     );
 
-    // ✅ SOLUCIÓN: Restaurar stock según el tipo de producto
+    console.log('Parámetros de la venta:', ventaParametrosResult.rows);
+
+    // Restaurar stock según el tipo de producto
     if (tieneParametros && ventaParametrosResult.rows.length > 0) {
-      // ✅ Para productos CON parámetros: solo actualizar parámetros
+      // Para productos CON parámetros: actualizar parámetros
+      console.log('Restaurando parámetros al vendedor...');
+
       for (const param of ventaParametrosResult.rows) {
+        console.log(`Restaurando parámetro: ${param.parametro}, cantidad: ${param.cantidad}`);
+
         await query(
           `INSERT INTO usuario_producto_parametros 
-           (producto_id, nombre, cantidad)
-           VALUES ($1, $2, $3)
-           ON CONFLICT (producto_id, nombre)
-           DO UPDATE SET cantidad = usuario_producto_parametros.cantidad + $3`,
-          [venta.producto, param.parametro, param.cantidad]
+           (usuario_id, producto_id, nombre, cantidad)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (usuario_id, producto_id, nombre)
+           DO UPDATE SET cantidad = usuario_producto_parametros.cantidad + $4`,
+          [vendedorId, venta.producto, param.parametro, param.cantidad]
         );
-        // ✅ El trigger automáticamente actualizará usuario_productos.cantidad
       }
-
-      // ✅ NO actualizar usuario_productos directamente
-      // El trigger ya lo hizo cuando actualizamos usuario_producto_parametros
-
     } else {
-      // ✅ Para productos SIN parámetros: SÍ actualizar directamente
+      // Para productos SIN parámetros: actualizar directamente
+      console.log('Restaurando cantidad del producto sin parámetros...');
+
       await query(
-        'UPDATE usuario_productos SET cantidad = cantidad + $1 WHERE producto_id = $2',
-        [venta.cantidad, venta.producto]
+        'UPDATE usuario_productos SET cantidad = cantidad + $1 WHERE usuario_id = $2 AND producto_id = $3',
+        [venta.cantidad, vendedorId, venta.producto]
       );
     }
 
@@ -77,9 +81,14 @@ export async function DELETE(
     await query('DELETE FROM ventas WHERE id = $1', [ventaId]);
 
     await query('COMMIT');
+    console.log('Venta eliminada exitosamente');
 
     // Crear respuesta con encabezados anti-caché
-    const response = NextResponse.json({ message: 'Venta eliminada con éxito' });
+    const response = NextResponse.json({
+      message: 'Venta eliminada con éxito',
+      cantidadDevuelta: venta.cantidad,
+      parametrosDevueltos: ventaParametrosResult.rows
+    });
     response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     response.headers.set('Pragma', 'no-cache');
     response.headers.set('Expires', '0');
@@ -89,7 +98,10 @@ export async function DELETE(
   } catch (error) {
     console.error('Error al eliminar venta:', error);
     await query('ROLLBACK');
-    return NextResponse.json({ error: 'Error al eliminar venta' }, { status: 500 });
+    return NextResponse.json({
+      error: 'Error al eliminar venta',
+      details: error instanceof Error ? error.message : 'Error desconocido'
+    }, { status: 500 });
   }
 }
 
@@ -114,8 +126,8 @@ export async function PUT(
 
     // Obtener la venta original
     const ventaOriginalResult = await query(
-      'SELECT * FROM ventas WHERE id = $1',
-      [ventaId]
+      'SELECT * FROM ventas WHERE id = $1 AND vendedor = $2',
+      [ventaId, vendedorId]
     );
 
     if (ventaOriginalResult.rows.length === 0) {
@@ -171,19 +183,19 @@ export async function PUT(
         console.log(`📈 Restaurando parámetro: ${param.parametro} +${param.cantidad}`);
         await query(
           `INSERT INTO usuario_producto_parametros 
-           (producto_id, nombre, cantidad)
-           VALUES ($1, $2, $3)
-           ON CONFLICT (producto_id, nombre)
-           DO UPDATE SET cantidad = usuario_producto_parametros.cantidad + $3`,
-          [ventaOriginal.producto, param.parametro, param.cantidad]
+           (usuario_id, producto_id, nombre, cantidad)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (usuario_id, producto_id, nombre)
+           DO UPDATE SET cantidad = usuario_producto_parametros.cantidad + $4`,
+          [vendedorId, ventaOriginal.producto, param.parametro, param.cantidad]
         );
       }
     } else {
       // Restaurar cantidad del producto original sin parámetros
       console.log(`📈 Restaurando producto sin parámetros: +${ventaOriginal.cantidad}`);
       await query(
-        'UPDATE usuario_productos SET cantidad = cantidad + $1 WHERE producto_id = $2',
-        [ventaOriginal.cantidad, ventaOriginal.producto]
+        'UPDATE usuario_productos SET cantidad = cantidad + $1 WHERE usuario_id = $2 AND producto_id = $3',
+        [ventaOriginal.cantidad, vendedorId, ventaOriginal.producto]
       );
     }
 
@@ -195,8 +207,8 @@ export async function PUT(
       for (const param of parametros) {
         const stockParamResult = await query(
           `SELECT cantidad FROM usuario_producto_parametros 
-           WHERE producto_id = $1 AND nombre = $2`,
-          [productoId, param.nombre]
+           WHERE usuario_id = $1 AND producto_id = $2 AND nombre = $3`,
+          [vendedorId, productoId, param.nombre]
         );
 
         const stockDisponible = stockParamResult.rows[0]?.cantidad || 0;
@@ -212,8 +224,8 @@ export async function PUT(
     } else {
       // Para productos sin parámetros
       const stockResult = await query(
-        'SELECT cantidad FROM usuario_productos WHERE producto_id = $1',
-        [productoId]
+        'SELECT cantidad FROM usuario_productos WHERE usuario_id = $1 AND producto_id = $2',
+        [vendedorId, productoId]
       );
 
       const stockDisponible = stockResult.rows[0]?.cantidad || 0;
@@ -264,8 +276,8 @@ export async function PUT(
         await query(
           `UPDATE usuario_producto_parametros 
            SET cantidad = cantidad - $1 
-           WHERE producto_id = $2 AND nombre = $3`,
-          [param.cantidad, productoId, param.nombre]
+           WHERE usuario_id = $2 AND producto_id = $3 AND nombre = $4`,
+          [param.cantidad, vendedorId, productoId, param.nombre]
         );
 
         console.log(`📉 Reducido parámetro ${param.nombre}: -${param.cantidad}`);
@@ -273,8 +285,8 @@ export async function PUT(
     } else {
       // Para productos sin parámetros
       await query(
-        'UPDATE usuario_productos SET cantidad = cantidad - $1 WHERE producto_id = $2',
-        [cantidad, productoId]
+        'UPDATE usuario_productos SET cantidad = cantidad - $1 WHERE usuario_id = $2 AND producto_id = $3',
+        [cantidad, vendedorId, productoId]
       );
       console.log(`📉 Reducido producto: -${cantidad}`);
     }

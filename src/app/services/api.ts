@@ -115,10 +115,26 @@ export const logout = async (): Promise<void> => {
   }
 };
 
-export const getVendedores = async (): Promise<Vendedor[]> => {
-  const response = await api.get('/users/vendedores');
-  return response.data;
+export const getVendedor = async (vendedorId: string): Promise<Vendedor> => {
+  try {
+    const response = await api.get(`/users/vendedores/${vendedorId}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error al obtener vendedor:', error);
+    throw new Error('No se pudo obtener la información del vendedor');
+  }
 };
+
+export const getVendedores = async (): Promise<Vendedor[]> => {
+  try {
+    const response = await api.get('/users/vendedores');
+    return response.data;
+  } catch (error) {
+    console.error('Error al obtener vendedores:', error);
+    throw new Error('No se pudieron obtener los vendedores');
+  }
+};
+
 
 export const getInventario = async (): Promise<Producto[]> => {
   try {
@@ -138,28 +154,6 @@ export const getInventario = async (): Promise<Producto[]> => {
 export const registerUser = async (userData: Omit<User, 'id'>): Promise<User> => {
   const response = await api.post<User>('/auth/register', userData);
   return response.data;
-};
-
-export const getProductosCompartidos = async () => {
-  try {
-    const response = await api.get('/productos/compartidos');
-
-    // Mapear correctamente los datos para que coincidan con el tipo Producto
-    return response.data.map((producto: any) => ({
-      id: producto.id,
-      nombre: producto.nombre,
-      precio: producto.precio,
-      foto: producto.foto,
-      cantidad: producto.cantidad,
-      tiene_parametros: producto.tieneParametros || producto.tiene_parametros || false,
-      tieneParametros: producto.tieneParametros || producto.tiene_parametros || false,
-      porcentajeGanancia: producto.porcentajeGanancia || 0,
-      parametros: Array.isArray(producto.parametros) ? producto.parametros : []
-    }));
-  } catch (error) {
-    console.error('Error al obtener productos compartidos:', error);
-    throw new Error('No se pudieron cargar los productos compartidos. Por favor, intenta de nuevo.');
-  }
 };
 
 export const agregarProducto = async (formData: FormData) => {
@@ -282,7 +276,7 @@ export const entregarProducto = async (
   productoId: string,
   cantidad: number,
   parametros?: Array<{ nombre: string; cantidad: number }>,
-  esCocina: boolean = false
+  userId?: number // NUEVO PARÁMETRO
 ) => {
   try {
     const response = await api.post('/transacciones', {
@@ -290,7 +284,7 @@ export const entregarProducto = async (
       cantidad,
       tipo: 'Entrega',
       parametros,
-      esCocina
+      userId // enviar userId
     });
     return response.data;
   } catch (error) {
@@ -438,28 +432,32 @@ const handleApiError = (error: unknown, context: string) => {
 export const reducirProductoInventario = async (
   productoId: string,
   cantidad: number,
-  parametros?: Array<{ nombre: string; cantidad: number }>
+  parametros?: Array<{ nombre: string; cantidad: number }>,
+  vendorId?: string
 ) => {
   try {
     const payload = {
       productoId,
       cantidad,
-      parametros
+      parametros,
+      vendedorId: vendorId || 'cafeteria', // ← Enviar vendedorId
+      desde: vendorId || 'cafeteria',      // ← Para tracking
+      hacia: 'almacen'                     // ← Para tracking
     };
 
-    console.log('Enviando datos:', payload); // Para depuración
+    console.log('Enviando datos de reducción:', payload);
 
     const response = await api.put(`/productos/reducir`, payload);
     return response.data;
   } catch (error: any) {
     console.error('Error al reducir la cantidad del producto:', error);
-    // Mostrar más detalles del error
     if (error.response) {
       console.error('Respuesta del servidor:', error.response.data);
     }
-    throw new Error('No se pudo reducir la cantidad del producto');
+    throw new Error(error.response?.data?.details || 'No se pudo reducir la cantidad del producto');
   }
 };
+
 
 export const getVentasVendedor = async (vendedorId: string): Promise<Venta[]> => {
   try {
@@ -501,6 +499,52 @@ export const editarVendedor = async (vendedorId: string, editedVendor: Partial<V
     throw new Error(axios.isAxiosError(error) && error.response?.data?.message
       ? error.response.data.message
       : `No se pudo editar el vendedor: ${(error as Error).message}`);
+  }
+};
+
+// Funciones para la funcionalidad de contabilidad de vendedores
+export const getContabilidadVendedores = async (fechaInicio: string, fechaFin: string): Promise<any[]> => {
+  try {
+    const response = await api.get('/contabilidad-vendedores', {
+      params: { fechaInicio, fechaFin }
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error al obtener contabilidad de vendedores:', error);
+    throw new Error('No se pudo obtener la contabilidad de vendedores');
+  }
+};
+
+export const getGastosVendedor = async (vendedorId: string, mes: number, anio: number): Promise<any[]> => {
+  try {
+    const response = await api.get('/gastos-vendedores', {
+      params: { vendedorId, mes, anio }
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error al obtener gastos del vendedor:', error);
+    throw new Error('No se pudieron obtener los gastos del vendedor');
+  }
+};
+
+export const crearGastoVendedor = async (data: { vendedorId: string; nombre: string; valor: number; mes: number; anio: number }): Promise<any> => {
+  try {
+    const response = await api.post('/gastos-vendedores', data);
+    return response.data;
+  } catch (error) {
+    console.error('Error al crear gasto del vendedor:', error);
+    throw new Error('No se pudo crear el gasto del vendedor');
+  }
+};
+
+export const eliminarGastoVendedor = async (vendedorId: string, nombre: string, mes: number, anio: number): Promise<void> => {
+  try {
+    await api.delete('/gastos-vendedores', {
+      params: { vendedorId, nombre, mes, anio }
+    });
+  } catch (error) {
+    console.error('Error al eliminar gasto del vendedor:', error);
+    throw new Error('No se pudo eliminar el gasto del vendedor');
   }
 };
 
@@ -558,33 +602,48 @@ export const deleteSale = async (saleId: string, vendedorId: string): Promise<vo
 export default api;
 
 export const createMerma = async (
-  producto_id: string,
-  usuario_id: string,
+  productoId: string,
+  origenId: string,
   cantidad: number,
-  parametros?: { nombre: string; cantidad: number }[]
+  parametros?: Array<{ nombre: string; cantidad: number }>
 ) => {
-  // Si usuario_id está vacío, usamos un valor especial para que el backend sepa que es merma directa
-  const id_usuario = usuario_id.trim() === '' ? 'cafeteria' : usuario_id;
-
-  const response = await fetch('/api/merma', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      producto_id,
-      usuario_id: id_usuario,
-      cantidad,
-      parametros
-    }),
+  console.log('📡 createMerma API llamada con:', {
+    productoId,
+    origenId,
+    cantidad,
+    parametros
   });
 
-  if (!response.ok) {
+  try {
+    // ✅ Preparar el payload
+    const payload = {
+      producto_id: productoId,
+      usuario_id: origenId === 'cafeteria' ? 'cafeteria' : origenId,
+      cantidad,
+      parametros: parametros?.filter(p => p.cantidad > 0) // Filtrar parámetros con cantidad 0
+    };
+
+    console.log('📤 Enviando a API:', payload);
+
+    const response = await api.post('/merma', payload);
+
+    console.log('✅ createMerma exitoso:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('❌ Error en createMerma:', error);
+
+    if (axios.isAxiosError(error)) {
+      const errorMessage = error.response?.data?.error || error.response?.data?.message || 'Error al crear merma';
+      const errorDetails = error.response?.data?.details || '';
+      console.error('❌ Detalles del error:', errorMessage, errorDetails);
+      throw new Error(`${errorMessage}${errorDetails ? ` - ${errorDetails}` : ''}`);
+    }
+
     throw new Error('Error al crear merma');
   }
-
-  return response.json();
 };
+
+
 
 export const getMermas = async (usuario_id?: string) => {
   const response = await fetch(`/api/merma${usuario_id ? `?usuario_id=${usuario_id}` : ''}`);
@@ -624,34 +683,79 @@ export const verificarNombreProducto = async (nombre: string): Promise<boolean> 
   }
 };
 
-export const getProductosCafeteria = async () => {
+export const getProductosCompartidos = async (usuarioId?: string, validation?: string) => {
   try {
-    const response = await api.get('/cafeteria/productos');
+    let url = `/productos/compartidos`;
+    const params = new URLSearchParams();
+    if (usuarioId) {
+      params.append('usuarioId', usuarioId);
+    }
+    if (validation) {
+      params.append('validation', validation);
+    }
+    if (params.toString()) {
+      url += `?${params.toString()}`;
+    }
+    const response = await api.get(url);
     return response.data;
   } catch (error) {
-    console.error('Error al obtener productos de cafetería:', error);
-    throw new Error('No se pudieron cargar los productos de cafetería. Por favor, intenta de nuevo.');
+    console.error('Error al obtener productos compartidos:', error);
+    throw new Error('No se pudieron obtener los productos compartidos');
   }
 };
 
 export const getVendedorProductos = async (vendedorId: string): Promise<LocalProducto[]> => {
   try {
-    // Usamos la ruta de productos compartidos que ya existe
-    const response = await api.get(`/productos/compartidos`);
+    if (!vendedorId) {
+      console.warn('⚠️ getVendedorProductos llamado sin vendedorId');
+      return [];
+    }
+
+    console.log('🔍 Llamando a API para obtener productos del vendedor:', vendedorId);
+
+    // Usar el endpoint correcto
+    const response = await api.get(`/users/productos/${vendedorId}`);
+
+    console.log('📦 Respuesta recibida:', {
+      total: response.data.length,
+      conParametros: response.data.filter((p: any) => p.tiene_parametros).length
+    });
 
     // Aseguramos que la respuesta tenga la estructura correcta
-    const productos = response.data.map((producto: any) => ({
-      ...producto,
-      tieneParametros: producto.tiene_parametros || false,
-      tiene_parametros: producto.tiene_parametros || false
-    }));
+    const productos = response.data.map((producto: any) => {
+      const productoMapeado = {
+        ...producto,
+        tieneParametros: Boolean(producto.tiene_parametros || producto.tieneParametros),
+        tiene_parametros: Boolean(producto.tiene_parametros || producto.tieneParametros),
+        parametros: producto.parametros || []
+      };
+
+      // Log detallado para productos con parámetros
+      if (productoMapeado.tiene_parametros && productoMapeado.parametros.length > 0) {
+        console.log(`   📦 ${productoMapeado.nombre}:`, {
+          tiene_parametros: productoMapeado.tiene_parametros,
+          cantidad_producto: productoMapeado.cantidad,
+          parametros: productoMapeado.parametros,
+          total_parametros: productoMapeado.parametros.reduce((sum: number, p: any) => sum + (p.cantidad || 0), 0)
+        });
+      }
+
+      return productoMapeado;
+    });
 
     return productos;
   } catch (error) {
-    console.error('Error al obtener productos del vendedor:', error);
+    console.error('❌ Error al obtener productos del vendedor:', error);
+
+    if (axios.isAxiosError(error)) {
+      console.error('   Status:', error.response?.status);
+      console.error('   Detalles:', error.response?.data);
+    }
+
     throw new Error('No se pudieron obtener los productos del vendedor');
   }
 };
+
 
 export const getVendedorVentas = async (vendedorId: string): Promise<Venta[]> => {
   try {
@@ -668,8 +772,9 @@ export const getVendedorVentas = async (vendedorId: string): Promise<Venta[]> =>
 
 export const getVendedorTransacciones = async (vendedorId: string): Promise<Transaccion[]> => {
   try {
-    // Usamos la función de transacciones compartidas que ya existe
-    const response = await api.get(`/transacciones/compartidas`);
+    // Usamos la función de transacciones compartidas filtrando por usuario
+    if (!vendedorId) return [];
+    const response = await api.get(`/transacciones/compartidas?usuarioId=${vendedorId}`);
     return response.data;
   } catch (error) {
     console.error('Error al obtener transacciones del vendedor:', error);
@@ -1021,4 +1126,44 @@ export const enviarCafeteriaACocina = async (
   }
 
   return response.json();
+};
+
+
+export const transferirProductoEntreVendedores = async (
+  productId: string,
+  fromVendorId: string,
+  toVendorId: string,
+  cantidad: number,
+  parametros?: Array<{ nombre: string; cantidad: number }>
+): Promise<any> => {
+  try {
+    console.log('📡 Llamando a API de transferencia:', {
+      productId,
+      fromVendorId,
+      toVendorId,
+      cantidad,
+      parametros
+    });
+
+    const response = await api.post('/transacciones/transfer', {
+      productId,
+      fromVendorId,
+      toVendorId,
+      cantidad,
+      parametros
+    });
+
+    console.log('✅ Respuesta de transferencia:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('❌ Error en transferencia:', error);
+
+    if (axios.isAxiosError(error)) {
+      const errorMessage = error.response?.data?.error || error.response?.data?.message || 'Error al transferir producto';
+      const errorDetails = error.response?.data?.details || '';
+      throw new Error(`${errorMessage}${errorDetails ? ` - ${errorDetails}` : ''}`);
+    }
+
+    throw new Error('Error al transferir el producto entre vendedores');
+  }
 };

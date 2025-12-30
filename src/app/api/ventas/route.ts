@@ -14,18 +14,24 @@ export async function POST(request: NextRequest) {
     const fechaVenta = new Date(fecha);
     await query('BEGIN');
 
-    // Verificar si el producto tiene parámetros
+    // Verificar si el producto tiene parámetros y obtener stock del vendedor
     const productoResult = await query(
       `SELECT p.precio, p.tiene_parametros, up.cantidad as stock_disponible 
        FROM productos p 
        JOIN usuario_productos up ON p.id = up.producto_id 
-       WHERE p.id = $1`,
-      [productoId]
+       WHERE p.id = $1 AND up.usuario_id = $2`,
+      [productoId, vendedorId]
     );
 
     if (productoResult.rows.length === 0) {
+      // Intentar ver si el producto existe pero no en el inventario del usuario
+      const productoExiste = await query('SELECT id FROM productos WHERE id = $1', [productoId]);
+      if (productoExiste.rows.length > 0) {
+        await query('ROLLBACK');
+        return NextResponse.json({ error: 'Producto no encontrado en el inventario del vendedor' }, { status: 404 });
+      }
       await query('ROLLBACK');
-      return NextResponse.json({ error: 'Producto no encontrado en el inventario' }, { status: 404 });
+      return NextResponse.json({ error: 'Producto no encontrado' }, { status: 404 });
     }
 
     const { precio: precioUnitario, stock_disponible, tiene_parametros } = productoResult.rows[0];
@@ -35,8 +41,8 @@ export async function POST(request: NextRequest) {
       for (const param of parametros) {
         const stockParam = await query(
           `SELECT cantidad FROM usuario_producto_parametros 
-           WHERE producto_id = $1 AND nombre = $2`,
-          [productoId, param.nombre]
+           WHERE producto_id = $1 AND nombre = $2 AND usuario_id = $3`,
+          [productoId, param.nombre, vendedorId]
         );
 
         if (!stockParam.rows.length || stockParam.rows[0].cantidad < param.cantidad) {
@@ -65,7 +71,7 @@ export async function POST(request: NextRequest) {
       ]
     );
 
-    // ✅ SOLUCIÓN: Manejar actualizaciones según el tipo de producto
+    // Manejar actualizaciones según el tipo de producto
     if (tiene_parametros && parametros) {
       for (const param of parametros) {
         // Insertar parámetros de la venta
@@ -75,24 +81,24 @@ export async function POST(request: NextRequest) {
           [ventaResult.rows[0].id, param.nombre, param.cantidad]
         );
 
-        // ✅ SOLUCIÓN: Actualizar parámetros (trigger se encarga del resto)
+        // Actualizar parámetros (filtrando por usuario_id)
         await query(
           `UPDATE usuario_producto_parametros 
            SET cantidad = cantidad - $1 
-           WHERE producto_id = $2 AND nombre = $3`,
-          [param.cantidad, productoId, param.nombre]
+           WHERE producto_id = $2 AND nombre = $3 AND usuario_id = $4`,
+          [param.cantidad, productoId, param.nombre, vendedorId]
         );
-        // ✅ El trigger automáticamente actualizará usuario_productos.cantidad
+        // El trigger actualiza usuario_productos.cantidad, pero DEBE manejar usuario_id?
+        // Los triggers en usuario_producto_parametros actualizan usuario_productos.
+        // Si el trigger no tiene en cuenta usuario_id, podría romper cosas.
+        // Asumiendo que el trigger usa (usuario_id, producto_id) para hacer join/update.
       }
 
-      // ✅ NO actualizar usuario_productos directamente para productos con parámetros
-      // El trigger ya lo hizo cuando actualizamos usuario_producto_parametros
-
     } else {
-      // ✅ Para productos SIN parámetros: SÍ actualizar directamente
+      // Para productos SIN parámetros
       await query(
-        'UPDATE usuario_productos SET cantidad = cantidad - $1 WHERE producto_id = $2',
-        [cantidad, productoId]
+        'UPDATE usuario_productos SET cantidad = cantidad - $1 WHERE producto_id = $2 AND usuario_id = $3',
+        [cantidad, productoId, vendedorId]
       );
     }
 

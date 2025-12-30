@@ -24,11 +24,32 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Si la cantidad es 0, debe especificar parámetros' }, { status: 400 });
     }
 
-
     await query('BEGIN');
 
     try {
-      // 1. Verificar stock del vendedor origen
+      // 1. Obtener nombres de los vendedores
+      const vendedorOrigenResult = await query(
+        'SELECT nombre FROM usuarios WHERE id = $1',
+        [fromVendorId]
+      );
+
+      const vendedorDestinoResult = await query(
+        'SELECT nombre FROM usuarios WHERE id = $1',
+        [toVendorId]
+      );
+
+      if (vendedorOrigenResult.rows.length === 0) {
+        throw new Error('Vendedor origen no encontrado');
+      }
+
+      if (vendedorDestinoResult.rows.length === 0) {
+        throw new Error('Vendedor destino no encontrado');
+      }
+
+      const nombreVendedorOrigen = vendedorOrigenResult.rows[0].nombre;
+      const nombreVendedorDestino = vendedorDestinoResult.rows[0].nombre;
+
+      // 2. Verificar stock del vendedor origen
       const vendedorProductoResult = await query(
         'SELECT cantidad, precio FROM usuario_productos WHERE usuario_id = $1 AND producto_id = $2',
         [fromVendorId, productId]
@@ -44,7 +65,7 @@ export async function POST(request: NextRequest) {
         throw new Error('Stock insuficiente en vendedor origen');
       }
 
-      // 2. Verificar si el producto tiene parámetros
+      // 3. Verificar si el producto tiene parámetros
       const productoResult = await query(
         'SELECT tiene_parametros FROM productos WHERE id = $1',
         [productId]
@@ -52,7 +73,7 @@ export async function POST(request: NextRequest) {
 
       const { tiene_parametros } = productoResult.rows[0];
 
-      // 3. Si tiene parámetros, verificar que los parámetros enviados sean válidos
+      // 4. Si tiene parámetros, verificar que los parámetros enviados sean válidos
       if (tiene_parametros) {
         if (!parametros || parametros.length === 0) {
           throw new Error('Este producto requiere especificar parámetros para la transferencia');
@@ -71,26 +92,25 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // 4. Registrar las transacciones
+      // ✅ 5. Registrar las transacciones - USAR productId (INTEGER) en lugar de nombreProducto (STRING)
       const bajaResult = await query(
         'INSERT INTO transacciones (producto, cantidad, tipo, desde, hacia, fecha) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
-        [productId, cantidad, 'Baja', fromVendorId, null, new Date()]
+        [productId, cantidad, 'Baja', nombreVendedorOrigen, nombreVendedorDestino, new Date()]
+        //                                                    
       );
 
       const entregaResult = await query(
         'INSERT INTO transacciones (producto, cantidad, tipo, desde, hacia, fecha) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
-        [productId, cantidad, 'Entrega', fromVendorId, toVendorId, new Date()]
+        [productId, cantidad, 'Entrega', nombreVendedorOrigen, nombreVendedorDestino, new Date()]
       );
 
-
-
-      // 5. Actualizar stock del vendedor origen
+      // 6. Actualizar stock del vendedor origen
       await query(
         'UPDATE usuario_productos SET cantidad = cantidad - $1 WHERE usuario_id = $2 AND producto_id = $3',
         [cantidad, fromVendorId, productId]
       );
 
-      // 6. Actualizar o crear stock del vendedor destino
+      // 7. Actualizar o crear stock del vendedor destino
       await query(
         `INSERT INTO usuario_productos (usuario_id, producto_id, cantidad, precio) 
          VALUES ($1, $2, $3, $4) 
@@ -99,8 +119,7 @@ export async function POST(request: NextRequest) {
         [toVendorId, productId, cantidad, precio]
       );
 
-      // 7. Manejar los parámetros si existen
-      // 7. Manejar los parámetros si existen
+      // 8. Manejar los parámetros si existen
       if (tiene_parametros && parametros) {
         for (const param of parametros) {
           // Reducir parámetros del vendedor origen
@@ -120,9 +139,9 @@ export async function POST(request: NextRequest) {
           // Agregar o actualizar parámetros en vendedor destino
           await query(
             `INSERT INTO usuario_producto_parametros (usuario_id, producto_id, nombre, cantidad)
-      VALUES ($1, $2, $3, $4)
-      ON CONFLICT (usuario_id, producto_id, nombre)
-      DO UPDATE SET cantidad = usuario_producto_parametros.cantidad + $4`,
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (usuario_id, producto_id, nombre)
+            DO UPDATE SET cantidad = usuario_producto_parametros.cantidad + $4`,
             [toVendorId, productId, param.nombre, param.cantidad]
           );
 
@@ -138,9 +157,6 @@ export async function POST(request: NextRequest) {
           );
         }
       }
-
-
-
 
       await query('COMMIT');
 
@@ -251,7 +267,7 @@ export async function GET(request: NextRequest) {
         [vendorId]
       );
     }
-    
+
 
     // Transformar los resultados
     const formattedResults = result.rows.map(row => ({

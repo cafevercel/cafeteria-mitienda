@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react'
+﻿import React, { useState, useCallback, useEffect } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription, DialogClose } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,10 +12,9 @@ import { format, parseISO, startOfWeek, endOfWeek, isValid, addDays } from 'date
 import { es } from 'date-fns/locale'
 import * as XLSX from 'xlsx'
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
 interface VendorDialogProps {
-  almacen: Producto[]// Añadir esta prop
+  almacen: Producto[]// AÃ±adir esta prop
   vendor: Vendedor
   onClose: () => void
   onEdit: (editedVendor: Vendedor) => Promise<void>
@@ -101,237 +100,6 @@ interface VentaDia {
   total: number
 }
 
-interface VentaDiaDesplegableProps {
-  venta: VentaDia;
-  onDeleteSale: (saleId: string) => Promise<void>; // Agregar esta prop
-}
-
-const VentaDiaDesplegable: React.FC<VentaDiaDesplegableProps> = ({ venta, onDeleteSale }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [deletingSaleId, setDeletingSaleId] = useState<string | null>(null);
-  const [expandedSales, setExpandedSales] = useState<Record<string, boolean>>({});
-
-  const handleDelete = async (saleId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-
-    if (!confirm('¿Estás seguro de eliminar esta venta? La cantidad se devolverá al inventario del vendedor.')) {
-      return;
-    }
-
-    setDeletingSaleId(saleId);
-    try {
-      await onDeleteSale(saleId);
-    } finally {
-      setDeletingSaleId(null);
-    }
-  };
-
-  return (
-    <Card>
-      <CardHeader
-        className="cursor-pointer hover:bg-gray-50"
-        onClick={() => setIsExpanded(!isExpanded)}
-      >
-        <div className="flex justify-between items-center">
-          <CardTitle className="text-base flex items-center gap-2">
-            {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
-            {format(parseISO(venta.fecha), 'dd/MM/yyyy', { locale: es })}
-          </CardTitle>
-          <span className="font-bold">${venta.total.toFixed(2)}</span>
-        </div>
-      </CardHeader>
-      {isExpanded && (
-        <CardContent>
-          <div className="space-y-2">
-            {venta.ventas.map((v) => {
-              const tieneParametros = v.parametros && Array.isArray(v.parametros) && v.parametros.length > 0;
-              const isVentaExpanded = expandedSales[v.id] || false;
-
-              return (
-                <div key={v.id} className="border rounded overflow-hidden">
-                  <div
-                    className={`flex justify-between items-center p-2 ${tieneParametros ? 'cursor-pointer hover:bg-gray-50' : ''}`}
-                    onClick={() => {
-                      if (tieneParametros) {
-                        setExpandedSales(prev => ({
-                          ...prev,
-                          [v.id]: !prev[v.id]
-                        }));
-                      }
-                    }}
-                  >
-                    <div className="flex-grow">
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium">{v.producto_nombre}</p>
-                        {tieneParametros && (
-                          <ChevronDown
-                            className={`h-4 w-4 transition-transform ${isVentaExpanded ? 'rotate-180' : ''}`}
-                          />
-                        )}
-                      </div>
-                      <p className="text-sm text-gray-500">
-                        Cantidad: {v.cantidad} - Precio unitario: ${v.precio_unitario}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold">${parseFloat(v.total.toString()).toFixed(2)}</span>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={(e) => handleDelete(v.id, e)}
-                        disabled={deletingSaleId === v.id}
-                      >
-                        {deletingSaleId === v.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <X className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Mostrar parámetros si existen y está expandido */}
-                  {tieneParametros && isVentaExpanded && (
-                    <div className="bg-gray-50 px-4 py-2 border-t">
-                      <p className="text-xs font-semibold text-gray-600 mb-2">Detalles:</p>
-                      <div className="space-y-1">
-                        {v.parametros!.map((param, index) => (
-                          <div key={index} className="flex justify-between items-center text-sm">
-                            <span className="text-gray-700">{param.nombre}</span>
-                            <span className="font-medium">Cantidad: {param.cantidad}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </CardContent>
-      )}
-    </Card>
-  );
-};
-
-
-
-interface VentaSemanaDesplegableProps {
-  venta: VentaSemana;
-  onDeleteSale: (saleId: string) => Promise<void>; // Agregar esta prop
-}
-
-const VentaSemanaDesplegable: React.FC<VentaSemanaDesplegableProps> = ({ venta, onDeleteSale }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [deletingSaleId, setDeletingSaleId] = useState<string | null>(null);
-  const [expandedSales, setExpandedSales] = useState<Record<string, boolean>>({});
-
-  const handleDelete = async (saleId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-
-    if (!confirm('¿Estás seguro de eliminar esta venta? La cantidad se devolverá al inventario del vendedor.')) {
-      return;
-    }
-
-    setDeletingSaleId(saleId);
-    try {
-      await onDeleteSale(saleId);
-    } finally {
-      setDeletingSaleId(null);
-    }
-  };
-
-  return (
-    <Card>
-      <CardHeader
-        className="cursor-pointer hover:bg-gray-50"
-        onClick={() => setIsExpanded(!isExpanded)}
-      >
-        <div className="flex justify-between items-center">
-          <CardTitle className="text-base flex items-center gap-2">
-            {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
-            {format(parseISO(venta.fechaInicio), 'dd/MM/yyyy', { locale: es })} - {format(parseISO(venta.fechaFin), 'dd/MM/yyyy', { locale: es })}
-          </CardTitle>
-          <div className="text-right">
-            <p className="font-bold">${venta.total.toFixed(2)}</p>
-            <p className="text-sm text-gray-500">Ganancia: ${venta.ganancia.toFixed(2)}</p>
-          </div>
-        </div>
-      </CardHeader>
-      {isExpanded && (
-        <CardContent>
-          <div className="space-y-2">
-            {venta.ventas.map((v) => {
-              const tieneParametros = v.parametros && Array.isArray(v.parametros) && v.parametros.length > 0;
-              const isVentaExpanded = expandedSales[v.id] || false;
-
-              return (
-                <div key={v.id} className="border rounded overflow-hidden">
-                  <div
-                    className={`flex justify-between items-center p-2 ${tieneParametros ? 'cursor-pointer hover:bg-gray-50' : ''}`}
-                    onClick={() => {
-                      if (tieneParametros) {
-                        setExpandedSales(prev => ({
-                          ...prev,
-                          [v.id]: !prev[v.id]
-                        }));
-                      }
-                    }}
-                  >
-                    <div className="flex-grow">
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium">{v.producto_nombre}</p>
-                        {tieneParametros && (
-                          <ChevronDown
-                            className={`h-4 w-4 transition-transform ${isVentaExpanded ? 'rotate-180' : ''}`}
-                          />
-                        )}
-                      </div>
-                      <p className="text-sm text-gray-500">
-                        {format(parseISO(v.fecha), 'dd/MM/yyyy', { locale: es })} - Cantidad: {v.cantidad}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold">${parseFloat(v.total.toString()).toFixed(2)}</span>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={(e) => handleDelete(v.id, e)}
-                        disabled={deletingSaleId === v.id}
-                      >
-                        {deletingSaleId === v.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <X className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Mostrar parámetros si existen y está expandido */}
-                  {tieneParametros && isVentaExpanded && (
-                    <div className="bg-gray-50 px-4 py-2 border-t">
-                      <p className="text-xs font-semibold text-gray-600 mb-2">Detalles:</p>
-                      <div className="space-y-1">
-                        {v.parametros!.map((param, index) => (
-                          <div key={index} className="flex justify-between items-center text-sm">
-                            <span className="text-gray-700">{param.nombre}</span>
-                            <span className="font-medium">Cantidad: {param.cantidad}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </CardContent>
-      )}
-    </Card>
-  );
-};
-
 
 export default function VendorDialog({
   vendor,
@@ -352,10 +120,6 @@ export default function VendorDialog({
   onUpdateProductQuantity,
   initialMode = 'view'
 }: VendorDialogProps) {
-
-  console.log('=== VENDOR DIALOG - Props recibidas ===')
-  console.log('Productos completos:', productos)
-  console.log('Cantidad de productos:', productos.length)
   const [mode, setMode] = useState<'view' | 'edit' | 'ventas' | 'productos' | 'transacciones'>(initialMode)
   const [editedVendor, setEditedVendor] = useState(vendor)
   const [searchTerm, setSearchTerm] = useState('')
@@ -396,22 +160,22 @@ export default function VendorDialog({
 
 
   const getComparativeData = useCallback((): ComparativeData[] => {
-    // Función de utilidad para validar parámetros
+    // FunciÃ³n de utilidad para validar parÃ¡metros
     const validarParametro = (parametro: any) => {
-      // Verificar que el parámetro sea un objeto válido
+      // Verificar que el parÃ¡metro sea un objeto vÃ¡lido
       if (!parametro || typeof parametro !== 'object') return false;
 
-      // Verificar que tenga un nombre válido (no solo números)
+      // Verificar que tenga un nombre vÃ¡lido (no solo nÃºmeros)
       if (!parametro.nombre || typeof parametro.nombre !== 'string') return false;
       if (/^\d+$/.test(parametro.nombre)) return false;
 
-      // Verificar que la cantidad sea un número
+      // Verificar que la cantidad sea un nÃºmero
       if (isNaN(parametro.cantidad)) return false;
 
       return true;
     };
 
-    // Crear un array con todos los IDs únicos (con validación)
+    // Crear un array con todos los IDs Ãºnicos (con validaciÃ³n)
     const uniqueIds = Array.from(
       new Set([
         ...productos.filter(p => p && p.id).map(p => p.id),
@@ -419,19 +183,19 @@ export default function VendorDialog({
       ])
     );
 
-    // Mapear los IDs únicos a los datos de productos
+    // Mapear los IDs Ãºnicos a los datos de productos
     const allProducts = uniqueIds.map(productId => {
       const productoVendedor = productos.find(p => p.id === productId);
       const productoAlmacen = almacen.find(p => p.id === productId);
 
-      // Filtrar y validar parámetros del vendedor
+      // Filtrar y validar parÃ¡metros del vendedor
       const parametrosVendedor = productoVendedor?.parametros
         ? productoVendedor.parametros
           .filter(validarParametro)
           .map(param => ({ ...param }))
         : [];
 
-      // Filtrar y validar parámetros del almacén
+      // Filtrar y validar parÃ¡metros del almacÃ©n
       const parametrosAlmacen = productoAlmacen?.parametros
         ? productoAlmacen.parametros
           .filter(validarParametro)
@@ -451,7 +215,7 @@ export default function VendorDialog({
       const cantidadVendedor = getCantidadTotal(productoVendedor, parametrosVendedor);
       const cantidadAlmacen = getCantidadTotal(productoAlmacen, parametrosAlmacen);
 
-      // Verificar si tiene parámetros válidos
+      // Verificar si tiene parÃ¡metros vÃ¡lidos
       const tieneParametros = parametrosVendedor.length > 0 || parametrosAlmacen.length > 0;
 
       return {
@@ -497,6 +261,7 @@ export default function VendorDialog({
 
 
 
+
   const handleComparativeSort = (field: 'cantidadVendedor' | 'cantidadAlmacen' | 'precio') => {
     if (sortField === field) {
       if (sortDirection === 'asc') {
@@ -513,21 +278,22 @@ export default function VendorDialog({
 
 
 
+
   const handleDeleteVendorData = async () => {
     try {
       setIsDeleting(true);
       await onDeleteVendorData(vendor.id);
       toast({
-        title: "Éxito",
+        title: "Ã‰xito",
         description: "Los datos del vendedor han sido eliminados correctamente.",
       });
       setDeleteConfirmDialogOpen(false);
-      onClose(); // Cerrar el diálogo principal
+      onClose(); // Cerrar el diÃ¡logo principal
     } catch (error) {
       console.error('Error al eliminar los datos:', error);
       toast({
         title: "Error",
-        description: "No se pudieron eliminar los datos del vendedor. Por favor, inténtelo de nuevo.",
+        description: "No se pudieron eliminar los datos del vendedor. Por favor, intÃ©ntelo de nuevo.",
         variant: "destructive",
       });
     } finally {
@@ -567,18 +333,18 @@ export default function VendorDialog({
       const nuevasVentasSemanales = agruparVentasPorSemana(nuevasVentasLocales)
       setVentasSemanales(nuevasVentasSemanales)
 
-      // Recalcular ventas específicas
+      // Recalcular ventas especÃ­ficas
       calcularVentasEspecificas()
 
       toast({
-        title: "Éxito",
+        title: "Ã‰xito",
         description: "La venta se ha eliminado correctamente.",
       })
     } catch (error) {
       console.error('Error al eliminar la venta:', error)
       toast({
         title: "Error",
-        description: "No se pudo eliminar la venta. Por favor, inténtelo de nuevo.",
+        description: "No se pudo eliminar la venta. Por favor, intÃ©ntelo de nuevo.",
         variant: "destructive",
       })
     }
@@ -690,11 +456,9 @@ export default function VendorDialog({
   const sortAndFilterProducts = useCallback((products: Producto[]) => {
     const calcularCantidadTotal = (producto: Producto) => {
       if (producto.parametros && producto.parametros.length > 0) {
-
-
-        console.log('Parámetros del producto:', producto.nombre, producto.parametros); // Log temporal
+        console.log('ParÃ¡metros del producto:', producto.nombre, producto.parametros); // Log temporal
         return producto.parametros
-          .filter(param => param.cantidad > 0) // Solo contar parámetros con cantidad > 0
+          .filter(param => param.cantidad > 0) // Solo contar parÃ¡metros con cantidad > 0
           .reduce((total, param) => total + (param.cantidad || 0), 0)
       }
       return producto.cantidad
@@ -723,7 +487,7 @@ export default function VendorDialog({
       const date = parseISO(dateString)
       if (!isValid(date)) {
         console.error(`Invalid date string: ${dateString}`)
-        return 'Fecha inválida'
+        return 'Fecha invÃ¡lida'
       }
       return format(date, 'dd/MM/yyyy', { locale: es })
     } catch (error) {
@@ -734,22 +498,227 @@ export default function VendorDialog({
 
   const formatPrice = (price: number | string): string => {
     const numPrice = typeof price === 'string' ? parseFloat(price) : price
-    return numPrice.toFixed(2)
+    return isNaN(numPrice) ? '0.00' : numPrice.toFixed(2)
   }
+
+  const VentaDiaDesplegable = ({ venta }: { venta: VentaDia }) => {
+    const [isOpen, setIsOpen] = useState(false)
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+    const [saleToDelete, setSaleToDelete] = useState<string | null>(null)
+
+    const handleDeleteClick = (saleId: string) => {
+      setSaleToDelete(saleId)
+      setDeleteDialogOpen(true)
+    }
+
+    const confirmDelete = async () => {
+      if (saleToDelete) {
+        try {
+          await handleDeleteSale(saleToDelete)
+          setDeleteDialogOpen(false)
+          setSaleToDelete(null)
+        } catch (error) {
+          console.error('Error al eliminar la venta:', error)
+          toast({
+            title: "Error",
+            description: "No se pudo eliminar la venta. Por favor, intÃ©ntelo de nuevo.",
+            variant: "destructive",
+          })
+        }
+      }
+    }
+
+    const renderParametros = (venta: Venta) => {
+      if (!venta.parametros || venta.parametros.length === 0) return null;
+
+      // Filtrar los parÃ¡metros con cantidad mayor a 0
+      const parametrosFiltrados = venta.parametros.filter(param => param.cantidad > 0);
+
+      if (parametrosFiltrados.length === 0) return null; // Si no hay parÃ¡metros vÃ¡lidos, no renderizar nada
+
+      return (
+        <div className="mt-1 text-sm text-gray-600">
+          {parametrosFiltrados.map((param, index) => (
+            <div key={index} className="flex space-x-2">
+              <span>{param.nombre}:</span>
+              <span>{param.cantidad}</span>
+            </div>
+          ))}
+        </div>
+      );
+    };
+
+
+    const calcularCantidadTotal = (venta: Venta) => {
+      if (venta.parametros && venta.parametros.length > 0) {
+        return venta.parametros.reduce((acc, param) => acc + param.cantidad, 0)
+      }
+      return venta.cantidad
+    }
+
+    return (
+      <div className="border rounded-lg mb-2">
+        <div
+          className="flex justify-between items-center p-4 cursor-pointer"
+          onClick={() => setIsOpen(!isOpen)}
+        >
+          <span>{formatDate(venta.fecha)}</span>
+          <div className="flex items-center">
+            <span className="mr-2">${formatPrice(venta.total)}</span>
+            {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </div>
+        </div>
+        {isOpen && (
+          <div className="p-4 bg-gray-50">
+            {venta.ventas.map((v) => (
+              <div key={v.id} className="flex items-center justify-between py-2">
+                <div className="flex items-center flex-grow">
+                  <Image
+                    src={v.producto_foto || '/placeholder.svg'}
+                    alt={v.producto_nombre}
+                    width={40}
+                    height={40}
+                    className="rounded-md mr-4"
+                  />
+                  <div>
+                    <span className="font-medium">{v.producto_nombre}</span>
+                    {renderParametros(v)}
+                  </div>
+                </div>
+                <div className="flex items-center">
+                  <div className="text-right mr-4">
+                    <div>Cantidad: {calcularCantidadTotal(v)}</div>
+                    <div>${formatPrice(v.precio_unitario)}</div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleDeleteClick(v.id)
+                    }}
+                  >
+                    <X className="h-4 w-4 text-red-500" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Confirmar eliminaciÃ³n</DialogTitle>
+            </DialogHeader>
+            <p>Â¿EstÃ¡ seguro de que desea eliminar esta venta?</p>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>Cancelar</Button>
+              <Button variant="destructive" onClick={confirmDelete}>Eliminar</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    )
+  }
+
+  const VentaSemanaDesplegable = ({ venta }: { venta: VentaSemana }) => {
+    const [isOpen, setIsOpen] = useState(false)
+
+    const parsePrice = (price: number | string): number => {
+      if (typeof price === 'number') return price
+      const parsed = parseFloat(price)
+      return isNaN(parsed) ? 0 : parsed
+    }
+
+    const calcularTotalVenta = (venta: Venta) => {
+      const cantidadTotal = venta.parametros && venta.parametros.length > 0
+        ? venta.parametros.reduce((acc, param) => acc + param.cantidad, 0)
+        : venta.cantidad
+      return cantidadTotal * parsePrice(venta.precio_unitario)
+    }
+
+    const ventasPorDia = venta.ventas.reduce((acc: Record<string, Venta[]>, v) => {
+      const fecha = parseISO(v.fecha)
+      if (!isValid(fecha)) {
+        console.error(`Invalid date in venta: ${v.fecha}`)
+        return acc
+      }
+      const fechaStr = format(fecha, 'yyyy-MM-dd')
+      if (!acc[fechaStr]) {
+        acc[fechaStr] = []
+      }
+      acc[fechaStr].push(v)
+      return acc
+    }, {})
+
+    return (
+      <div className="border rounded-lg mb-2">
+        <div
+          className="flex justify-between items-center p-4 cursor-pointer"
+          onClick={() => setIsOpen(!isOpen)}
+        >
+          <span>Semana {formatDate(venta.fechaInicio)} - {formatDate(venta.fechaFin)}</span>
+          <div className="flex items-center space-x-4">
+            <span>${formatPrice(venta.total)}</span>
+            <span className="text-green-600">Ganancia: ${formatPrice(venta.ganancia)}</span>
+            {isOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </div>
+        </div>
+        {isOpen && (
+          <div className="p-4 bg-gray-50">
+            {Object.entries(ventasPorDia)
+              .sort(([dateA], [dateB]) => {
+                const a = parseISO(dateA)
+                const b = parseISO(dateB)
+                return isValid(a) && isValid(b) ? a.getTime() - b.getTime() : 0
+              })
+              .map(([fecha, ventasDia]) => {
+                const fechaVenta = parseISO(fecha)
+                const fechaInicio = parseISO(venta.fechaInicio)
+                const fechaFin = parseISO(venta.fechaFin)
+                if (isValid(fechaVenta) && isValid(fechaInicio) && isValid(fechaFin) &&
+                  fechaVenta >= fechaInicio && fechaVenta <= fechaFin) {
+                  return (
+                    <VentaDiaDesplegable
+                      key={fecha}
+                      venta={{
+                        fecha,
+                        ventas: ventasDia,
+                        total: ventasDia.reduce((sum, v) => sum + calcularTotalVenta(v), 0)
+                      }}
+                    />
+                  )
+                }
+                return null
+              })}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
-    setEditedVendor(prev => ({
-      ...prev,
-      [name]: value
-    }))
+    if (name === 'newPassword') {
+      setNewPassword(value)
+    } else if (name === 'confirmPassword') {
+      setConfirmPassword(value)
+    } else {
+      setEditedVendor(prev => ({
+        ...prev,
+        [name]: value,
+      }))
+    }
   }
 
   const handleEdit = async () => {
-    if (newPassword && newPassword !== confirmPassword) {
+    if (newPassword !== confirmPassword) {
       toast({
         title: "Error",
-        description: "Las contraseñas no coinciden.",
+        description: "Las contraseÃ±as no coinciden.",
         variant: "destructive",
       })
       return
@@ -766,14 +735,14 @@ export default function VendorDialog({
       setNewPassword('')
       setConfirmPassword('')
       toast({
-        title: "Éxito",
+        title: "Ã‰xito",
         description: "Los datos del vendedor se han actualizado correctamente.",
       })
     } catch (error) {
       console.error('Error al editar el vendedor:', error)
       toast({
         title: "Error",
-        description: "No se pudo actualizar los datos del vendedor. Por favor, inténtelo de nuevo.",
+        description: "No se pudo actualizar los datos del vendedor. Por favor, intÃ©ntelo de nuevo.",
         variant: "destructive",
       })
     } finally {
@@ -781,50 +750,13 @@ export default function VendorDialog({
     }
   }
 
-  const handleReduceProduct = async (destination: 'almacen' | 'merma' | 'vendedor') => {
-    console.log('🔵 handleReduceProduct llamado con destino:', destination);
-    console.log('🔵 productToReduce:', productToReduce);
+  // En VendorDialog
+  const handleReduceProduct = async () => {
+    if (!productToReduce || !selectedDestination) return;
 
-    if (!productToReduce) {
-      console.log('❌ No hay producto para reducir');
-      return;
-    }
-
-    // Verificar dinámicamente si tiene parámetros válidos
-    const parametrosValidos = productToReduce.parametros?.filter(param =>
-      param.cantidad > 0 &&
-      param.nombre.trim() !== '' &&
-      isNaN(Number(param.nombre))
-    ) || [];
-
-    const tieneParametrosValidos = parametrosValidos.length > 0;
-
-    // Validar que hay cantidad a reducir
-    const totalAReducir = tieneParametrosValidos
-      ? Object.values(parameterQuantities).reduce((sum, val) => sum + val, 0)
-      : quantityToReduce;
-
-    console.log('🔵 Total a reducir:', totalAReducir);
-    console.log('🔵 tieneParametrosValidos:', tieneParametrosValidos);
-    console.log('🔵 parametrosValidos:', parametrosValidos);
-    console.log('🔵 parameterQuantities:', parameterQuantities);
-    console.log('🔵 quantityToReduce:', quantityToReduce);
-
-    if (totalAReducir === 0) {
-      console.log('❌ Total a reducir es 0');
-      toast({
-        title: "Error",
-        description: "Debes especificar una cantidad mayor a 0",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    console.log('🔵 Iniciando proceso...');
     setIsLoading(true);
-
     try {
-      const parametrosReduccion = tieneParametrosValidos
+      const parametrosReduccion = productToReduce.tiene_parametros && productToReduce.parametros
         ? Object.entries(parameterQuantities)
           .filter(([_, cantidad]) => cantidad > 0)
           .map(([nombre, cantidad]) => ({
@@ -833,71 +765,45 @@ export default function VendorDialog({
           }))
         : undefined;
 
-      console.log('🔵 parametrosReduccion:', parametrosReduccion);
-
-      if (destination === 'merma') {
-        console.log('🟡 Llamando a onProductMerma...');
-
+      if (selectedDestination === 'merma') {
+        // Solo llamar a onProductMerma
         await onProductMerma(
           productToReduce.id,
           vendor.id,
-          tieneParametrosValidos ? 0 : quantityToReduce,
+          productToReduce.tiene_parametros ? 0 : quantityToReduce,
           parametrosReduccion
         );
-
-        console.log('✅ onProductMerma completado');
-
-        toast({
-          title: "Éxito",
-          description: "Producto enviado a merma correctamente.",
-        });
-
-        setReduceDialogOpen(false);
-        setProductToReduce(null);
-        setQuantityToReduce(0);
-        setParameterQuantities({});
-
-        console.log('✅ Estados reseteados');
-
-      } else if (destination === 'almacen') {
-        console.log('🟡 Llamando a onProductReduce...');
-
+      } else if (selectedDestination === 'almacen') {
+        // Para devoluciÃ³n al almacÃ©n, usar onProductReduce
         await onProductReduce(
           productToReduce.id,
           vendor.id,
-          tieneParametrosValidos ? 0 : quantityToReduce,
+          productToReduce.tiene_parametros ? 0 : quantityToReduce,
           parametrosReduccion
         );
-
-        console.log('✅ onProductReduce completado');
-
-        toast({
-          title: "Éxito",
-          description: "Producto devuelto al almacén correctamente.",
-        });
-
-        setReduceDialogOpen(false);
-        setProductToReduce(null);
-        setQuantityToReduce(0);
-        setParameterQuantities({});
-
-        console.log('✅ Estados reseteados');
       }
 
+      setShowDestinationDialog(false);
+      setSelectedDestination(null);
+      setProductToReduce(null);
+      setQuantityToReduce(0);
+      setParameterQuantities({});
+
+      toast({
+        title: "Ã‰xito",
+        description: `Producto ${selectedDestination === 'merma' ? 'enviado a merma' : 'reducido'} correctamente.`,
+      });
     } catch (error) {
-      console.error('❌ Error en handleReduceProduct:', error);
+      console.error('Error al procesar la operaciÃ³n:', error);
       toast({
         title: "Error",
-        description: `No se pudo ${destination === 'merma' ? 'enviar a merma' : 'devolver al almacén'} el producto. ${error instanceof Error ? error.message : ''}`,
+        description: `No se pudo ${selectedDestination === 'merma' ? 'enviar a merma' : 'reducir'} el producto.`,
         variant: "destructive",
       });
     } finally {
-      console.log('🔵 Finally - setIsLoading(false)');
       setIsLoading(false);
     }
   };
-
-
 
 
 
@@ -917,16 +823,15 @@ export default function VendorDialog({
   }, [])
 
   const renderProductList = useCallback((products: Producto[]) => {
-
     const filteredAndSortedProducts = sortAndFilterProducts(products)
 
     const calcularCantidadTotal = (producto: Producto) => {
       if (producto.parametros && producto.parametros.length > 0) {
-        // Filtrar parámetros válidos (no numéricos y cantidad > 0)
+        // Filtrar parÃ¡metros vÃ¡lidos (no numÃ©ricos y cantidad > 0)
         const parametrosValidos = producto.parametros.filter(param =>
           param.cantidad > 0 &&
-          isNaN(Number(param.nombre)) && // Excluir nombres que son solo números
-          param.nombre.trim() !== '' // Excluir nombres vacíos
+          isNaN(Number(param.nombre)) && // Excluir nombres que son solo nÃºmeros
+          param.nombre.trim() !== '' // Excluir nombres vacÃ­os
         );
 
         return parametrosValidos.reduce((total, param) => total + param.cantidad, 0);
@@ -937,18 +842,18 @@ export default function VendorDialog({
     return (
       <div className="space-y-2">
         {filteredAndSortedProducts.map(producto => {
-          // Filtrar parámetros válidos
+          // Filtrar parÃ¡metros vÃ¡lidos
           const parametrosValidos = producto.parametros?.filter(param =>
             param.cantidad > 0 &&
-            isNaN(Number(param.nombre)) && // Excluir nombres que son solo números
-            param.nombre.trim() !== '' // Excluir nombres vacíos
+            isNaN(Number(param.nombre)) && // Excluir nombres que son solo nÃºmeros
+            param.nombre.trim() !== '' // Excluir nombres vacÃ­os
           ) || [];
 
           const hasParameters = parametrosValidos.length > 0;
           const isExpanded = expandedProducts[producto.id] || false;
           const cantidadTotal = calcularCantidadTotal(producto);
 
-          // Si el producto tiene parámetros pero ninguno es válido, lo mostramos como agotado
+          // Si el producto tiene parÃ¡metros pero ninguno es vÃ¡lido, lo mostramos como agotado
           if (producto.parametros && producto.parametros.length > 0 && !hasParameters) {
             return (
               <div
@@ -1071,9 +976,9 @@ export default function VendorDialog({
     return (
       <Tabs defaultValue="por-dia">
         <TabsList>
-          <TabsTrigger value="por-dia">Por día</TabsTrigger>
+          <TabsTrigger value="por-dia">Por dÃ­a</TabsTrigger>
           <TabsTrigger value="por-semana">Por semana</TabsTrigger>
-          <TabsTrigger value="especificas">Ventas Específicas</TabsTrigger>
+          <TabsTrigger value="especificas">Ventas EspecÃ­ficas</TabsTrigger>
         </TabsList>
         <TabsContent value="por-dia">
           <div className="space-y-4">
@@ -1091,7 +996,6 @@ export default function VendorDialog({
                 <VentaDiaDesplegable
                   key={venta.fecha}
                   venta={venta}
-                  onDeleteSale={handleDeleteSale} // Pasar la función aquí
                 />
               ))
             ) : (
@@ -1112,11 +1016,7 @@ export default function VendorDialog({
             </div>
             {ventasSemanalesState.length > 0 ? (
               filtrarVentasSemanales(ventasSemanalesState).map((venta) => (
-                <VentaSemanaDesplegable
-                  key={`${venta.fechaInicio}-${venta.fechaFin}`}
-                  venta={venta}
-                  onDeleteSale={handleDeleteSale} // Pasar la función aquí
-                />
+                <VentaSemanaDesplegable key={`${venta.fechaInicio}-${venta.fechaFin}`} venta={venta} />
               ))
             ) : (
               <div className="text-center py-4">No hay ventas registradas</div>
@@ -1130,40 +1030,21 @@ export default function VendorDialog({
     )
   }
 
-
   const renderTransaccionesList = () => {
-    const vendorNombre = vendor.nombre;
-
-    console.log('=== FILTRADO DE TRANSACCIONES ===');
-    console.log('Vendedor actual:', vendorNombre);
-    console.log('Total transacciones:', transacciones.length);
+    const vendorId = vendor.id.toString();
 
     const filteredTransacciones = filterItems(transacciones, searchTerm).filter(transaccion => {
       const transaccionDesde = transaccion.desde?.toString();
       const transaccionHacia = transaccion.hacia?.toString();
 
-      console.log('---');
-      console.log('Producto:', transaccion.producto);
-      console.log('Tipo:', transaccion.tipo);
-      console.log('Desde:', transaccionDesde);
-      console.log('Hacia:', transaccionHacia);
-      console.log('¿Desde === vendorNombre?', transaccionDesde === vendorNombre);
-      console.log('¿Hacia === vendorNombre?', transaccionHacia === vendorNombre);
-
-      if (transaccionDesde === vendorNombre && transaccion.tipo === 'Baja') {
-        console.log('✅ INCLUIDA: Baja desde este vendedor');
+      if (transaccionDesde === vendorId && transaccion.tipo === 'Baja') {
         return true;
       }
-      if (transaccionHacia === vendorNombre && transaccion.tipo === 'Entrega') {
-        console.log('✅ INCLUIDA: Entrega hacia este vendedor');
+      if (transaccionHacia === vendorId && transaccion.tipo === 'Entrega') {
         return true;
       }
-      console.log('❌ EXCLUIDA');
       return false;
     });
-
-    console.log('Transacciones filtradas:', filteredTransacciones.length);
-    console.log('=================================');
 
     const calcularCantidadTotal = (transaccion: Transaccion): number => {
       if (transaccion.parametros && Array.isArray(transaccion.parametros) && transaccion.parametros.length > 0) {
@@ -1229,12 +1110,12 @@ export default function VendorDialog({
                   </div>
                 </div>
 
-                {/* Panel expandible para parámetros */}
+                {/* Panel expandible para parÃ¡metros */}
                 {hasParameters && isExpanded && transaccion.parametros && (
                   <div className="bg-gray-50 px-4 py-2 border-t">
                     <div className="space-y-2">
                       {transaccion.parametros
-                        .filter((param: TransaccionParametro) => param.cantidad > 0) // Añadimos este filtro
+                        .filter((param: TransaccionParametro) => param.cantidad > 0) // AÃ±adimos este filtro
                         .map((param: TransaccionParametro, index: number) => (
                           <div
                             key={`${transaccion.id}-param-${index}`}
@@ -1383,7 +1264,7 @@ export default function VendorDialog({
         let inconsistenciaData: InconsistenciaData;
 
         if (producto.parametros && producto.parametros.length > 0) {
-          // Calcular inconsistencias para productos con parámetros
+          // Calcular inconsistencias para productos con parÃ¡metros
           const parametrosInconsistentes = producto.parametros
             .filter(parametro => parametro.cantidad > 0 || parametro.nombre.trim() !== '')
             .map(parametro => {
@@ -1420,7 +1301,7 @@ export default function VendorDialog({
             tieneParametros: true
           };
         } else {
-          // Calcular inconsistencias para productos sin parámetros
+          // Calcular inconsistencias para productos sin parÃ¡metros
           const resultado = calcularCantidadPorTransacciones(producto.id);
           inconsistenciaData = {
             id: producto.id,
@@ -1482,7 +1363,7 @@ export default function VendorDialog({
                     <tr>
                       <td colSpan={8} className="text-center py-4 text-gray-500 text-sm">
                         {searchTerm
-                          ? 'No se encontraron productos que coincidan con la búsqueda.'
+                          ? 'No se encontraron productos que coincidan con la bÃºsqueda.'
                           : 'No se encontraron inconsistencias en el inventario.'}
                       </td>
                     </tr>
@@ -1514,7 +1395,7 @@ export default function VendorDialog({
                           <td className="p-2 text-right text-sm whitespace-nowrap">{item.cantidadActual}</td>
                           <td className="p-2 text-right text-sm whitespace-nowrap">{item.cantidadCalculada}</td>
                           <td className={`p-2 text-right text-sm whitespace-nowrap ${item.diferencia > 0 ? 'text-green-600' :
-                            item.diferencia < 0 ? 'text-red-600' : ''
+                              item.diferencia < 0 ? 'text-red-600' : ''
                             }`}>
                             {item.diferencia}
                           </td>
@@ -1553,7 +1434,7 @@ export default function VendorDialog({
                                   <table className="w-full text-xs border-separate border-spacing-0">
                                     <thead className="bg-gray-100">
                                       <tr>
-                                        <th className="p-1 text-left min-w-[100px]">Parámetro</th>
+                                        <th className="p-1 text-left min-w-[100px]">ParÃ¡metro</th>
                                         <th className="p-1 text-right min-w-[50px]">Actual</th>
                                         <th className="p-1 text-right min-w-[60px]">Calculada</th>
                                         <th className="p-1 text-right min-w-[60px]">Diferencia</th>
@@ -1570,7 +1451,7 @@ export default function VendorDialog({
                                           <td className="p-1 text-right whitespace-nowrap">{param.cantidadActual}</td>
                                           <td className="p-1 text-right whitespace-nowrap">{param.cantidadCalculada}</td>
                                           <td className={`p-1 text-right whitespace-nowrap ${param.diferencia > 0 ? 'text-green-600' :
-                                            param.diferencia < 0 ? 'text-red-600' : ''
+                                              param.diferencia < 0 ? 'text-red-600' : ''
                                             }`}>
                                             {param.diferencia}
                                           </td>
@@ -1618,21 +1499,21 @@ export default function VendorDialog({
                 name="telefono"
                 value={editedVendor.telefono}
                 onChange={handleInputChange}
-                placeholder="Teléfono"
+                placeholder="TelÃ©fono"
               />
               <Input
                 type="password"
                 name="newPassword"
                 value={newPassword}
                 onChange={handleInputChange}
-                placeholder="Nueva contraseña (dejar en blanco para no cambiar)"
+                placeholder="Nueva contraseÃ±a (dejar en blanco para no cambiar)"
               />
               <Input
                 type="password"
                 name="confirmPassword"
                 value={confirmPassword}
                 onChange={handleInputChange}
-                placeholder="Confirmar nueva contraseña"
+                placeholder="Confirmar nueva contraseÃ±a"
               />
               <Button onClick={handleEdit} disabled={isLoading}>
                 {isLoading ? (
@@ -1645,7 +1526,7 @@ export default function VendorDialog({
                 )}
               </Button>
 
-              {/* Nuevo botón para eliminar datos */}
+              {/* Nuevo botÃ³n para eliminar datos */}
               <div className="pt-4 border-t mt-4">
                 <Button
                   variant="destructive"
@@ -1664,90 +1545,85 @@ export default function VendorDialog({
               </div>
             </div>
           ) : mode === 'productos' ? (
-            <div className="max-h-[600px] overflow-y-auto">
-              <Tabs defaultValue="disponibles" className="w-full">
-                <div className="flex justify-center mb-4">
-                  <Button onClick={exportToExcel} className="bg-green-500 hover:bg-green-600 text-white">
-                    <FileDown className="mr-2 h-4 w-4" />
-                    Exportar
-                  </Button>
-                </div>
-                <TabsList className="grid w-full grid-cols-2 mb-4">
-                  <TabsTrigger value="disponibles">Disponibles</TabsTrigger>
-                  <TabsTrigger value="agotados">Agotados</TabsTrigger>
-                </TabsList>
-                <div className="space-y-4 mb-4">
-                  <div className="relative">
-                    <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                    <Input
-                      type="search"
-                      placeholder="Buscar productos..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-10"
-                    />
-                  </div>
-                  <div className="flex justify-start space-x-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleSort('nombre')}
-                      className="flex items-center"
-                    >
-                      Nombre
-                      <ArrowUpDown className="ml-2 h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleSort('cantidad')}
-                      className="flex items-center"
-                    >
-                      Cantidad
-                      <ArrowUpDown className="ml-2 h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-                <TabsContent value="disponibles">
-                  {renderProductList(productos.filter(p => {
-                    const cantidadTotal = p.parametros && p.parametros.length > 0
-                      ? p.parametros.reduce((total, param) => total + (param.cantidad || 0), 0)
-                      : p.cantidad
-                    return cantidadTotal > 0
-                  }))}
-                </TabsContent>
-                <TabsContent value="agotados">
-                  {renderProductList(productos.filter(p => {
-                    const cantidadTotal = p.parametros && p.parametros.length > 0
-                      ? p.parametros.reduce((total, param) => total + (param.cantidad || 0), 0)
-                      : p.cantidad
-                    return cantidadTotal === 0
-                  }))}
-                </TabsContent>
-              </Tabs>
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <h2 className="text-lg font-bold">Productos del Vendedor</h2>
+              </div>
+              <div className="border rounded-lg overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Producto</TableHead>
+                      <TableHead>Precio</TableHead>
+                      <TableHead>Cantidad</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {productos.length > 0 ? (
+                      productos.map((producto) => (
+                        <TableRow key={producto.id}>
+                          <TableCell className="font-medium">{producto.nombre}</TableCell>
+                          <TableCell>${producto.precio}</TableCell>
+                          <TableCell>
+                            {producto.tiene_parametros && producto.parametros ? (
+                              <div className="text-sm">
+                                <div className="font-medium">Total: {producto.cantidad}</div>
+                                {producto.parametros.map(p => (
+                                  <div key={p.nombre} className="text-xs text-gray-500">
+                                    {p.nombre}: {p.cantidad}
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              producto.cantidad
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={3} className="text-center h-24">
+                          No hay productos asignados
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
             </div>
           ) : mode === 'transacciones' ? (
             <div className="space-y-4">
               <h2 className="text-lg font-bold">Historial de Transacciones</h2>
-              <div className="relative mb-4">
-                <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                <Input
-                  placeholder="Buscar transacciones..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
+              <div className="border rounded-lg overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Fecha</TableHead>
+                      <TableHead>Tipo</TableHead>
+                      <TableHead>Producto</TableHead>
+                      <TableHead>Cantidad</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {transacciones.length > 0 ? (
+                      transacciones.map((t) => (
+                        <TableRow key={t.id}>
+                          <TableCell>{formatDate(t.fecha)}</TableCell>
+                          <TableCell>{t.tipo}</TableCell>
+                          <TableCell>{t.producto}</TableCell>
+                          <TableCell>{t.cantidad}</TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-center h-24">
+                          No hay transacciones registradas
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
               </div>
-              {isLoading ? (
-                <div className="flex justify-center items-center py-8">
-                  <div className="text-center">
-                    <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2 text-gray-600" />
-                    <p className="text-gray-500">Cargando transacciones...</p>
-                  </div>
-                </div>
-              ) : (
-                renderTransaccionesList()
-              )}
             </div>
           ) : (
             <div className="flex flex-col space-y-2">
@@ -1756,17 +1632,16 @@ export default function VendorDialog({
             </div>
           )}
         </div>
-
       </DialogContent>
 
-      {/* Diálogo para confirmar eliminación de datos */}
+      {/* DiÃ¡logo para confirmar eliminaciÃ³n de datos */}
       <AlertDialog open={deleteConfirmDialogOpen} onOpenChange={setDeleteConfirmDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+            <AlertDialogTitle>Â¿EstÃ¡s seguro?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta acción eliminará todas las ventas y transacciones asociadas a este vendedor.
-              Esta acción no se puede deshacer.
+              Esta acciÃ³n eliminarÃ¡ todas las ventas y transacciones asociadas a este vendedor.
+              Esta acciÃ³n no se puede deshacer.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1788,296 +1663,6 @@ export default function VendorDialog({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      <Dialog open={reduceDialogOpen} onOpenChange={setReduceDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Reducir producto</DialogTitle>
-            <DialogDescription>
-              {productToReduce?.nombre}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            {(() => {
-              // Verificar dinámicamente si tiene parámetros válidos
-              const parametrosValidos = productToReduce?.parametros?.filter(param =>
-                param.cantidad > 0 &&
-                param.nombre.trim() !== '' &&
-                isNaN(Number(param.nombre))
-              ) || [];
-
-              const tieneParametrosValidos = parametrosValidos.length > 0;
-
-              console.log('🔍 Verificación de parámetros:', {
-                producto: productToReduce?.nombre,
-                tiene_parametros: productToReduce?.tiene_parametros,
-                parametros: productToReduce?.parametros,
-                parametrosValidos,
-                tieneParametrosValidos
-              });
-
-              return (
-                <>
-                  {/* Productos SIN parámetros válidos */}
-                  {productToReduce && !tieneParametrosValidos && (
-                    <div>
-                      <label className="text-sm font-medium">Cantidad a reducir</label>
-                      <Input
-                        type="number"
-                        min="0"
-                        max={productToReduce.cantidad || 0}
-                        value={quantityToReduce}
-                        onChange={(e) => setQuantityToReduce(parseInt(e.target.value) || 0)}
-                      />
-                      <p className="text-xs text-gray-500 mt-1">
-                        Disponible: {productToReduce.cantidad}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Productos CON parámetros válidos */}
-                  {productToReduce && tieneParametrosValidos && (
-                    <div className="space-y-3">
-                      <label className="text-sm font-medium block">Cantidades por parámetro</label>
-                      <div className="max-h-[300px] overflow-y-auto space-y-2">
-                        {parametrosValidos.map((parametro) => (
-                          <div
-                            key={parametro.nombre}
-                            className="flex items-center justify-between gap-2 p-2 border rounded-lg bg-gray-50"
-                          >
-                            <span className="text-sm font-medium flex-shrink-0">
-                              {parametro.nombre}
-                            </span>
-                            <div className="flex items-center gap-2">
-                              <Input
-                                type="number"
-                                min="0"
-                                max={parametro.cantidad}
-                                value={parameterQuantities[parametro.nombre] || 0}
-                                onChange={(e) => {
-                                  const value = parseInt(e.target.value) || 0;
-                                  const maxValue = parametro.cantidad;
-                                  setParameterQuantities(prev => ({
-                                    ...prev,
-                                    [parametro.nombre]: Math.min(value, maxValue)
-                                  }));
-                                }}
-                                className="w-20 text-center"
-                                onClick={(e) => e.stopPropagation()}
-                              />
-                              <span className="text-sm text-gray-500 flex-shrink-0">
-                                / {parametro.cantidad}
-                              </span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Mostrar total a reducir */}
-                      <div className="pt-2 border-t">
-                        <p className="text-sm font-medium">
-                          Total a reducir: {Object.values(parameterQuantities).reduce((sum, val) => sum + val, 0)}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Botones de destino */}
-                  <div className="space-y-2 pt-2">
-                    <p className="text-sm font-medium">Selecciona el destino:</p>
-                    <Button
-                      className="w-full"
-                      onClick={() => handleReduceProduct('almacen')}
-                      disabled={isLoading || (
-                        tieneParametrosValidos
-                          ? Object.values(parameterQuantities).reduce((sum, val) => sum + val, 0) === 0
-                          : quantityToReduce === 0
-                      )}
-                    >
-                      {isLoading ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Procesando...
-                        </>
-                      ) : (
-                        <>
-                          <ArrowLeftRight className="mr-2 h-4 w-4" />
-                          Devolver al Almacén
-                        </>
-                      )}
-                    </Button>
-
-                    <Button
-                      className="w-full"
-                      variant="destructive"
-                      onClick={() => {
-                        console.log('🔴 Botón "Enviar a Merma" clickeado');
-                        handleReduceProduct('merma');
-                      }}
-                      disabled={isLoading || (
-                        tieneParametrosValidos
-                          ? Object.values(parameterQuantities).reduce((sum, val) => sum + val, 0) === 0
-                          : quantityToReduce === 0
-                      )}
-                    >
-                      {isLoading ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Procesando...
-                        </>
-                      ) : (
-                        <>
-                          <X className="mr-2 h-4 w-4" />
-                          Enviar a Merma
-                        </>
-                      )}
-                    </Button>
-
-                    <Button
-                      className="w-full"
-                      variant="outline"
-                      onClick={() => {
-                        setReduceDialogOpen(false);
-                        setShowVendorSelectDialog(true);
-                      }}
-                      disabled={isLoading || (
-                        tieneParametrosValidos
-                          ? Object.values(parameterQuantities).reduce((sum, val) => sum + val, 0) === 0
-                          : quantityToReduce === 0
-                      )}
-                    >
-                      <ArrowLeftRight className="mr-2 h-4 w-4" />
-                      Transferir a otro Vendedor
-                    </Button>
-                  </div>
-                </>
-              );
-            })()}
-          </div>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setReduceDialogOpen(false);
-                setProductToReduce(null);
-                setQuantityToReduce(0);
-                setParameterQuantities({});
-              }}
-              disabled={isLoading}
-            >
-              Cancelar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-
-
-      {/* Diálogo de selección de vendedor */}
-      <Dialog open={showVendorSelectDialog} onOpenChange={setShowVendorSelectDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Seleccionar vendedor destino</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-2">
-            {vendedores
-              .filter(v => v.id !== vendor.id)
-              .map(v => (
-                <Button
-                  key={v.id}
-                  className="w-full"
-                  variant="outline"
-                  disabled={isLoading}
-                  onClick={async (e) => {
-                    console.log('🔵 Vendedor seleccionado:', v.nombre);
-                    console.log('🔵 Producto a transferir:', productToReduce);
-                    console.log('🔵 Cantidad:', quantityToReduce);
-                    console.log('🔵 Parámetros:', parameterQuantities);
-
-                    e.preventDefault();
-                    e.stopPropagation();
-
-                    if (!productToReduce || isLoading) {
-                      console.log('❌ Validación falló');
-                      return;
-                    }
-
-                    setIsLoading(true);
-                    console.log('🟡 Iniciando transferencia...');
-
-                    try {
-                      const parametrosTransferencia = productToReduce.tiene_parametros
-                        ? Object.entries(parameterQuantities)
-                          .filter(([_, cantidad]) => cantidad > 0)
-                          .map(([nombre, cantidad]) => ({ nombre, cantidad }))
-                        : undefined;
-
-                      console.log('🟡 Parámetros de transferencia:', parametrosTransferencia);
-
-                      await onProductTransfer(
-                        productToReduce.id,
-                        vendor.id,
-                        v.id,
-                        productToReduce.tiene_parametros ? 0 : quantityToReduce,
-                        parametrosTransferencia
-                      );
-
-                      console.log('✅ Transferencia exitosa');
-
-                      toast({
-                        title: "Éxito",
-                        description: `Producto transferido a ${v.nombre}`,
-                      });
-
-                      setShowVendorSelectDialog(false);
-                      setReduceDialogOpen(false);
-                      setProductToReduce(null);
-                      setQuantityToReduce(0);
-                      setParameterQuantities({});
-
-                    } catch (error) {
-                      console.error('❌ Error completo:', error);
-                      toast({
-                        title: "Error",
-                        description: `No se pudo transferir: ${error instanceof Error ? error.message : 'Error desconocido'}`,
-                        variant: "destructive",
-                      });
-                    } finally {
-                      console.log('🔵 Finally ejecutado');
-                      setIsLoading(false);
-                    }
-                  }}
-
-
-                >
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Transfiriendo...
-                    </>
-                  ) : (
-                    v.nombre
-                  )}
-                </Button>
-              ))}
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setShowVendorSelectDialog(false);
-                setReduceDialogOpen(true);
-              }}
-              disabled={isLoading}
-            >
-              Cancelar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-
     </Dialog>
   );
 }

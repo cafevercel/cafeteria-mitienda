@@ -109,7 +109,7 @@ export async function POST(request: Request) {
         }
       }
 
-      // ✅ CORRECCIÓN: Tipado explícito para reduce
+      // Calcular cantidad total
       cantidadReal = parametros.reduce((total: number, param: ParametroMerma) => {
         return total + (param.cantidad || 0);
       }, 0);
@@ -197,7 +197,7 @@ export async function POST(request: Request) {
     const mermaId = mermaResult.rows[0].id;
 
     if (producto.rows[0].tiene_parametros && parametros && parametros.length > 0) {
-      // 3a. Para productos con parámetros
+      // 3a. Para productos con parámetros - ✅ USAR NOMBRE EN LUGAR DE ID
       const transaccionResult = await sql`
         INSERT INTO transacciones (
           producto,
@@ -209,7 +209,7 @@ export async function POST(request: Request) {
         ) VALUES (
           ${producto_id},
           ${cantidadReal},
-          ${esMermaDirecta ? 'Inventario' : usuario_id},
+          ${nombreUsuario},
           'MERMA',
           NOW(),
           'Baja'
@@ -274,57 +274,58 @@ export async function POST(request: Request) {
         }
       }
     } else {
-      // 3b. Para productos sin parámetros
+      // 3b. Para productos sin parámetros - ✅ USAR NOMBRE EN LUGAR DE ID
       await sql`
-    INSERT INTO transacciones (
-      producto,
-      cantidad,
-      desde,
-      hacia,
-      fecha,
-      tipo
-    ) VALUES (
-      ${producto_id},
-      ${cantidadReal},
-      ${esMermaDirecta ? 'Inventario' : usuario_id},
-      'MERMA',
-      NOW(),
-      'Baja'
-    )
-  `;
+        INSERT INTO transacciones (
+          producto,
+          cantidad,
+          desde,
+          hacia,
+          fecha,
+          tipo
+        ) VALUES (
+          ${producto_id},
+          ${cantidadReal},
+          ${nombreUsuario},
+          'MERMA',
+          NOW(),
+          'Baja'
+        )
+      `;
 
       if (esCafeteria) {
-        // ✅ SOLO actualizar para productos SIN parámetros
+        // SOLO actualizar para productos SIN parámetros
         await sql`
-      UPDATE usuario_productos 
-      SET cantidad = cantidad - ${cantidadReal}
-      WHERE producto_id = ${producto_id}
-    `;
+          UPDATE usuario_productos 
+          SET cantidad = cantidad - ${cantidadReal}
+          WHERE producto_id = ${producto_id}
+        `;
       } else if (esMermaDirecta) {
         // Si es merma directa (no cafetería), actualizar en productos
         await sql`
-      UPDATE productos 
-      SET cantidad = cantidad - ${cantidadReal}
-      WHERE id = ${producto_id}
-    `;
+          UPDATE productos 
+          SET cantidad = cantidad - ${cantidadReal}
+          WHERE id = ${producto_id}
+        `;
       } else {
         // Si es de un vendedor específico, actualizar en usuario_productos
         await sql`
-      UPDATE usuario_productos 
-      SET cantidad = cantidad - ${cantidadReal}
-      WHERE producto_id = ${producto_id}
-      AND usuario_id = ${usuario_id}
-    `;
+          UPDATE usuario_productos 
+          SET cantidad = cantidad - ${cantidadReal}
+          WHERE producto_id = ${producto_id}
+          AND usuario_id = ${usuario_id}
+        `;
       }
     }
 
     return NextResponse.json({
       success: true,
       merma_id: mermaId,
-      cantidad_procesada: cantidadReal
+      cantidad_procesada: cantidadReal,
+      desde: nombreUsuario,
+      hacia: 'MERMA'
     });
   } catch (error) {
-    // ✅ CORRECCIÓN: Manejo de error tipado
     console.error('Error en merma:', error);
     const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
     return NextResponse.json(

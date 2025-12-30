@@ -204,3 +204,43 @@ export interface MenuSection {
   sample_image: string | null;
   orden: number;
 }
+
+// Tipos para la funcionalidad de contabilidad de vendedores
+export interface GastoVendedor {
+  id: number;
+  nombre: string;
+  cantidad: number;
+  fecha: string;
+  vendedor_id?: string; // Opcional para compatibilidad
+  mes?: number; // Opcional para compatibilidad
+  anio?: number; // Opcional para compatibilidad
+}
+
+export interface VendedorConSalario extends Vendedor {
+  salario?: number;
+}
+
+export interface CalculoContabilidadVendedor {
+  vendedorId: string;
+  vendedorNombre: string;
+  ventaTotal: number;
+  gananciaBruta: number;
+  gastos: number;
+  salario: number;
+  resultado: number;
+  detalles: {
+    ventas: Array<{
+      producto: string;
+      cantidad: number;
+      precioVenta: number;
+      precioCompra: number;
+      gananciaProducto: number;
+    }>;
+    gastosDesglosados: Array<{
+      nombre: string;
+      valorMensual: number;
+      diasSeleccionados: number;
+      valorProrrateado: number;
+    }>;
+  };
+}

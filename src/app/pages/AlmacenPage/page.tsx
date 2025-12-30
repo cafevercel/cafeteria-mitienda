@@ -11,17 +11,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
-import CocinaSection from '@/components/CocinaSection'
-import GastosSection from '@/components/GastosSection'
+import ContabilidadProducto from '@/components/ContabilidadProducto'
+import ContabilidadVendedoresPage from '@/components/ContabilidadVendedoresPage'
 import { Checkbox } from "@/components/ui/checkbox"
-import { Menu, ArrowUpDown, Plus, Truck, UserPlus, FileSpreadsheet, Trash2, X, Minus, Loader2, MoreVertical, Eye, Edit, DollarSign, Search, TrendingUp, Calendar } from "lucide-react"
+import { Menu, ArrowUpDown, Plus, Truck, UserPlus, FileSpreadsheet, Trash2, X, Minus, Loader2, MoreVertical, Eye, Edit, DollarSign, Search, TrendingUp, Calendar, Box, ArrowLeftRight } from "lucide-react"
 import {
   getVendedores,
   getCurrentUser,
   getInventario,
   registerUser,
-  getProductosCafeteria,
   getVentasVendedor,
   agregarProducto,
   editarProducto,
@@ -38,7 +38,8 @@ import {
   getVendedorProductos,
   getVendedorVentas,
   getVendedorTransacciones,
-  enviarCafeteriaACocina
+  enviarCafeteriaACocina,
+  transferirProductoEntreVendedores
 } from '../../services/api'
 import ProductDialog from '@/components/ProductDialog'
 import VendorDialog from '@/components/VendedorDialog'
@@ -47,9 +48,6 @@ import { ImageUpload } from '@/components/ImageUpload'
 import { Producto, Vendedor, Venta, Transaccion, Merma, Parametro } from '@/types'
 import { toast } from "@/hooks/use-toast";
 import { useVendorProducts } from '@/hooks/use-vendor-products';
-import VentasCafeteriaList from '@/components/VentasCafeteriaList'
-import TransaccionesList from '@/components/TransaccionesList'
-import BalanceSection from '@/components/BalanceSection'
 import MenuSectionComponent from '@/components/MenuSection'
 import React from 'react'
 
@@ -259,7 +257,7 @@ export default function AlmacenPage() {
   const [ventasVendedor, setVentasVendedor] = useState<Venta[]>([])
   const [transaccionesVendedor, setTransaccionesVendedor] = useState<Transaccion[]>([])
   const [vendedorSeleccionado, setVendedorSeleccionado] = useState<Vendedor | null>(null)
-  const [modeVendedor, setModeVendedor] = useState<'view' | 'edit' | 'ventas'>('view')
+  const [modeVendedor, setModeVendedor] = useState<'view' | 'edit' | 'ventas' | 'productos' | 'transacciones'>('view')
   const [ventasSemanales, setVentasSemanales] = useState<VentaSemana[]>([])
   const [ventasDiarias, setVentasDiarias] = useState<VentaDia[]>([])
   const [showAddProductModal, setShowAddProductModal] = useState(false)
@@ -279,8 +277,9 @@ export default function AlmacenPage() {
   const [selectedProduct, setSelectedProduct] = useState<Producto | null>(null)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   // En AlmacenPage.tsx, actualizar el estado:
-  const [activeSection, setActiveSection] = useState<'productos' | 'cafeteria' | 'cocina' | 'vendedores' | 'gastos' | 'ventas' | 'balance' | 'menu'>('productos')
+  const [activeSection, setActiveSection] = useState<'productos' | 'vendedores' | 'ventas' | 'menu' | 'contabilidad' | 'contabilidad-vendedores'>('productos')
   const [showMassDeliveryDialog, setShowMassDeliveryDialog] = useState(false)
+  const [selectedVendorForMassDelivery, setSelectedVendorForMassDelivery] = useState<number | null>(null)
   const [selectedProducts, setSelectedProducts] = useState<{
     [productId: string]: {
       cantidad: number;
@@ -304,17 +303,12 @@ export default function AlmacenPage() {
   const [nombreExiste, setNombreExiste] = useState(false);
   const [verificandoNombre, setVerificandoNombre] = useState(false);
   const { updateProductQuantity } = useVendorProducts();
-  const [activeCafeteriaTab, setActiveCafeteriaTab] = useState<'productos' | 'transacciones' | 'ventas'>('productos');
   const [reduceDialogOpen, setReduceDialogOpen] = useState(false)
   const [productToReduce, setProductToReduce] = useState<Producto | null>(null)
   const [quantityToReduce, setQuantityToReduce] = useState(0)
   const [parameterQuantities, setParameterQuantities] = useState<Record<string, number>>({})
   const [showDestinationDialog, setShowDestinationDialog] = useState(false)
   const [selectedDestination, setSelectedDestination] = useState<'almacen' | 'merma' | 'cocina' | null>(null)
-  const [cafeteriaFilterOption, setCafeteriaFilterOption] = useState<'todos' | 'pocos' | 'sin-existencias'>('todos')
-  const [cafeteriaProductos, setCafeteriaProductos] = useState<Producto[]>([])
-  const [cafeteriaSortBy, setCafeteriaSortBy] = useState<'nombre' | 'precio' | 'cantidadCaf' | 'cantidadAlm'>('nombre')
-  const [cafeteriaSortOrder, setCafeteriaSortOrder] = useState<'asc' | 'desc'>('asc')
   const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set());
   // Agregar estos estados al inicio del componente
   const [showVentasModal, setShowVentasModal] = useState(false)
@@ -324,104 +318,6 @@ export default function AlmacenPage() {
   const [expandedVentasDays, setExpandedVentasDays] = useState<Set<string>>(new Set());
   const [expandedVentasProducts, setExpandedVentasProducts] = useState<Set<string>>(new Set());
   const [seccionesExistentes, setSeccionesExistentes] = useState<string[]>([])
-
-
-  const handleExportCafeteriaToExcel = () => {
-    // Verificar que los datos estén disponibles
-    if (!productosVendedor || productosVendedor.length === 0) {
-      toast({
-        title: "Sin datos",
-        description: "No hay productos en cafetería para exportar",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    const exportData: any[] = [];
-
-    productosVendedor.forEach((producto: Producto) => {
-      // Calcular la cantidad total en cafetería
-      const cantidadCafeteria = producto.tiene_parametros && producto.parametros
-        ? producto.parametros.filter((p: any) => isNaN(Number(p.nombre)) && p.nombre.trim() !== '')
-          .reduce((sum: number, param: any) => sum + param.cantidad, 0)
-        : producto.cantidad;
-
-      // Buscar el producto correspondiente en el almacén
-      const productoAlmacen = inventario.find((p: Producto) => p.id === producto.id);
-      const cantidadAlmacen = productoAlmacen
-        ? (productoAlmacen.tiene_parametros && productoAlmacen.parametros
-          ? productoAlmacen.parametros.filter((p: any) => isNaN(Number(p.nombre)) && p.nombre.trim() !== '')
-            .reduce((sum: number, param: any) => sum + param.cantidad, 0)
-          : productoAlmacen.cantidad)
-        : 0;
-
-      if (producto.tiene_parametros && producto.parametros && producto.parametros.length > 0) {
-        // Si tiene parámetros, crear una fila por cada parámetro
-        const parametrosValidos = producto.parametros.filter((p: any) =>
-          isNaN(Number(p.nombre)) && p.nombre.trim() !== ''
-        );
-
-        if (parametrosValidos.length > 0) {
-          parametrosValidos.forEach((parametro: any) => {
-            exportData.push({
-              'Nombre del Producto': producto.nombre,
-              'Subproducto': parametro.nombre,
-              'Cantidad en Cafetería': parametro.cantidad,
-              'Precio': `$${Number(producto.precio).toFixed(2)}`,
-              'Cantidad Total en Cafetería': cantidadCafeteria,
-              'Cantidad en Almacén': cantidadAlmacen
-            });
-          });
-        } else {
-          // Si no hay parámetros válidos, agregar solo el producto
-          exportData.push({
-            'Nombre del Producto': producto.nombre,
-            'Subproducto': 'N/A',
-            'Cantidad en Cafetería': cantidadCafeteria,
-            'Precio': `$${Number(producto.precio).toFixed(2)}`,
-            'Cantidad Total en Cafetería': cantidadCafeteria,
-            'Cantidad en Almacén': cantidadAlmacen
-          });
-        }
-      } else {
-        // Si no tiene parámetros, agregar solo el producto
-        exportData.push({
-          'Nombre del Producto': producto.nombre,
-          'Subproducto': 'N/A',
-          'Cantidad en Cafetería': cantidadCafeteria,
-          'Precio': `$${Number(producto.precio).toFixed(2)}`,
-          'Cantidad Total en Cafetería': cantidadCafeteria,
-          'Cantidad en Almacén': cantidadAlmacen
-        });
-      }
-    });
-
-    // Crear el archivo Excel
-    const ws = XLSX.utils.json_to_sheet(exportData);
-
-    // Ajustar el ancho de las columnas
-    const colWidths = [
-      { wch: 25 }, // Nombre del Producto
-      { wch: 20 }, // Subproducto
-      { wch: 15 }, // Cantidad en Cafetería
-      { wch: 12 }, // Precio
-      { wch: 20 }, // Cantidad Total en Cafetería
-      { wch: 18 }  // Cantidad en Almacén
-    ];
-    ws['!cols'] = colWidths;
-
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Productos Cafetería");
-
-    // Generar nombre del archivo con fecha actual
-    const fechaActual = new Date().toLocaleDateString('es-ES').replace(/\//g, '-');
-    XLSX.writeFile(wb, `productos_cafeteria_${fechaActual}.xlsx`);
-
-    toast({
-      title: "Éxito",
-      description: "Lista de productos de cafetería exportada correctamente",
-    });
-  };
 
 
   const obtenerSeccionesUnicas = useCallback(() => {
@@ -510,42 +406,6 @@ export default function AlmacenPage() {
     }
   };
 
-  const getFilteredCafeteriaProducts = (productos: Producto[]): Producto[] => {
-    // Filtrar primero por término de búsqueda
-    const filteredBySearch = productos.filter((producto) =>
-      producto.nombre.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
-    // Calcular la cantidad total para cada producto
-    const calcularCantidadTotal = (producto: Producto): number => {
-      if (producto.tiene_parametros && producto.parametros) {
-        // Filtrar parámetros válidos (no numéricos y cantidad > 0)
-        const parametrosValidos = producto.parametros.filter(param =>
-          isNaN(Number(param.nombre)) && // Excluir nombres que son solo números
-          param.nombre.trim() !== '' // Excluir nombres vacíos
-        );
-
-        return parametrosValidos.reduce((total, param) => total + (param.cantidad || 0), 0);
-      }
-      return producto.cantidad || 0;
-    };
-
-    // Luego aplicar el filtro seleccionado
-    switch (cafeteriaFilterOption) {
-      case 'pocos':
-        return filteredBySearch.filter(producto => {
-          const cantidad = calcularCantidadTotal(producto);
-          return cantidad >= 0 && cantidad < 5; // Incluir productos con cantidad 0
-        });
-      case 'sin-existencias':
-        return filteredBySearch.filter(producto => {
-          const cantidad = calcularCantidadTotal(producto);
-          return cantidad === 0;
-        });
-      default: // 'todos'
-        return filteredBySearch;
-    }
-  };
 
   const handleDeleteVendorData = async (vendorId: string) => {
     try {
@@ -564,7 +424,6 @@ export default function AlmacenPage() {
       throw error;
     }
   };
-
 
 
   const toggleMermaExpansion = (mermaId: string) => {
@@ -630,38 +489,176 @@ export default function AlmacenPage() {
     parametros?: Parametro[]
   ) => {
     try {
-      // Solo llamar a createMerma, que manejará internamente la reducción
-      await createMerma(productId, vendorId, cantidad, parametros);
+      console.log('🟢 handleProductMerma llamado con:', {
+        productId,
+        vendorId,
+        cantidad,
+        parametros
+      });
+
+      // ✅ CORRECCIÓN: Convertir vendorId a string primero
+      const vendorIdStr = String(vendorId || '');
+      const origenId = vendorIdStr.trim() !== '' ? vendorIdStr : 'cafeteria';
+
+      console.log('🟡 origenId determinado:', origenId);
+
+      // ✅ Transformar y filtrar los parámetros
+      const parametrosFormateados = parametros
+        ?.filter(p => p.cantidad > 0)
+        ?.map(p => ({
+          nombre: p.nombre,
+          cantidad: p.cantidad
+        }));
+
+      console.log('🟡 Datos preparados para createMerma:', {
+        productId,
+        origenId,
+        cantidad,
+        parametrosFormateados,
+        tieneParametros: !!parametrosFormateados?.length
+      });
+
+      // ✅ Validar que hay algo que enviar
+      if (parametrosFormateados && parametrosFormateados.length > 0) {
+        const totalCantidad = parametrosFormateados.reduce((sum, p) => sum + p.cantidad, 0);
+        if (totalCantidad === 0) {
+          toast({
+            title: "Error",
+            description: "Debe especificar al menos una cantidad mayor a 0",
+            variant: "destructive",
+          });
+          return;
+        }
+      } else if (!cantidad || cantidad === 0) {
+        toast({
+          title: "Error",
+          description: "Debe especificar una cantidad mayor a 0",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      console.log('🟡 Llamando a createMerma...');
+
+      await createMerma(
+        String(productId), // ✅ Asegurar que sea string
+        origenId,
+        cantidad,
+        parametrosFormateados
+      );
+
+      console.log('✅ createMerma completado exitosamente');
 
       // Actualizar los estados después de la operación
       if (vendedorSeleccionado) {
+        console.log('🔄 Actualizando productos del vendedor...');
         const updatedProducts = await getProductosCompartidos();
         setProductosVendedor(updatedProducts);
       }
 
-      // Si estamos en la sección de cafetería, actualizar específicamente esos productos
-      if (activeSection === 'cafeteria') {
-        const updatedCafeteriaProducts = await getProductosCafeteria();
-        setCafeteriaProductos(updatedCafeteriaProducts);
-      }
-
+      console.log('🔄 Actualizando inventario...');
       await fetchInventario();
+
+      console.log('🔄 Actualizando mermas...');
       await fetchMermas();
+
+      console.log('✅ Todos los estados actualizados');
 
       toast({
         title: "Éxito",
         description: "Merma registrada correctamente",
       });
     } catch (error) {
-      console.error('Error al registrar merma:', error);
+      console.error('❌ Error en handleProductMerma:', error);
       toast({
         title: "Error",
-        description: "Error al registrar la merma",
+        description: error instanceof Error ? error.message : "Error al registrar la merma",
         variant: "destructive",
       });
+      throw error; // ✅ IMPORTANTE: Re-lanzar el error
     }
   };
 
+  // En AlmacenPage, reemplazar la función handleProductTransfer
+  const handleProductTransfer = async (
+    productId: string,
+    fromVendorId: string,
+    toVendorId: string,
+    cantidad: number,
+    parametros?: Array<{ nombre: string; cantidad: number }>
+  ) => {
+    try {
+      console.log('🟢 handleProductTransfer iniciado:', {
+        productId,
+        fromVendorId,
+        toVendorId,
+        cantidad,
+        parametros
+      });
+
+      // Buscar el producto
+      const producto = inventario.find(p => p.id.toString() === productId.toString());
+      if (!producto) {
+        throw new Error('Producto no encontrado');
+      }
+
+      // Buscar vendedores
+      const vendedorOrigen = vendedores.find(v => v.id.toString() === fromVendorId.toString());
+      const vendedorDestino = vendedores.find(v => v.id.toString() === toVendorId.toString());
+
+      if (!vendedorOrigen || !vendedorDestino) {
+        throw new Error('Vendedor no encontrado');
+      }
+
+      console.log('🟡 Llamando a transferirProductoEntreVendedores...');
+
+      // Llamar a la función de API
+      const result = await transferirProductoEntreVendedores(
+        productId,
+        fromVendorId,
+        toVendorId,
+        cantidad,
+        parametros
+      );
+
+      console.log('✅ Transferencia completada:', result);
+
+      // Actualizar estados locales
+      if (vendedorSeleccionado) {
+        console.log('🔄 Actualizando productos del vendedor...');
+        const updatedProducts = await getVendedorProductos(vendedorSeleccionado.id);
+        setProductosVendedor(updatedProducts);
+
+        console.log('🔄 Actualizando transacciones del vendedor...');
+        const updatedTransactions = await getVendedorTransacciones(vendedorSeleccionado.id);
+        setTransaccionesVendedor(updatedTransactions);
+      }
+
+      console.log('🔄 Actualizando inventario...');
+      await fetchInventario();
+
+      console.log('🔄 Actualizando vendedores...');
+      await fetchVendedores();
+
+      console.log('✅ Estados actualizados correctamente');
+
+      toast({
+        title: "Éxito",
+        description: `Producto transferido de ${vendedorOrigen.nombre} a ${vendedorDestino.nombre}`,
+      });
+
+      return result;
+
+    } catch (error) {
+      console.error('❌ Error en handleProductTransfer:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Error al transferir el producto",
+        variant: "destructive",
+      });
+      throw error;
+    }
+  };
 
 
 
@@ -744,9 +741,6 @@ export default function AlmacenPage() {
 
 
 
-
-
-
   const calcularCantidadTotal = (producto: Producto) => {
     if (producto.tiene_parametros && producto.parametros) {
       return producto.parametros.reduce((sum, param) => sum + param.cantidad, 0);
@@ -759,7 +753,7 @@ export default function AlmacenPage() {
     productId: string,
     cantidad: number,
     parametros?: Array<{ nombre: string; cantidad: number }>,
-    esCocina: boolean = false // NUEVO PARÁMETRO
+    userId?: number // NUEVO PARÁMETRO
   ) => {
     try {
       if (!productId) {
@@ -771,11 +765,15 @@ export default function AlmacenPage() {
         return;
       }
 
-      await entregarProducto(productId, cantidad, parametros, esCocina);
+      await entregarProducto(productId, cantidad, parametros, userId);
+
+      // Buscar nombre del vendedor para el mensaje
+      const vendedor = vendedores.find(v => Number(v.id) === userId);
+      const nombreDestino = vendedor ? vendedor.nombre : 'destino desconocido';
 
       toast({
         title: "Éxito",
-        description: `Producto entregado a ${esCocina ? 'cocina' : 'cafetería'} correctamente`,
+        description: `Producto entregado a ${nombreDestino} correctamente`,
       });
 
       // Actualizar inventario
@@ -797,6 +795,15 @@ export default function AlmacenPage() {
         toast({
           title: "Error",
           description: "Por favor, selecciona al menos un producto.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (!selectedVendorForMassDelivery) {
+        toast({
+          title: "Error",
+          description: "Por favor, selecciona un destinatario.",
           variant: "destructive",
         });
         return;
@@ -848,7 +855,8 @@ export default function AlmacenPage() {
           await entregarProducto(
             productId,
             cantidadTotal,
-            parametrosArray
+            parametrosArray,
+            selectedVendorForMassDelivery
           );
         } catch (error) {
           console.error(`Error en entrega: ${error}`);
@@ -863,6 +871,7 @@ export default function AlmacenPage() {
       await fetchInventario();
       setShowMassDeliveryDialog(false);
       setSelectedProducts({});
+      setSelectedVendorForMassDelivery(null);
       toast({
         title: "Éxito",
         description: "Entrega masiva realizada con éxito",
@@ -877,8 +886,6 @@ export default function AlmacenPage() {
       });
     }
   };
-
-
 
 
   const handleSort = (key: 'nombre' | 'cantidad') => {
@@ -942,8 +949,7 @@ export default function AlmacenPage() {
     }
   }
 
-  // Función para calcular ventas diarias
-  // Función para calcular ventas diarias
+
   const calcularVentasDiarias = (ventas: Venta[]) => {
     const ventasPorDia = ventas.reduce((acc: Record<string, Venta[]>, venta) => {
       const fecha = parseLocalDate(venta.fecha);
@@ -972,9 +978,6 @@ export default function AlmacenPage() {
   };
 
 
-
-  // Función para calcular ventas semanales
-  // Función para calcular ventas semanales
   const calcularVentasSemanales = (ventas: Venta[]) => {
     const ventasPorSemana = ventas.reduce((acc: Record<string, VentaSemana>, venta) => {
       const fecha = parseLocalDate(venta.fecha);
@@ -1026,20 +1029,19 @@ export default function AlmacenPage() {
     try {
       setIsLoading(true);
 
-      // Primero establecemos el modo y el vendedor seleccionado para mostrar algo al usuario
+      // Primero establecemos el modo y el vendedor seleccionado
       setModeVendedor(initialMode);
       setVendedorSeleccionado(vendedor);
 
-      // Usamos Promise.allSettled para que si alguna falla, las otras continúen
+      // ✅ SIEMPRE cargar TODOS los datos, sin importar el modo
       const [productosResult, ventasResult, transaccionesResult] = await Promise.allSettled([
         getVendedorProductos(vendedor.id),
         getVendedorVentas(vendedor.id),
         getVendedorTransacciones(vendedor.id)
       ]);
 
-      // Procesamos los resultados individualmente
+      // Procesar productos
       if (productosResult.status === 'fulfilled') {
-        // Mapeamos los productos a la estructura esperada
         const productosCorregidos = productosResult.value.map(p => ({
           id: p.id,
           nombre: p.nombre,
@@ -1050,15 +1052,16 @@ export default function AlmacenPage() {
           tieneParametros: Boolean(p.tiene_parametros || p.tieneParametros),
           parametros: p.parametros || []
         }));
-
         setProductosVendedor(productosCorregidos);
       } else {
         console.error('Error al obtener productos:', productosResult.reason);
-        setProductosVendedor([]); // Array vacío si hay error
+        setProductosVendedor([]);
       }
 
+      // Procesar ventas
       if (ventasResult.status === 'fulfilled') {
         const ventas = ventasResult.value;
+        console.log('✅ Ventas cargadas:', ventas.length); // ← Log para debug
         setVentasVendedor(ventas);
         calcularVentasDiarias(ventas);
         calcularVentasSemanales(ventas);
@@ -1069,23 +1072,28 @@ export default function AlmacenPage() {
         setVentasSemanales([]);
       }
 
+      // Procesar transacciones
       if (transaccionesResult.status === 'fulfilled') {
         setTransaccionesVendedor(transaccionesResult.value);
       } else {
         console.error('Error al obtener transacciones:', transaccionesResult.reason);
-        setTransaccionesVendedor([]); // Array vacío si hay error
+        setTransaccionesVendedor([]);
       }
+
+      console.log('✅ Todos los datos cargados'); // ← Log para debug
+
     } catch (error) {
       console.error('Error al cargar datos del vendedor:', error);
       toast({
         title: "Error",
-        description: "No se pudieron cargar algunos datos del vendedor. La información puede estar incompleta.",
+        description: "No se pudieron cargar algunos datos del vendedor.",
         variant: "destructive",
       });
     } finally {
       setIsLoading(false);
     }
   };
+
 
 
   useEffect(() => {
@@ -1202,22 +1210,24 @@ export default function AlmacenPage() {
   };
 
 
-
-
-
   const handleReduceVendorProduct = async (
     productId: string,
     cantidad: number,
     parametros?: Array<{ nombre: string; cantidad: number }>
   ) => {
     try {
-      // Si hay parámetros, enviarlos en la reducción
-      await reducirProductoInventario(productId, cantidad, parametros);
+      // Pasar el vendorId como cuarto parámetro
+      await reducirProductoInventario(
+        productId,
+        cantidad,
+        parametros,
+        vendedorSeleccionado?.id || 'almacen' // ← AGREGAR ESTO
+      );
 
       if (vendedorSeleccionado) {
         const updatedProducts = await getProductosCompartidos();
         setProductosVendedor(updatedProducts);
-        const updatedTransactions = await getTransaccionesVendedor();
+        const updatedTransactions = await getVendedorTransacciones(vendedorSeleccionado.id);
         setTransaccionesVendedor(updatedTransactions);
       }
 
@@ -1325,96 +1335,9 @@ export default function AlmacenPage() {
     }
   };
 
-  useEffect(() => {
-    const loadCafeteriaData = async () => {
-      if (activeSection === 'cafeteria') {
-        try {
-          // Cambiar getProductosCompartidos por getProductosCafeteria
-          const productos = await getProductosCafeteria();
 
-          // Debug para ver qué estamos recibiendo
-          console.log('Debug - Productos recibidos de getProductosCafeteria:', productos);
 
-          if (productos && productos.length > 0) {
-            setProductosVendedor(productos);
-            setCafeteriaProductos(productos);
-          } else {
-            // Si no hay productos, establecer arrays vacíos
-            setProductosVendedor([]);
-            setCafeteriaProductos([]);
-            toast({
-              title: "Información",
-              description: "No hay productos disponibles en la cafetería.",
-              variant: "default",
-            });
-          }
 
-          // Cargar transacciones
-          const transacciones = await getTransaccionesVendedor();
-          setTransaccionesVendedor(transacciones);
-
-          // Actualizar también el inventario general
-          await fetchInventario();
-        } catch (error) {
-          console.error('Error al cargar datos de cafetería:', error);
-          toast({
-            title: "Error",
-            description: "No se pudieron cargar los datos de la cafetería",
-            variant: "destructive",
-          });
-        }
-      }
-    };
-
-    loadCafeteriaData();
-  }, [activeSection]);
-
-  // Corregir la función handleReduceCafeteriaProduct para que coincida con la firma correcta
-  const handleReduceCafeteriaProduct = async (
-    productId: string,
-    cantidad: number,
-    parametros?: Array<{ nombre: string; cantidad: number }>
-  ) => {
-    try {
-      // La función reducirProductoInventario ahora espera solo 3 parámetros
-      await reducirProductoInventario(productId, cantidad, parametros);
-
-      // Actualizar los datos después de la operación
-      const updatedProducts = await getProductosCafeteria();
-      setProductosVendedor(updatedProducts);
-      setCafeteriaProductos(updatedProducts);
-
-      // Actualizar las transacciones
-      const transacciones = await getTransaccionesVendedor();
-      setTransaccionesVendedor(transacciones);
-
-      // Actualizar el inventario general
-      await fetchInventario();
-
-      toast({
-        title: "Éxito",
-        description: "Producto reducido correctamente",
-      });
-
-    } catch (error) {
-      console.error('Error al reducir producto:', error);
-      toast({
-        title: "Error",
-        description: "Error al reducir el producto",
-        variant: "destructive",
-      });
-      throw error; // Re-lanzar el error para que pueda ser capturado por el manejador superior
-    }
-  };
-
-  const handleCafeteriaSort = (key: 'nombre' | 'precio' | 'cantidadCaf' | 'cantidadAlm') => {
-    if (cafeteriaSortBy === key) {
-      setCafeteriaSortOrder(cafeteriaSortOrder === 'asc' ? 'desc' : 'asc')
-    } else {
-      setCafeteriaSortBy(key)
-      setCafeteriaSortOrder('asc')
-    }
-  }
 
   const handleToggleVendedorActivo = async (vendedorId: string, activo: boolean) => {
     try {
@@ -1435,46 +1358,17 @@ export default function AlmacenPage() {
     }
   };
 
-  // Efecto para cargar los datos del vendedor cuando cambia
-  useEffect(() => {
-    if (!vendedorSeleccionado) return;
+  const handleMostrarProductosVendedor = (vendedor: Vendedor) => {
+    setVendedorSeleccionado(vendedor);
+    setModeVendedor('productos');
+  };
 
-    setIsLoading(true);
+  const handleMostrarTransaccionesVendedor = (vendedor: Vendedor) => {
+    setVendedorSeleccionado(vendedor);
+    setModeVendedor('transacciones');
+  };
 
 
-
-    const loadData = async () => {
-      try {
-        if (modeVendedor === 'edit') {
-          // Para editar solo necesitamos los productos
-          const productos = await getVendedorProductos(vendedorSeleccionado.id);
-          setProductosVendedor(productos.map(p => ({
-            ...p,
-            tiene_parametros: p.tiene_parametros || p.tieneParametros || false,
-            tieneParametros: p.tiene_parametros || p.tieneParametros || false,
-            foto: p.foto || ''
-          })) as any);
-        } else if (modeVendedor === 'ventas') {
-          // Para ventas necesitamos las ventas y cálculos relacionados
-          const ventas = await getVendedorVentas(vendedorSeleccionado.id);
-          setVentasVendedor(ventas);
-          calcularVentasDiarias(ventas);
-          calcularVentasSemanales(ventas);
-        }
-      } catch (error) {
-        console.error('Error al cargar datos del vendedor:', error);
-        toast({
-          title: "Error",
-          description: "No se pudieron cargar algunos datos. La información podría estar incompleta.",
-          variant: "destructive",
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadData();
-  }, [vendedorSeleccionado, modeVendedor]);
 
   // Agregar una función para alternar la expansión de productos
   const toggleProductExpansion = (productId: string) => {
@@ -1516,44 +1410,7 @@ export default function AlmacenPage() {
               >
                 Almacén
               </Button>
-              <Button
-                variant="ghost"
-                className={activeSection === 'cafeteria' ? 'bg-orange-100 text-orange-800' : 'text-orange-700 hover:bg-orange-50 hover:text-orange-800'}
-                onClick={() => {
-                  setActiveSection('cafeteria')
-                  setIsMenuOpen(false)
 
-                  if (!cafeteriaProductos.length) {
-                    toast({
-                      title: "Aviso",
-                      description: "No se encontró un vendedor con el nombre 'Cafetería'. Por favor, créelo primero.",
-                      variant: "default",
-                    });
-                  }
-                }}
-              >
-                Cafetería
-              </Button>
-              <Button
-                variant="ghost"
-                className={activeSection === 'cocina' ? 'bg-orange-100 text-orange-800' : 'text-orange-700 hover:bg-orange-50 hover:text-orange-800'}
-                onClick={() => {
-                  setActiveSection('cocina')
-                  setIsMenuOpen(false)
-                }}
-              >
-                Cocina
-              </Button>
-              <Button
-                variant="ghost"
-                className={activeSection === 'gastos' ? 'bg-orange-100 text-orange-800' : 'text-orange-700 hover:bg-orange-50 hover:text-orange-800'}
-                onClick={() => {
-                  setActiveSection('gastos')
-                  setIsMenuOpen(false)
-                }}
-              >
-                Gastos
-              </Button>
               <Button
                 variant="ghost"
                 className={activeSection === 'vendedores' ? 'bg-orange-100 text-orange-800' : 'text-orange-700 hover:bg-orange-50 hover:text-orange-800'}
@@ -1574,15 +1431,27 @@ export default function AlmacenPage() {
               >
                 Ventas
               </Button>
+
               <Button
                 variant="ghost"
-                className={activeSection === 'balance' ? 'bg-orange-100 text-orange-800' : 'text-orange-700 hover:bg-orange-50 hover:text-orange-800'}
+                className={activeSection === 'contabilidad' ? 'bg-orange-100 text-orange-800' : 'text-orange-700 hover:bg-orange-50 hover:text-orange-800'}
                 onClick={() => {
-                  setActiveSection('balance')
+                  setActiveSection('contabilidad')
                   setIsMenuOpen(false)
                 }}
               >
-                Balance
+                Contabilidad por producto
+              </Button>
+
+              <Button
+                variant="ghost"
+                className={activeSection === 'contabilidad-vendedores' ? 'bg-orange-100 text-orange-800' : 'text-orange-700 hover:bg-orange-50 hover:text-orange-800'}
+                onClick={() => {
+                  setActiveSection('contabilidad-vendedores')
+                  setIsMenuOpen(false)
+                }}
+              >
+                Contabilidad Vendedores
               </Button>
 
               <Button
@@ -1924,28 +1793,33 @@ export default function AlmacenPage() {
                         </div>
                       </div>
                       <div className="flex space-x-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleVerVendedor(vendedor, 'edit')}
-                        >
-                          <Edit className="h-4 w-4" />
-                          <span className="ml-1">Editar</span>
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleMostrarVentas(vendedor)}
-                          disabled={loadingVentas}
-                        >
-                          {loadingVentas ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <DollarSign className="h-4 w-4" />
-                          )}
-                          <span className="ml-1">Ventas</span>
-                        </Button>
-
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" className="h-8 w-8 p-0">
+                              <span className="sr-only">Abrir menú</span>
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+                            <DropdownMenuItem onClick={() => handleVerVendedor(vendedor, 'edit')}>
+                              <Edit className="mr-2 h-4 w-4" />
+                              <span>Editar</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleVerVendedor(vendedor, 'ventas')}>
+                              <DollarSign className="mr-2 h-4 w-4" />
+                              <span>Ventas</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleMostrarProductosVendedor(vendedor)}>
+                              <Box className="mr-2 h-4 w-4" />
+                              <span>Productos</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleMostrarTransaccionesVendedor(vendedor)}>
+                              <ArrowLeftRight className="mr-2 h-4 w-4" />
+                              <span>Transacciones</span>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </div>
                   </div>
@@ -1956,353 +1830,16 @@ export default function AlmacenPage() {
         </div>
       )}
 
-      {activeSection === 'cocina' && (
-        <CocinaSection />
-      )}
-
-      {activeSection === 'gastos' && (
-        <GastosSection />
-      )}
-
       {activeSection === 'ventas' && (
         <SalesSection userRole="Almacen" />
       )}
 
-      {activeSection === 'cafeteria' && (
-        <div>
-          <Card>
-            <CardHeader>
-              {/* Header con título y botón de exportar alineados */}
-              <div className="flex justify-between items-center mb-4">
-                <CardTitle>Productos en Cafetería</CardTitle>
-
-                {/* Botón de exportar - solo icono en móvil, a la altura del título */}
-                {activeCafeteriaTab === 'productos' && (
-                  <Button
-                    onClick={handleExportCafeteriaToExcel}
-                    className="bg-green-500 hover:bg-green-600 text-white"
-                    size="sm"
-                  >
-                    <FileSpreadsheet className="h-4 w-4" />
-                    <span className="hidden md:inline ml-2">Exportar Cafetería</span>
-                  </Button>
-                )}
-              </div>
-
-              {/* Pestañas - ancho completo y distribuidas uniformemente */}
-              <div className="grid grid-cols-3 gap-2 w-full">
-                <Button
-                  variant={activeCafeteriaTab === 'productos' ? "default" : "outline"}
-                  onClick={() => setActiveCafeteriaTab('productos')}
-                  size="sm"
-                  className="w-full"
-                >
-                  Productos
-                </Button>
-                <Button
-                  variant={activeCafeteriaTab === 'transacciones' ? "default" : "outline"}
-                  onClick={() => setActiveCafeteriaTab('transacciones')}
-                  size="sm"
-                  className="w-full"
-                >
-                  Transacciones
-                </Button>
-                <Button
-                  variant={activeCafeteriaTab === 'ventas' ? "default" : "outline"}
-                  onClick={() => setActiveCafeteriaTab('ventas')}
-                  size="sm"
-                  className="w-full"
-                >
-                  Ventas
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {activeCafeteriaTab === 'productos' ? (
-                <div>
-                  {/* Barra de búsqueda para productos */}
-                  <div className="mb-4 flex flex-col space-y-2 md:flex-row md:space-y-0 md:space-x-2 items-start">
-                    <Input
-                      placeholder="Buscar productos..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="flex-grow"
-                    />
-                    <Select
-                      value={cafeteriaFilterOption}
-                      onValueChange={(value) => setCafeteriaFilterOption(value as 'todos' | 'pocos' | 'sin-existencias')}
-                    >
-                      <SelectTrigger className="w-full md:w-auto min-w-[200px]">
-                        <SelectValue placeholder="Filtrar productos" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="todos">Todos los productos</SelectItem>
-                        <SelectItem value="pocos">Menos de 5 unidades</SelectItem>
-                        <SelectItem value="sin-existencias">Sin existencias</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Tabla de productos en cafetería */}
-                  <div className="overflow-x-auto">
-                    <table className="w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Foto
-                          </th>
-                          <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            <button
-                              onClick={() => handleCafeteriaSort('nombre')}
-                              className="flex items-center space-x-1 focus:outline-none"
-                            >
-                              <span>Nombre</span>
-                              <ArrowUpDown className="h-3 w-3" />
-                            </button>
-                          </th>
-                          <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            <button
-                              onClick={() => handleCafeteriaSort('precio')}
-                              className="flex items-center justify-end space-x-1 focus:outline-none ml-auto"
-                            >
-                              <span>Precio</span>
-                              <ArrowUpDown className="h-3 w-3" />
-                            </button>
-                          </th>
-                          <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            <button
-                              onClick={() => handleCafeteriaSort('cantidadCaf')}
-                              className="flex items-center justify-end space-x-1 focus:outline-none ml-auto"
-                            >
-                              <span>Cant. Caf</span>
-                              <ArrowUpDown className="h-3 w-3" />
-                            </button>
-                          </th>
-                          <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            <button
-                              onClick={() => handleCafeteriaSort('cantidadAlm')}
-                              className="flex items-center justify-end space-x-1 focus:outline-none ml-auto"
-                            >
-                              <span>Cant. Alm</span>
-                              <ArrowUpDown className="h-3 w-3" />
-                            </button>
-                          </th>
-                          <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Acción
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {getFilteredCafeteriaProducts(productosVendedor)
-                          .sort((a, b) => {
-                            // Calcular la cantidad en cafetería de los productos
-                            const cantidadCafeteriaA = a.tiene_parametros && a.parametros
-                              ? a.parametros.filter(p => isNaN(Number(p.nombre)) && p.nombre.trim() !== '')
-                                .reduce((sum, param) => sum + param.cantidad, 0)
-                              : a.cantidad;
-
-                            const cantidadCafeteriaB = b.tiene_parametros && b.parametros
-                              ? b.parametros.filter(p => isNaN(Number(p.nombre)) && p.nombre.trim() !== '')
-                                .reduce((sum, param) => sum + param.cantidad, 0)
-                              : b.cantidad;
-
-                            // Buscar el producto correspondiente en el almacén
-                            const productoAlmacenA = inventario.find(p => p.id === a.id);
-                            const productoAlmacenB = inventario.find(p => p.id === b.id);
-
-                            // Calcular la cantidad en almacén
-                            const cantidadAlmacenA = productoAlmacenA
-                              ? (productoAlmacenA.tiene_parametros && productoAlmacenA.parametros
-                                ? productoAlmacenA.parametros.filter(p => isNaN(Number(p.nombre)) && p.nombre.trim() !== '')
-                                  .reduce((sum, param) => sum + param.cantidad, 0)
-                                : productoAlmacenA.cantidad)
-                              : 0;
-
-                            const cantidadAlmacenB = productoAlmacenB
-                              ? (productoAlmacenB.tiene_parametros && productoAlmacenB.parametros
-                                ? productoAlmacenB.parametros.filter(p => isNaN(Number(p.nombre)) && p.nombre.trim() !== '')
-                                  .reduce((sum, param) => sum + param.cantidad, 0)
-                                : productoAlmacenB.cantidad)
-                              : 0;
-
-                            // Ordenar según el campo seleccionado
-                            switch (cafeteriaSortBy) {
-                              case 'nombre':
-                                return cafeteriaSortOrder === 'asc'
-                                  ? a.nombre.localeCompare(b.nombre)
-                                  : b.nombre.localeCompare(a.nombre);
-                              case 'precio':
-                                return cafeteriaSortOrder === 'asc'
-                                  ? Number(a.precio) - Number(b.precio)
-                                  : Number(b.precio) - Number(a.precio);
-                              case 'cantidadCaf':
-                                return cafeteriaSortOrder === 'asc'
-                                  ? cantidadCafeteriaA - cantidadCafeteriaB
-                                  : cantidadCafeteriaB - cantidadCafeteriaA;
-                              case 'cantidadAlm':
-                                return cafeteriaSortOrder === 'asc'
-                                  ? cantidadAlmacenA - cantidadAlmacenB
-                                  : cantidadAlmacenB - cantidadAlmacenA;
-                              default:
-                                return 0;
-                            }
-                          })
-                          .map((producto) => {
-                            // Encontrar el producto correspondiente en el almacén
-                            const productoAlmacen = inventario.find(p => p.id === producto.id);
-
-                            // Calcular la cantidad total en el almacén
-                            const cantidadAlmacen = productoAlmacen
-                              ? (productoAlmacen.tiene_parametros && productoAlmacen.parametros
-                                ? productoAlmacen.parametros.filter(p => isNaN(Number(p.nombre)) && p.nombre.trim() !== '')
-                                  .reduce((sum, param) => sum + param.cantidad, 0)
-                                : productoAlmacen.cantidad)
-                              : 0;
-
-                            // Calcular la cantidad total en cafetería
-                            const cantidadCafeteria = producto.tiene_parametros && producto.parametros
-                              ? producto.parametros.filter(p => isNaN(Number(p.nombre)) && p.nombre.trim() !== '')
-                                .reduce((sum, param) => sum + param.cantidad, 0)
-                              : producto.cantidad;
-
-                            // Determinar si es cantidad cero para aplicar el estilo rojo
-                            const cantidadCero = cantidadCafeteria === 0;
-
-                            return (
-                              <React.Fragment key={producto.id}>
-                                <tr
-                                  className={`hover:bg-gray-50 ${cantidadCero ? 'bg-red-50' : ''} ${producto.tiene_parametros ? 'cursor-pointer' : ''}`}
-                                  onClick={() => {
-                                    if (producto.tiene_parametros && producto.parametros && producto.parametros.length > 0) {
-                                      toggleProductExpansion(producto.id);
-                                    }
-                                  }}
-                                >
-                                  <td className="px-6 py-4 whitespace-nowrap">
-                                    <div className="w-10 h-10 relative">
-                                      <Image
-                                        src={producto.foto || '/placeholder.svg'}
-                                        alt={producto.nombre}
-                                        fill
-                                        className="rounded-md object-cover"
-                                        onError={(e) => {
-                                          // Fallback a imagen por defecto
-                                          (e.target as HTMLImageElement).src = '/placeholder.svg';
-                                        }}
-                                      />
-                                    </div>
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap">
-                                    <div className={`text-sm font-medium ${cantidadCero ? 'text-red-600' : 'text-gray-900'}`}>{producto.nombre}</div>
-                                    {producto.tiene_parametros && producto.parametros && producto.parametros.length > 0 && (
-                                      <div className="text-xs text-blue-500 hover:underline">
-                                        {expandedProducts.has(producto.id) ? 'Ocultar parámetros' : 'Ver parámetros'} ({producto.parametros.length})
-                                      </div>
-                                    )}
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-right">
-                                    <div className={`text-sm ${cantidadCero ? 'text-red-600' : 'text-gray-900'}`}>${Number(producto.precio).toFixed(2)}</div>
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-right">
-                                    <div className={`text-sm ${cantidadCero ? 'text-red-600 font-semibold' : 'text-gray-900'}`}>
-                                      {cantidadCafeteria}
-                                    </div>
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-right">
-                                    <div className={`text-sm ${cantidadCero ? 'text-red-600' : 'text-gray-900'}`}>{cantidadAlmacen}</div>
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-right">
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={(e) => {
-                                        e.stopPropagation(); // Evitar que se expanda al hacer clic en el botón
-                                        setProductToReduce(producto);
-                                        setReduceDialogOpen(true);
-                                      }}
-                                      disabled={cantidadCero}
-                                    >
-                                      <Minus className="h-4 w-4" />
-                                    </Button>
-                                  </td>
-                                </tr>
-                                {expandedProducts.has(producto.id) && producto.tiene_parametros && producto.parametros && (
-                                  <tr className="bg-gray-50">
-                                    <td colSpan={6} className="px-6 py-3">
-                                      <div className="ml-12 space-y-2 text-sm">
-                                        {producto.parametros
-                                          .filter(p => isNaN(Number(p.nombre)) && p.nombre.trim() !== '')
-                                          .map((parametro, idx) => (
-                                            <div key={idx} className="bg-white p-2 rounded border">
-                                              <div className="font-medium">{parametro.nombre}</div>
-                                              <div className={`${parametro.cantidad === 0 ? 'text-red-600 font-semibold' : 'text-gray-700'}`}>
-                                                Cantidad: {parametro.cantidad}
-                                              </div>
-                                            </div>
-                                          ))}
-                                      </div>
-                                    </td>
-                                  </tr>
-                                )}
-                              </React.Fragment>
-                            );
-                          })}
-                        {getFilteredCafeteriaProducts(productosVendedor).length === 0 && (
-                          <tr>
-                            <td colSpan={6} className="px-6 py-10 text-center text-gray-500">
-                              No se encontraron productos que coincidan con el filtro seleccionado
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              ) : activeCafeteriaTab === 'ventas' ? (
-                <div className="space-y-4">
-                  <div className="mb-4">
-                    <div className="relative">
-                      <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                      <Input
-                        placeholder="Buscar por producto o vendedor..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-10"
-                      />
-                    </div>
-                  </div>
-                  <VentasCafeteriaList searchTerm={searchTerm} />
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="mb-4">
-                    <div className="relative">
-                      <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                      <Input
-                        type="search"
-                        placeholder="Buscar..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-10"
-                      />
-                    </div>
-                  </div>
-                  <div className="overflow-auto">
-                    <TransaccionesList
-                      transacciones={transaccionesVendedor}
-                      searchTerm={searchTerm}
-                      vendedorId=""
-                    />
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+      {activeSection === 'contabilidad' && (
+        <ContabilidadProducto inventario={inventario} />
       )}
 
-      {activeSection === 'balance' && (
-        <BalanceSection />
+      {activeSection === 'contabilidad-vendedores' && (
+        <ContabilidadVendedoresPage vendedores={vendedores} onRefresh={fetchVendedores} />
       )}
 
       {activeSection === 'menu' && (
@@ -2428,7 +1965,25 @@ export default function AlmacenPage() {
                 </div>
               ))}
             </div>
-            <div className="sticky bottom-0 pt-2 bg-white">
+            <div className="sticky bottom-0 pt-2 bg-white space-y-2">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Entregar a:</label>
+                <Select
+                  value={selectedVendorForMassDelivery?.toString() || ""}
+                  onValueChange={(val) => setSelectedVendorForMassDelivery(Number(val))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecciona un destinatario" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {vendedores.map((v) => (
+                      <SelectItem key={v.id} value={v.id.toString()}>
+                        {v.nombre} ({v.rol})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <Button
                 onClick={handleMassDelivery}
                 disabled={Object.keys(selectedProducts).length === 0}
@@ -2723,8 +2278,8 @@ export default function AlmacenPage() {
           vendedores={vendedores}
           onEdit={handleEditProduct}
           onDelete={handleDeleteProduct}
-          onDeliver={(productId, cantidadTotal, parametros, esCocina) =>
-            handleProductDelivery(productId, cantidadTotal, parametros, esCocina)
+          onDeliver={(productId, cantidadTotal, parametros, userId) =>
+            handleProductDelivery(productId, cantidadTotal, parametros, userId)
           }
           seccionesExistentes={seccionesExistentes}
         />
@@ -2733,37 +2288,43 @@ export default function AlmacenPage() {
 
 
       {vendedorSeleccionado && (
-        <VendorDialog
-          almacen={inventario}
-          vendor={vendedorSeleccionado}
-          onClose={() => setVendedorSeleccionado(null)}
-          onEdit={handleEditVendedor}
-          productos={productosVendedor}
-          ventas={ventasVendedor}
-          ventasSemanales={ventasSemanales}
-          ventasDiarias={ventasDiarias}
-          transacciones={transaccionesVendedor}
-          onProductReduce={(productId, vendorId, cantidad, parametros) => handleReduceVendorProduct(productId, cantidad, parametros)}
-          onDeleteSale={deleteSale}
-          onProductMerma={handleProductMerma}
-          vendedores={vendedores}
-          onDeleteVendorData={handleDeleteVendorData}
-          onUpdateProductQuantity={handleUpdateProductQuantity}
-          initialMode={modeVendedor}
-          onProductTransfer={async (productId, fromVendorId, toVendorId, cantidad, parametros) => {
-            // Implementación temporal para evitar el error
-            console.log('Transferencia de producto no implementada', {
-              productId, fromVendorId, toVendorId, cantidad, parametros
-            });
-            toast({
-              title: "Aviso",
-              description: "La transferencia de productos entre vendedores no está disponible actualmente",
-              variant: "default",
-            });
-            return Promise.resolve();
-          }}
-        />
+        <>
+          {isLoading ? (
+            <Dialog open={true} onOpenChange={() => setVendedorSeleccionado(null)}>
+              <DialogContent>
+                <div className="flex flex-col items-center justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
+                  <p>Cargando datos del vendedor...</p>
+                </div>
+              </DialogContent>
+            </Dialog>
+          ) : (
+            <VendorDialog
+              almacen={inventario}
+              vendor={vendedorSeleccionado}
+              onClose={() => setVendedorSeleccionado(null)}
+              onEdit={handleEditVendedor}
+              productos={productosVendedor}
+              ventas={ventasVendedor}
+              ventasSemanales={ventasSemanales}
+              ventasDiarias={ventasDiarias}
+              transacciones={transaccionesVendedor}
+              onProductReduce={(productId, vendorId, cantidad, parametros) =>
+                handleReduceVendorProduct(productId, cantidad, parametros)
+              }
+              onDeleteSale={deleteSale}
+              onProductMerma={handleProductMerma}
+              vendedores={vendedores}
+              onDeleteVendorData={handleDeleteVendorData}
+              onUpdateProductQuantity={handleUpdateProductQuantity}
+              initialMode={modeVendedor}
+              onProductTransfer={handleProductTransfer}
+            />
+          )}
+        </>
       )}
+
+
 
       <Dialog open={reduceDialogOpen} onOpenChange={setReduceDialogOpen}>
         <DialogContent className="max-h-[90vh] flex flex-col">
@@ -2925,32 +2486,15 @@ export default function AlmacenPage() {
                     // Enviar a merma
                     await handleProductMerma(
                       productToReduce.id,
-                      '',
+                      'cafeteria', // ← CAMBIAR de '' a 'cafeteria'
                       productToReduce.tiene_parametros ? 0 : quantityToReduce,
                       parametrosReduccion
                     );
                   } else if (selectedDestination === 'almacen') {
-                    // Devolver al almacén
-                    await handleReduceCafeteriaProduct(
-                      productToReduce.id,
-                      productToReduce.tiene_parametros ? 0 : quantityToReduce,
-                      parametrosReduccion
-                    );
-                  } else if (selectedDestination === 'cocina') {
-                    // NUEVA FUNCIONALIDAD: Enviar a cocina
-                    await enviarCafeteriaACocina(
-                      productToReduce.id,
-                      productToReduce.tiene_parametros ? 0 : quantityToReduce,
-                      parametrosReduccion
-                    );
+
                   }
 
-                  // Actualizar inmediatamente la interfaz para cafetería
-                  if (activeSection === 'cafeteria') {
-                    const updatedProducts = await getProductosCafeteria();
-                    setCafeteriaProductos(updatedProducts);
-                    setProductosVendedor(updatedProducts);
-                  }
+
 
                   setShowDestinationDialog(false);
                   setSelectedDestination(null);
@@ -2961,10 +2505,10 @@ export default function AlmacenPage() {
                   toast({
                     title: "Éxito",
                     description: `Producto ${selectedDestination === 'merma'
-                        ? 'enviado a merma'
-                        : selectedDestination === 'cocina'
-                          ? 'enviado a cocina'
-                          : 'devuelto al almacén'
+                      ? 'enviado a merma'
+                      : selectedDestination === 'cocina'
+                        ? 'enviado a cocina'
+                        : 'devuelto al almacén'
                       } correctamente.`,
                   });
                 } catch (error) {
@@ -2972,10 +2516,10 @@ export default function AlmacenPage() {
                   toast({
                     title: "Error",
                     description: `No se pudo ${selectedDestination === 'merma'
-                        ? 'enviar a merma'
-                        : selectedDestination === 'cocina'
-                          ? 'enviar a cocina'
-                          : 'devolver al almacén'
+                      ? 'enviar a merma'
+                      : selectedDestination === 'cocina'
+                        ? 'enviar a cocina'
+                        : 'devolver al almacén'
                       } el producto.`,
                     variant: "destructive",
                   });

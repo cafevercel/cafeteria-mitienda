@@ -69,9 +69,12 @@ function validateParametros(parametros: any[]): { valid: boolean; errors: string
   return { valid: errors.length === 0, errors };
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const result = await query(`
+    const { searchParams } = new URL(request.url);
+    const usuarioId = searchParams.get('usuarioId');
+
+    let queryText = `
     SELECT 
       p.id,
       p.nombre,
@@ -91,17 +94,34 @@ export async function GET() {
       ) as parametros
     FROM productos p
     JOIN usuario_productos up ON p.id = up.producto_id
-    LEFT JOIN usuario_producto_parametros upp ON p.id = upp.producto_id
-    WHERE up.cocina IS NOT TRUE
+    LEFT JOIN usuario_producto_parametros upp ON p.id = upp.producto_id AND upp.usuario_id = up.usuario_id
+    WHERE 1=1
+    `;
+
+    const queryParams: any[] = [];
+
+    if (usuarioId) {
+      queryText += ` AND up.usuario_id = $${queryParams.length + 1}`;
+      queryParams.push(Number(usuarioId));
+    } else {
+      // Fallback for legacy behavior or specific restricted view needed? 
+      // For now, let's allow viewing all non-kitchen if no ID (or handle as error if safer)
+      // But the previous code was `WHERE up.cocina IS NOT TRUE` which is vague.
+      // Let's keep the filter `up.cocina IS NOT TRUE` as a fallback if no user specified, 
+      // to avoid breaking existing generic calls if any.
+      queryText += ` AND (up.cocina IS NOT TRUE OR up.cocina IS NULL)`;
+    }
+
+    queryText += `
     GROUP BY p.id, p.nombre, p.precio, p.foto, p.tiene_parametros, p.porcentaje_ganancia, up.cantidad
     ORDER BY p.nombre
-  `);
+    `;
+
+    const result = await query(queryText, queryParams);
 
     if (!result.rows || result.rows.length === 0) {
-      return NextResponse.json({
-        productos: [],
-        mensaje: 'No hay productos compartidos disponibles'
-      });
+      // Return empty array instead of 404/message to be cleaner for frontend
+      return NextResponse.json([]);
     }
 
     const productosFormateados = result.rows.map(producto => ({

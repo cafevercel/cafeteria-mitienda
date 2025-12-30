@@ -22,7 +22,9 @@ import {
   getTransaccionesProducto,
   getVentasProducto,
   getProductosCompartidos,
-  getTransaccionesVendedor
+  getTransaccionesVendedor,
+  getVendedor,
+  getVendedores
 } from '../../../services/api'
 import { WeekPicker } from '@/components/Weekpicker'
 
@@ -144,11 +146,22 @@ const parseLocalDate = (dateString: string): Date => {
 
 
 const calcularCantidadTotal = (producto: Producto): number => {
+  console.log(`🧮 Calculando cantidad para "${producto.nombre}":`, {
+    tiene_parametros: producto.tiene_parametros,
+    parametros_existe: !!producto.parametros,
+    parametros_length: producto.parametros?.length || 0
+  });
+
   if (producto.tiene_parametros && producto.parametros) {
-    return producto.parametros.reduce((total, param) => total + param.cantidad, 0);
+    const total = producto.parametros.reduce((total, param) => total + param.cantidad, 0);
+    console.log(`  ✓ Suma de parámetros: ${total}`);
+    return total;
   }
+
+  console.log(`  ✓ Cantidad directa: ${producto.cantidad}`);
   return producto.cantidad;
 };
+
 
 const useVendedorData = (vendedorId: string) => {
   const router = useRouter()
@@ -167,6 +180,59 @@ const useVendedorData = (vendedorId: string) => {
   const [productosSeleccionados, setProductosSeleccionados] = useState<ProductoVenta[]>([]);
   const [fecha, setFecha] = useState('');
   const [isProcessingVenta, setIsProcessingVenta] = useState(false)
+  const [vendedorNombre, setVendedorNombre] = useState<string>('')
+
+  const fetchVendedorNombre = useCallback(async () => {
+
+    try {
+      // Opción 1: Intentar obtener el vendedor específico
+      try {
+        const vendedorData = await getVendedor(vendedorId);
+        const nombre = vendedorData.nombre || '';
+
+        setVendedorNombre(nombre);
+        return;
+      } catch (vendedorError) {
+        console.log('⚠️ No se pudo obtener vendedor específico, intentando con lista completa');
+      }
+
+      // Opción 2: Si falla, obtener todos los vendedores y buscar el específico
+      const vendedores = await getVendedores();
+      console.log('📋 Vendedores obtenidos:', vendedores);
+      const vendedor = vendedores.find(v => v.id.toString() === vendedorId.toString());
+
+      if (vendedor) {
+        const nombre = vendedor.nombre || '';
+        console.log('✅ Nombre del vendedor encontrado:', nombre);
+        setVendedorNombre(nombre);
+        return;
+      }
+
+      // Opción 3: Fallback - buscar en las transacciones
+      console.log('⚠️ Vendedor no encontrado en lista, buscando en transacciones...');
+      if (transacciones.length > 0) {
+        const transaccionConNombre = transacciones.find(t =>
+          (t.desde && t.desde !== 'Almacen' && t.desde !== 'Inventario' && t.desde !== 'MERMA') ||
+          (t.hacia && t.hacia !== 'Almacen' && t.hacia !== 'Inventario' && t.hacia !== 'MERMA')
+        );
+
+        if (transaccionConNombre) {
+          const nombre = (transaccionConNombre.desde !== 'Almacen' &&
+            transaccionConNombre.desde !== 'Inventario' &&
+            transaccionConNombre.desde !== 'MERMA' &&
+            transaccionConNombre.desde)
+            ? transaccionConNombre.desde
+            : transaccionConNombre.hacia;
+          console.log('✅ Nombre encontrado en transacciones:', nombre);
+          setVendedorNombre(nombre || '');
+        } else {
+          console.log('❌ No se encontró nombre del vendedor en ninguna fuente');
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error al obtener nombre del vendedor:', error);
+    }
+  }, [vendedorId, transacciones]);
 
   const handleEnviarVenta = async () => {
     if (productosSeleccionados.length === 0) {
@@ -314,47 +380,91 @@ const useVendedorData = (vendedorId: string) => {
 
   const fetchProductos = useCallback(async () => {
     try {
-      const data = await getProductosCompartidos();
-      console.log('Raw data from getProductosCompartidos:', data);
+      const data = await getProductosCompartidos(vendedorId);
 
-      // Modificamos el filtrado considerando los parámetros
-      setProductosDisponibles(data.filter((producto: Producto) => {
+      // 🔥 NORMALIZAR los datos de la API
+      const productosNormalizados = data.map((producto: any) => ({
+        id: producto.id,
+        nombre: producto.nombre,
+        precio: producto.precio,
+        cantidad: producto.cantidad,
+        foto: producto.foto,
+        // 🔥 Convertir tieneParametros → tiene_parametros
+        tiene_parametros: producto.tieneParametros || producto.tiene_parametros || false,
+        parametros: producto.parametros || [],
+        porcentajeGanancia: producto.porcentajeGanancia || producto.porcentaje_ganancia || 0
+      }));
+
+      // 🔥 LOG para verificar normalización
+      console.log('📦 PRODUCTOS NORMALIZADOS:', productosNormalizados);
+
+      productosNormalizados.forEach((producto: Producto, index: number) => {
+        console.log(`\n🔍 PRODUCTO ${index + 1} NORMALIZADO:`, {
+          id: producto.id,
+          nombre: producto.nombre,
+          tiene_parametros: producto.tiene_parametros,
+          parametros: producto.parametros,
+          cantidad: producto.cantidad,
+          'tiene_parametros (tipo)': typeof producto.tiene_parametros,
+          'parametros length': producto.parametros?.length || 0
+        });
+
+        if (producto.parametros && producto.parametros.length > 0) {
+          console.log(`  📋 Parámetros de "${producto.nombre}":`, producto.parametros);
+        }
+      });
+
+      // Filtrar productos
+      const disponibles = productosNormalizados.filter((producto: Producto) => {
         const cantidadTotal = calcularCantidadTotal(producto);
         return cantidadTotal > 0;
-      }));
+      });
 
-      setProductosAgotados(data.filter((producto: Producto) => {
+      const agotados = productosNormalizados.filter((producto: Producto) => {
         const cantidadTotal = calcularCantidadTotal(producto);
         return cantidadTotal === 0;
-      }));
+      });
 
-      console.log('Productos disponibles:', productosDisponibles);
-      console.log('Productos agotados:', productosAgotados);
+      console.log('\n✅ PRODUCTOS DISPONIBLES:', disponibles.length);
+      console.log('❌ PRODUCTOS AGOTADOS:', agotados.length);
+
+      setProductosDisponibles(disponibles);
+      setProductosAgotados(agotados);
+
     } catch (error) {
-      console.error('Error al obtener productos:', error)
+      console.error('❌ Error al obtener productos:', error)
       setError('No se pudieron cargar los productos. Por favor, intenta de nuevo.')
     }
-  }, [])
+  }, [vendedorId])
+
 
   const fetchVentasRegistro = useCallback(async () => {
     try {
-      // Obtener todos los productos para tener acceso a los porcentajes de ganancia
-      const productos = await getProductosCompartidos();
+      const productos = await getProductosCompartidos(vendedorId);
+
+      // 🔥 Normalizar productos
+      const productosNormalizados = productos.map((producto: any) => ({
+        id: producto.id,
+        nombre: producto.nombre,
+        precio: producto.precio,
+        cantidad: producto.cantidad,
+        foto: producto.foto,
+        tiene_parametros: producto.tieneParametros || producto.tiene_parametros || false,
+        parametros: producto.parametros || [],
+        porcentajeGanancia: producto.porcentajeGanancia || producto.porcentaje_ganancia || 0
+      }));
+
       const productosMap = new Map<string, Producto>();
 
-      // Crear un mapa de productos por ID para búsqueda rápida
-      productos.forEach((producto: Producto) => {
+      productosNormalizados.forEach((producto: Producto) => {
         productosMap.set(producto.id, producto);
       });
 
-      // Llamar a getVentasMes para obtener todas las ventas
       const ventasMesData: Venta[] = await getVentasMes(vendedorId);
 
-      // Enriquecer las ventas con los porcentajes de ganancia de los productos
       const ventasEnriquecidas = ventasMesData.map(venta => {
         const producto = productosMap.get(venta.producto);
         if (producto) {
-          // Usar el porcentaje de ganancia del producto
           return {
             ...venta,
             porcentajeGanancia: producto.porcentajeGanancia !== undefined ? String(producto.porcentajeGanancia) : undefined,
@@ -363,8 +473,6 @@ const useVendedorData = (vendedorId: string) => {
         }
         return venta;
       });
-
-      console.log('Ventas enriquecidas con porcentajes de ganancia:', ventasEnriquecidas);
 
       setVentasRegistro(ventasEnriquecidas);
       setVentasAgrupadas(agruparVentas(ventasEnriquecidas));
@@ -382,21 +490,29 @@ const useVendedorData = (vendedorId: string) => {
 
 
   const fetchTransacciones = useCallback(async () => {
+
     try {
-      const data = await getTransaccionesVendedor();
+      const data = await getTransaccionesVendedor(); // ✅ Sin parámetro
+
       setTransacciones(data);
     } catch (error) {
-      console.error('Error al obtener transacciones:', error);
+      console.error('❌ Error al obtener transacciones:', error);
       setError('No se pudieron cargar las transacciones. Por favor, intenta de nuevo.');
     }
-  }, []);
+  }, []); // ✅ Sin dependencias
 
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true);
       setError(null);
       try {
-        await Promise.all([fetchProductos(), fetchVentasRegistro(), fetchTransacciones()]);
+        // Primero cargar transacciones
+        await fetchTransacciones();
+        // Luego cargar el resto de datos
+        await Promise.all([
+          fetchProductos(),
+          fetchVentasRegistro()
+        ]);
       } catch (error) {
         console.error('Error loading data:', error);
         setError(error instanceof Error ? error.message : 'Error loading data');
@@ -407,6 +523,12 @@ const useVendedorData = (vendedorId: string) => {
 
     loadData();
   }, [fetchProductos, fetchVentasRegistro, fetchTransacciones]);
+
+  useEffect(() => {
+    if (transacciones.length > 0 && !vendedorNombre) {
+      fetchVendedorNombre();
+    }
+  }, [transacciones, vendedorNombre, fetchVendedorNombre]);
 
   return {
     isLoading,
@@ -431,7 +553,8 @@ const useVendedorData = (vendedorId: string) => {
     productosSeleccionados,
     setProductosSeleccionados,
     fecha,
-    setFecha
+    setFecha,
+    vendedorNombre
   }
 }
 
@@ -512,7 +635,7 @@ const VentaDiaDesplegable = ({ venta, busqueda }: { venta: VentaDia, busqueda: s
 
       // Verificar si hay porcentaje de ganancia
       if (!porcentajeGanancia) {
-        console.log(`Producto: ${v.producto_nombre} porcentajeGanancia: ${v.porcentajeGanancia} porcentaje_ganancia: ${v.porcentaje_ganancia}`);
+
         return totalGanancia;
       }
 
@@ -702,17 +825,46 @@ const VentaSemanaDesplegable = ({ venta, busqueda }: { venta: VentaSemana, busqu
 const TransaccionesList = ({
   transacciones,
   searchTerm,
-  vendedorId
+  vendedorId,
+  vendedorNombre
 }: {
   transacciones: Transaccion[],
   searchTerm: string,
-  vendedorId: string
+  vendedorId: string,
+  vendedorNombre?: string
 }) => {
   const [expandedTransactions, setExpandedTransactions] = useState<Set<string>>(new Set());
 
-  const filteredTransacciones = transacciones.filter(t =>
+
+
+  // 🔥 FILTRADO CORREGIDO - Primero filtrar por vendedor, luego por búsqueda
+  const filteredByVendedor = transacciones.filter(t => {
+
+    // Para transacciones tipo "Baja", el vendedor debe estar en "desde"
+    if (t.tipo === 'Baja') {
+      const match = t.desde === vendedorNombre;
+      console.log(`  ✓ Baja - Match: ${match} (${t.desde} === ${vendedorNombre})`);
+      return match;
+    }
+    // Para transacciones tipo "Entrega", el vendedor debe estar en "hacia"
+    if (t.tipo === 'Entrega') {
+      const match = t.hacia === vendedorNombre;
+      console.log(`  ✓ Entrega - Match: ${match} (${t.hacia} === ${vendedorNombre})`);
+      return match;
+    }
+    // Si no tiene tipo definido, no mostrar
+    console.log(`  ✗ Sin tipo válido`);
+    return false;
+  });
+
+
+
+  // Luego aplicar el filtro de búsqueda
+  const filteredTransacciones = filteredByVendedor.filter(t =>
     t.producto.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+
 
   const getTransactionKey = (transaction: Transaccion) => {
     const parametrosString = transaction.parametros
@@ -735,9 +887,7 @@ const TransaccionesList = ({
     });
   };
 
-  const filteredByRole = filteredTransacciones;
-
-  const groupedTransactions = filteredByRole.reduce((acc, transaction) => {
+  const groupedTransactions = filteredTransacciones.reduce((acc, transaction) => {
     const key = getTransactionKey(transaction);
     if (!acc.has(key)) {
       acc.set(key, transaction);
@@ -745,87 +895,88 @@ const TransaccionesList = ({
     return acc;
   }, new Map<string, Transaccion>());
 
+
+
   return (
     <div className="space-y-2">
-      {Array.from(groupedTransactions.values()).map((transaccion) => {
-        const transactionKey = getTransactionKey(transaccion);
-        const transactionType = transaccion.tipo || 'Normal';
-        const borderColor =
-          transactionType === 'Baja' ? 'border-red-500' :
-            transactionType === 'Entrega' ? 'border-green-500' :
-              'border-blue-500';
+      {Array.from(groupedTransactions.values()).length === 0 ? (
+        <div className="text-center py-8 text-gray-500">
+          <p>No hay transacciones para mostrar</p>
+          <p className="text-xs mt-2">Total recibidas: {transacciones.length}</p>
+          <p className="text-xs">Filtradas por vendedor: {filteredByVendedor.length}</p>
+          <p className="text-xs">Después de búsqueda: {filteredTransacciones.length}</p>
+        </div>
+      ) : (
+        Array.from(groupedTransactions.values()).map((transaccion) => {
+          const transactionKey = getTransactionKey(transaccion);
+          const transactionType = transaccion.tipo || 'Normal';
+          const borderColor =
+            transactionType === 'Baja' ? 'border-red-500' :
+              transactionType === 'Entrega' ? 'border-green-500' :
+                'border-blue-500';
 
-        // 🔥 AQUÍ ESTÁ EL FIX PRINCIPAL
-        const cantidadTotal = transaccion.parametros && transaccion.parametros.length > 0
-          ? transaccion.parametros.reduce((sum, param) => sum + param.cantidad, 0)
-          : (transaccion.cantidad || 0); // Añadimos || 0 para manejar valores undefined/null
+          const cantidadTotal = transaccion.parametros && transaccion.parametros.length > 0
+            ? transaccion.parametros.reduce((sum, param) => sum + param.cantidad, 0)
+            : (transaccion.cantidad || 0);
 
-        const isExpanded = expandedTransactions.has(transactionKey);
+          const isExpanded = expandedTransactions.has(transactionKey);
 
-        // 🔥 DEBUGGING: Añade este console.log temporalmente para verificar los datos
-        console.log('Transacción:', {
-          producto: transaccion.producto,
-          cantidad: transaccion.cantidad,
-          parametros: transaccion.parametros,
-          cantidadTotal: cantidadTotal
-        });
-
-        return (
-          <div
-            key={transactionKey}
-            className={`bg-white p-4 rounded-lg shadow border-l-4 ${borderColor}`}
-          >
+          return (
             <div
-              className={`flex items-start ${transaccion.parametros && transaccion.parametros.length > 0 ? 'cursor-pointer' : ''}`}
-              onClick={() => {
-                if (transaccion.parametros && transaccion.parametros.length > 0) {
-                  toggleExpand(transactionKey);
-                }
-              }}
+              key={transactionKey}
+              className={`bg-white p-4 rounded-lg shadow border-l-4 ${borderColor}`}
             >
-              <ArrowLeftRight className="w-6 h-6 text-blue-500 mr-4 flex-shrink-0 mt-1" />
-              <div className="flex-grow overflow-hidden">
-                <div className="flex justify-between items-center mb-1">
-                  <p className="font-bold text-sm truncate">{transaccion.producto}</p>
-                  <p className="text-sm font-semibold text-green-600">
-                    ${formatPrice(transaccion.precio)}
-                  </p>
-                </div>
-                <div className="flex justify-between items-center text-xs text-gray-600">
-                  <span>{formatDate(transaccion.fecha)}</span>
-                  {/* 🔥 MEJORA EN LA VISUALIZACIÓN */}
-                  <span>
-                    Cantidad Total: {cantidadTotal > 0 ? cantidadTotal : 'N/A'}
-                  </span>
-                </div>
-                {transaccion.parametros && transaccion.parametros.length > 0 && (
-                  <div className="flex items-center justify-end mt-1">
-                    {isExpanded ? (
-                      <ChevronUp className="h-4 w-4 text-gray-500" />
-                    ) : (
-                      <ChevronDown className="h-4 w-4 text-gray-500" />
-                    )}
+              <div
+                className={`flex items-start ${transaccion.parametros && transaccion.parametros.length > 0 ? 'cursor-pointer' : ''}`}
+                onClick={() => {
+                  if (transaccion.parametros && transaccion.parametros.length > 0) {
+                    toggleExpand(transactionKey);
+                  }
+                }}
+              >
+                <ArrowLeftRight className="w-6 h-6 text-blue-500 mr-4 flex-shrink-0 mt-1" />
+                <div className="flex-grow overflow-hidden">
+                  <div className="flex justify-between items-center mb-1">
+                    <p className="font-bold text-sm truncate">{transaccion.producto}</p>
+                    <p className="text-sm font-semibold text-green-600">
+                      ${formatPrice(transaccion.precio)}
+                    </p>
                   </div>
-                )}
-                {isExpanded && transaccion.parametros && transaccion.parametros.length > 0 && (
-                  <div className="mt-2 space-y-1 pl-4 border-l-2 border-gray-200">
-                    {transaccion.parametros
-                      .filter(param => param.cantidad !== 0)
-                      .map((param, index) => (
-                        <div key={index} className="flex justify-between text-xs text-gray-600">
-                          <span className="font-medium">{param.nombre}:</span>
-                          <span>{param.cantidad}</span>
-                        </div>
-                      ))}
+                  <div className="flex justify-between items-center text-xs text-gray-600">
+                    <span>{formatDate(transaccion.fecha)}</span>
+                    <span>
+                      Cantidad Total: {cantidadTotal > 0 ? cantidadTotal : 'N/A'}
+                    </span>
                   </div>
-                )}
+                  {transaccion.parametros && transaccion.parametros.length > 0 && (
+                    <div className="flex items-center justify-end mt-1">
+                      {isExpanded ? (
+                        <ChevronUp className="h-4 w-4 text-gray-500" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4 text-gray-500" />
+                      )}
+                    </div>
+                  )}
+                  {isExpanded && transaccion.parametros && transaccion.parametros.length > 0 && (
+                    <div className="mt-2 space-y-1 pl-4 border-l-2 border-gray-200">
+                      {transaccion.parametros
+                        .filter(param => param.cantidad !== 0)
+                        .map((param, index) => (
+                          <div key={index} className="flex justify-between text-xs text-gray-600">
+                            <span className="font-medium">{param.nombre}:</span>
+                            <span>{param.cantidad}</span>
+                          </div>
+                        ))}
+                    </div>
+                  )}
 
-                <p className="text-xs font-semibold mt-1 text-gray-700">{transactionType}</p>
+                  <p className="text-xs font-semibold mt-1 text-gray-700">{transactionType}</p>
+                </div>
               </div>
             </div>
-          </div>
-        );
-      })}
+          );
+        })
+      )}
     </div>
   );
 };
@@ -833,7 +984,13 @@ const TransaccionesList = ({
 
 
 
+
 const ProductoCard = ({ producto, vendedorId }: { producto: Producto, vendedorId: string }) => {
+  console.log(`🎴 Renderizando tarjeta de "${producto.nombre}":`, {
+    tiene_parametros: producto.tiene_parametros,
+    parametros: producto.parametros,
+    cantidad: producto.cantidad
+  });
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [transacciones, setTransacciones] = useState<Transaccion[]>([])
   const [ventas, setVentas] = useState<Venta[]>([])
@@ -951,7 +1108,7 @@ const ProductoCard = ({ producto, vendedorId }: { producto: Producto, vendedorId
         getVentasProducto(producto.id, startDate, endDate, vendedorId)
       ]);
 
-      console.log('📊 Datos de ventas obtenidos:', ventasData); // 🔥 DEBUG
+      console.log('📊 Datos de ventas obtenidos:', ventasData); //  DEBUG
       setTransacciones(transaccionesData);
       setVentas(ventasData);
     } catch (error) {
@@ -1360,7 +1517,8 @@ export default function VendedorPage() {
     productosSeleccionados,
     setProductosSeleccionados,
     fecha,
-    setFecha
+    setFecha,
+    vendedorNombre
   } = useVendedorData(vendedorId)
 
   const [busqueda, setBusqueda] = useState('')
@@ -1934,6 +2092,7 @@ export default function VendedorPage() {
                 transacciones={transacciones}
                 searchTerm={busqueda}
                 vendedorId={vendedorId}
+                vendedorNombre={vendedorNombre}
               />
             </div>
           </div>

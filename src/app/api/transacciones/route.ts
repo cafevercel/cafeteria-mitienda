@@ -5,17 +5,26 @@ import { query } from '@/lib/db';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { productoId, cantidad, tipo, parametros, esCocina } = body;
+    const { productoId, cantidad, tipo, parametros, userId } = body;
 
     console.log('Request body:', body);
 
-    if (!productoId || cantidad === undefined || cantidad === null || !tipo) {
-      return NextResponse.json({ error: 'Faltan datos requeridos' }, { status: 400 });
+    if (!productoId || cantidad === undefined || cantidad === null || !tipo || !userId) {
+      return NextResponse.json({ error: 'Faltan datos requeridos (incluyendo userId)' }, { status: 400 });
     }
 
     await query('BEGIN');
 
     try {
+      // 1. Obtener información del usuario destino
+      const usuarioResult = await query('SELECT nombre FROM usuarios WHERE id = $1', [userId]);
+      if (usuarioResult.rows.length === 0) {
+        throw new Error('Usuario destino no encontrado');
+      }
+      const nombreUsuario = usuarioResult.rows[0].nombre;
+      const esCocina = nombreUsuario.toLowerCase() === 'cocina';
+
+      // 2. Obtener información del producto
       const productoResult = await query(
         'SELECT tiene_parametros, cantidad as stock_actual, precio FROM productos WHERE id = $1',
         [productoId]
@@ -27,13 +36,13 @@ export async function POST(request: NextRequest) {
 
       const { tiene_parametros, stock_actual, precio } = productoResult.rows[0];
 
-      // Validar stock y actualizar inventario principal
+      // 3. Validar stock y actualizar inventario principal (Almacén)
       if (tiene_parametros) {
         if (!parametros || !Array.isArray(parametros) || parametros.length === 0) {
           throw new Error('Este producto requiere parámetros. Por favor, especifique los parámetros.');
         }
 
-        const cantidadTotalParametros = parametros.reduce((sum, param) => sum + param.cantidad, 0);
+        const cantidadTotalParametros = parametros.reduce((sum: number, param: any) => sum + param.cantidad, 0);
 
         if (stock_actual < cantidadTotalParametros) {
           throw new Error('Stock total insuficiente');
@@ -57,10 +66,10 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // ✅ CORRECCIÓN: Registrar la transacción CON CAMPO es_cocina
+      // 4. Registrar la transacción
       const transactionResult = await query(
         'INSERT INTO transacciones (producto, cantidad, tipo, desde, hacia, fecha, es_cocina) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
-        [productoId, cantidad, tipo, 'Almacen', esCocina ? 'Cocina' : 'Cafeteria', new Date(), esCocina || false]
+        [productoId, cantidad, tipo, 'Almacen', nombreUsuario, new Date(), esCocina]
       );
 
       const transaccionId = transactionResult.rows[0].id;
@@ -76,91 +85,37 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // ✅ SOLUCIÓN CORREGIDA: Manejar destino según esCocina
-      if (esCocina) {
-        // ✅ CORRECCIÓN PRINCIPAL: Usar ON CONFLICT para evitar duplicados
-        await query(
-          `INSERT INTO cocina (producto_id, cantidad, precio, cocina) 
-           VALUES ($1, $2, $3, $4) 
-           ON CONFLICT (producto_id) 
-           DO UPDATE SET 
-             cantidad = cocina.cantidad + $2, 
-             precio = $3`,
-          [productoId, cantidad, precio, true]
-        );
+      // 5. Actualizar inventario del Usuario Destino (usuario_productos)
+      // Usamos ON CONFLICT para simplificar insert/update
+      await query(
+        `INSERT INTO usuario_productos (usuario_id, producto_id, cantidad, precio) 
+         VALUES ($1, $2, $3, $4) 
+         ON CONFLICT (usuario_id, producto_id) 
+         DO UPDATE SET 
+           cantidad = usuario_productos.cantidad + $3, 
+           precio = $4`,
+        [userId, productoId, cantidad, precio]
+      );
 
-        // Si tiene parámetros, también insertar los parámetros en cocina
-        if (tiene_parametros && parametros && parametros.length > 0) {
-          for (const param of parametros) {
-            await query(
-              `INSERT INTO cocina_parametros (producto_id, nombre, cantidad) 
-               VALUES ($1, $2, $3) 
-               ON CONFLICT (producto_id, nombre) 
-               DO UPDATE SET cantidad = cocina_parametros.cantidad + $3`,
-              [productoId, param.nombre, param.cantidad]
-            );
-          }
-        }
-      } else {
-        // Mantener lógica existente para cafetería (usuario_productos)
-        const existingProduct = await query(
-          'SELECT * FROM usuario_productos WHERE producto_id = $1',
-          [productoId]
-        );
-
-        if (tiene_parametros) {
-          if (existingProduct.rows.length === 0) {
-            await query(
-              'INSERT INTO usuario_productos (producto_id, cantidad, precio, cocina) VALUES ($1, $2, $3, $4)',
-              [productoId, 0, precio, false]
-            );
-          } else {
-            await query(
-              'UPDATE usuario_productos SET precio = $1, cocina = $2 WHERE producto_id = $3',
-              [precio, false, productoId]
-            );
-          }
-
-          // Actualizar parámetros de usuario
-          for (const param of parametros) {
-            const existingParam = await query(
-              'SELECT * FROM usuario_producto_parametros WHERE producto_id = $1 AND nombre = $2',
-              [productoId, param.nombre]
-            );
-
-            if (existingParam.rows.length > 0) {
-              await query(
-                'UPDATE usuario_producto_parametros SET cantidad = cantidad + $1 WHERE producto_id = $2 AND nombre = $3',
-                [param.cantidad, productoId, param.nombre]
-              );
-            } else {
-              await query(
-                'INSERT INTO usuario_producto_parametros (producto_id, nombre, cantidad) VALUES ($1, $2, $3)',
-                [productoId, param.nombre, param.cantidad]
-              );
-            }
-          }
-        } else {
-          if (existingProduct.rows.length > 0) {
-            await query(
-              'UPDATE usuario_productos SET cantidad = cantidad + $1, precio = $2, cocina = $3 WHERE producto_id = $4',
-              [cantidad, precio, false, productoId]
-            );
-          } else {
-            await query(
-              'INSERT INTO usuario_productos (producto_id, cantidad, precio, cocina) VALUES ($1, $2, $3, $4)',
-              [productoId, cantidad, precio, false]
-            );
-          }
+      // Si tiene parámetros, actualizar usuario_producto_parametros
+      if (tiene_parametros && parametros && parametros.length > 0) {
+        for (const param of parametros) {
+          await query(
+            `INSERT INTO usuario_producto_parametros (usuario_id, producto_id, nombre, cantidad) 
+             VALUES ($1, $2, $3, $4) 
+             ON CONFLICT (usuario_id, producto_id, nombre) 
+             DO UPDATE SET cantidad = usuario_producto_parametros.cantidad + $4`,
+            [userId, productoId, param.nombre, param.cantidad]
+          );
         }
       }
 
       await query('COMMIT');
 
       return NextResponse.json({
-        message: `Producto entregado ${esCocina ? 'a cocina' : 'a cafetería'} exitosamente`,
+        message: `Producto entregado a ${nombreUsuario} exitosamente`,
         transaction: transactionResult.rows[0],
-        destino: esCocina ? 'Cocina' : 'Cafeteria'
+        destino: nombreUsuario
       });
 
     } catch (error) {

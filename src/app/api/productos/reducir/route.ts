@@ -5,7 +5,7 @@ export async function PUT(request: NextRequest) {
     try {
         const body = await request.json();
         const { productoId, cantidad, parametros } = body;
-        const vendedorId = body.vendedorId || null; // Hacemos el vendedorId opcional, solo para tracking
+        const vendedorId = body.vendedorId || null;
 
         if (!productoId) {
             return NextResponse.json({ error: 'Falta el ID del producto' }, { status: 400 });
@@ -14,6 +14,22 @@ export async function PUT(request: NextRequest) {
         await query('BEGIN');
 
         try {
+            // ✅ NUEVO: Obtener el nombre del vendedor si existe
+            let nombreVendedor = 'Cafetería'; // Valor por defecto
+
+            if (vendedorId && vendedorId !== 'cafeteria' && vendedorId !== 'almacen') {
+                const vendedorResult = await query(
+                    'SELECT nombre FROM usuarios WHERE id = $1',
+                    [vendedorId]
+                );
+
+                if (vendedorResult.rows.length > 0) {
+                    nombreVendedor = vendedorResult.rows[0].nombre;
+                }
+            } else if (vendedorId === 'almacen') {
+                nombreVendedor = 'Almacen';
+            }
+
             // Verificar si el producto tiene parámetros
             const productoResult = await query(
                 'SELECT tiene_parametros FROM productos WHERE id = $1',
@@ -52,10 +68,13 @@ export async function PUT(request: NextRequest) {
                     );
                 }
 
-                // Registrar transacción principal
+                // ✅ MODIFICADO: Calcular cantidad total de parámetros
+                const cantidadTotal = parametros.reduce((sum: number, param: any) => sum + param.cantidad, 0);
+
+                // ✅ MODIFICADO: Registrar transacción principal con nombre del vendedor
                 const transaccionResult = await query(
                     'INSERT INTO transacciones (producto, cantidad, tipo, desde, hacia, fecha, parametro_nombre) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
-                    [productoId, parametros[0].cantidad, 'Baja', vendedorId, null, new Date(), null]
+                    [productoId, cantidadTotal, 'Baja', nombreVendedor, 'Almacen', new Date(), null]
                 );
 
                 const transaccionId = transaccionResult.rows[0].id;
@@ -99,10 +118,10 @@ export async function PUT(request: NextRequest) {
                     [cantidad, productoId]
                 );
 
-                // Registrar transacción
+                // ✅ MODIFICADO: Registrar transacción con nombre del vendedor
                 await query(
                     'INSERT INTO transacciones (producto, cantidad, tipo, desde, hacia, fecha) VALUES ($1, $2, $3, $4, $5, $6)',
-                    [productoId, cantidad, 'Baja', vendedorId, null, new Date()]
+                    [productoId, cantidad, 'Baja', nombreVendedor, 'Almacen', new Date()]
                 );
             }
 
@@ -137,9 +156,9 @@ export async function PUT(request: NextRequest) {
         } catch (error) {
             await query('ROLLBACK');
             console.error('Error en la transacción:', error);
-            return NextResponse.json({ 
-                error: 'Error al procesar la reducción', 
-                details: (error as Error).message 
+            return NextResponse.json({
+                error: 'Error al procesar la reducción',
+                details: (error as Error).message
             }, { status: 400 });
         }
     } catch (error) {

@@ -3,8 +3,13 @@ import { query } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
   try {
+    const { searchParams } = new URL(request.url);
+    const usuarioId = searchParams.get('usuarioId');
+
     // Consulta única optimizada con JOINs y agregación JSON
-    const optimizedQuery = `
+    // Si hay usuarioId, filtramos por transacciones donde el usuario es origen o destino
+    // Nota: 'desde' y 'hacia' en transacciones almacenan el NOMBRE del usuario, no el ID.
+    let optimizedQuery = `
       SELECT 
         t.id, 
         p.nombre as producto, 
@@ -28,11 +33,29 @@ export async function GET(request: NextRequest) {
       FROM transacciones t 
       JOIN productos p ON t.producto = p.id 
       LEFT JOIN transaccion_parametros tp ON t.id = tp.transaccion_id
+      WHERE 1=1
+    `;
+
+    const queryParams: any[] = [];
+
+    if (usuarioId) {
+      // Subconsulta para obtener el nombre del usuario y comparar
+      optimizedQuery += ` 
+        AND EXISTS (
+          SELECT 1 FROM usuarios u 
+          WHERE u.id = $1 
+          AND (t.desde = u.nombre OR t.hacia = u.nombre)
+        )
+      `;
+      queryParams.push(Number(usuarioId));
+    }
+
+    optimizedQuery += `
       GROUP BY t.id, p.nombre, t.cantidad, t.tipo, t.desde, t.hacia, t.fecha, p.precio, p.tiene_parametros, t.es_cocina
       ORDER BY t.fecha DESC
     `;
 
-    const result = await query(optimizedQuery);
+    const result = await query(optimizedQuery, queryParams);
 
     return NextResponse.json(result.rows);
 

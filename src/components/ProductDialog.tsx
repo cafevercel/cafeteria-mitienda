@@ -12,7 +12,8 @@ import { ImageUpload } from '@/components/ImageUpload';
 import { formatearPorcentajeGanancia } from "@/lib/formatters";
 
 type DeliveryStep = 'location' | 'quantities';
-type DeliveryLocation = 'cafeteria' | 'cocina';
+// type DeliveryLocation = 'cafeteria' | 'cocina'; // Removed in favor of user selection
+
 
 interface ProductDialogProps {
   product: Producto;
@@ -23,8 +24,8 @@ interface ProductDialogProps {
   onDeliver: (
     productId: string,
     cantidadTotal: number,
-    parametros: Array<{ nombre: string; cantidad: number }>,
-    esCocina: boolean
+    parametros: Array<{ nombre: string; cantidad: number }> | undefined,
+    userId?: number
   ) => Promise<void>;
   seccionesExistentes: string[];
 }
@@ -113,40 +114,40 @@ SeccionAutocomplete.displayName = 'SeccionAutocomplete';
 type ModeType = 'view' | 'edit' | 'deliver';
 
 // Componente de selección de ubicación - MOVIDO FUERA
+// Componente de selección de ubicación - MOVIDO FUERA
 const LocationSelectionMode = React.memo(({
-  onLocationSelect,
+  onVendorSelect,
   onBack,
+  vendedores,
 }: {
-  onLocationSelect: (location: DeliveryLocation) => void;
+  onVendorSelect: (vendor: Vendedor) => void;
   onBack: () => void;
+  vendedores: Vendedor[];
 }) => (
   <div className="space-y-4">
-    <h3 className="text-lg font-semibold">Seleccionar lugar de entrega</h3>
+    <h3 className="text-lg font-semibold">Seleccionar vendedor para entrega</h3>
 
-    <div className="space-y-3">
-      <Button
-        variant="outline"
-        className="w-full h-16 text-left flex items-center justify-start space-x-3 hover:bg-blue-50 hover:border-blue-300"
-        onClick={() => onLocationSelect('cafeteria')}
-      >
-        <div className="w-4 h-4 rounded-full bg-blue-500"></div>
-        <div>
-          <div className="font-medium">Cafetería</div>
-          <div className="text-sm text-gray-500">Entrega normal al inventario</div>
-        </div>
-      </Button>
+    <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2">
+      {vendedores.map((vendor) => (
+        <Button
+          key={vendor.id}
+          variant="outline"
+          className="w-full h-16 text-left flex items-center justify-start space-x-3 hover:bg-blue-50 hover:border-blue-300"
+          onClick={() => onVendorSelect(vendor)}
+        >
+          <div className="w-4 h-4 rounded-full bg-blue-500"></div>
+          <div>
+            <div className="font-medium">{vendor.nombre}</div>
+            <div className="text-sm text-gray-500">{vendor.rol}</div>
+          </div>
+        </Button>
+      ))}
 
-      <Button
-        variant="outline"
-        className="w-full h-16 text-left flex items-center justify-start space-x-3 hover:bg-green-50 hover:border-green-300"
-        onClick={() => onLocationSelect('cocina')}
-      >
-        <div className="w-4 h-4 rounded-full bg-green-500"></div>
-        <div>
-          <div className="font-medium">Cocina</div>
-          <div className="text-sm text-gray-500">Entrega marcada para cocina</div>
+      {vendedores.length === 0 && (
+        <div className="text-center py-4 text-gray-500">
+          No hay vendedores disponibles
         </div>
-      </Button>
+      )}
     </div>
 
     <div className="flex justify-end">
@@ -345,7 +346,7 @@ const DeliverMode = React.memo(({
   parameterQuantities,
   simpleDeliveryQuantity,
   totalDeliveryQuantity,
-  deliveryLocation,
+  selectedVendor,
   onParameterQuantityChange,
   onSimpleDeliveryChange,
   onBack,
@@ -356,7 +357,7 @@ const DeliverMode = React.memo(({
   parameterQuantities: { [key: string]: number };
   simpleDeliveryQuantity: number;
   totalDeliveryQuantity: number;
-  deliveryLocation: DeliveryLocation | null;
+  selectedVendor: Vendedor | null;
   onParameterQuantityChange: (paramName: string, value: number) => void;
   onSimpleDeliveryChange: (value: number) => void;
   onBack: () => void;
@@ -364,12 +365,12 @@ const DeliverMode = React.memo(({
   getTotalCantidad: () => number;
 }) => (
   <div className="space-y-4">
-    {deliveryLocation && (
+    {selectedVendor && (
       <div className="mb-4 p-3 bg-gray-50 rounded-md border">
         <div className="flex items-center space-x-2">
-          <div className={`w-3 h-3 rounded-full ${deliveryLocation === 'cocina' ? 'bg-green-500' : 'bg-blue-500'}`}></div>
+          <div className="w-3 h-3 rounded-full bg-blue-500"></div>
           <span className="font-medium">
-            Entregar a: {deliveryLocation === 'cocina' ? 'Cocina' : 'Cafetería'}
+            Entregar a: {selectedVendor.nombre}
           </span>
         </div>
       </div>
@@ -530,7 +531,7 @@ export default function ProductDialog({
   const [parameterQuantities, setParameterQuantities] = useState<{ [key: string]: number }>({});
   const [totalDeliveryQuantity, setTotalDeliveryQuantity] = useState(0);
   const [simpleDeliveryQuantity, setSimpleDeliveryQuantity] = useState<number>(0);
-  const [deliveryLocation, setDeliveryLocation] = useState<DeliveryLocation | null>(null);
+  const [selectedVendor, setSelectedVendor] = useState<Vendedor | null>(null);
   const [deliveryStep, setDeliveryStep] = useState<DeliveryStep>('location');
 
   // Efecto para sincronizar el estado con el producto recibido
@@ -556,15 +557,82 @@ export default function ProductDialog({
 
   // Función para iniciar el modo de entrega
   const handleDeliverMode = useCallback(() => {
-    setDeliveryLocation(null);
+    setSelectedVendor(null);
     setDeliveryStep('location');
     setMode('deliver');
   }, []);
 
   // Función para seleccionar ubicación de entrega
-  const handleLocationSelect = useCallback((location: DeliveryLocation) => {
-    setDeliveryLocation(location);
+  const handleVendorSelect = useCallback((vendor: Vendedor) => {
+    setSelectedVendor(vendor);
     setDeliveryStep('quantities');
+  }, []);
+
+  const handleDelivery = async () => {
+    if (!selectedVendor) {
+      toast({
+        title: "Error",
+        description: "Debe seleccionar un lugar de entrega",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const cantidadAEntregar = product.tiene_parametros ? totalDeliveryQuantity : simpleDeliveryQuantity;
+
+    if (cantidadAEntregar === 0) {
+      toast({
+        title: "Advertencia",
+        description: "Por favor ingrese las cantidades a entregar.",
+        variant: "default",
+      });
+      return;
+    }
+
+    if (cantidadAEntregar > getTotalCantidad()) {
+      toast({
+        title: "Error",
+        description: "La cantidad total excede el stock disponible.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const parametrosEntrega = product.tiene_parametros && product.parametros ?
+        product.parametros.map((param) => ({
+          nombre: param.nombre,
+          cantidad: parameterQuantities[param.nombre] || 0,
+        })) :
+        [];
+
+      await onDeliver(
+        product.id,
+        cantidadAEntregar,
+        parametrosEntrega.length > 0 ? parametrosEntrega : undefined,
+        Number(selectedVendor.id)
+      );
+
+      toast({
+        title: "Éxito",
+        description: `Productos entregados a ${selectedVendor.nombre}`,
+      });
+      onClose();
+    } catch (error) {
+      console.error('Error delivering product:', error);
+      toast({
+        title: "Error",
+        description: "No se pudieron entregar los productos",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const resetDeliveryState = useCallback(() => {
+    setDeliveryStep('location');
+    setSelectedVendor(null);
+    setParameterQuantities({});
+    setSimpleDeliveryQuantity(0);
   }, []);
 
   // Función para calcular la cantidad total disponible
@@ -694,7 +762,7 @@ export default function ProductDialog({
 
   // Manejo de la entrega del producto
   const handleDeliver = useCallback(async () => {
-    if (!deliveryLocation) {
+    if (!selectedVendor) {
       toast({
         title: "Error",
         description: "Debe seleccionar un lugar de entrega",
@@ -735,12 +803,12 @@ export default function ProductDialog({
         product.id,
         cantidadAEntregar,
         parametrosEntrega,
-        deliveryLocation === 'cocina'
+        Number(selectedVendor.id)
       );
 
       toast({
         title: "Éxito",
-        description: `Producto entregado a ${deliveryLocation === 'cocina' ? 'cocina' : 'cafetería'} correctamente`,
+        description: `Producto entregado a ${selectedVendor.nombre} correctamente`,
       });
 
       onClose();
@@ -752,7 +820,7 @@ export default function ProductDialog({
         variant: "destructive",
       });
     }
-  }, [deliveryLocation, product, totalDeliveryQuantity, simpleDeliveryQuantity, getTotalCantidad, parameterQuantities, onDeliver, onClose]);
+  }, [selectedVendor, product, totalDeliveryQuantity, simpleDeliveryQuantity, getTotalCantidad, parameterQuantities, onDeliver, onClose]);
 
   // Función para eliminar producto
   const handleDelete = useCallback(async () => {
@@ -830,8 +898,9 @@ export default function ProductDialog({
             />
           ) : mode === 'deliver' && deliveryStep === 'location' ? (
             <LocationSelectionMode
-              onLocationSelect={handleLocationSelect}
+              onVendorSelect={handleVendorSelect}
               onBack={() => handleSetMode('view')}
+              vendedores={vendedores}
             />
           ) : mode === 'deliver' && deliveryStep === 'quantities' ? (
             <DeliverMode
@@ -839,7 +908,7 @@ export default function ProductDialog({
               parameterQuantities={parameterQuantities}
               simpleDeliveryQuantity={simpleDeliveryQuantity}
               totalDeliveryQuantity={totalDeliveryQuantity}
-              deliveryLocation={deliveryLocation}
+              selectedVendor={selectedVendor}
               onParameterQuantityChange={handleParameterQuantityChange}
               onSimpleDeliveryChange={handleSimpleDeliveryChange}
               onBack={() => handleSetDeliveryStep('location')}
