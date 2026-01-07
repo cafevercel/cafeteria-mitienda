@@ -1,7 +1,7 @@
 //api.ts
 
 import axios from 'axios';
-import { Venta, Vendedor, Transaccion, VentaParametro, IngresoBalance, Gasto, Producto, GastoBalance, Balance, MenuSection, Agrego, Costo, ProductoCocina } from '@/types';
+import { Venta, Vendedor, Transaccion, VentaParametro, IngresoBalance, Gasto, Producto, GastoBalance, Balance, MenuSection, Agrego, Costo, ProductoCocina, Empleado, NewEmpleado } from '@/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
 
@@ -101,6 +101,60 @@ export const login = async (nombre: string, password: string): Promise<User> => 
       console.error('Error en la solicitud de login:', error);
     }
     throw new Error('Error de autenticación. Por favor, verifica tus credenciales e intenta de nuevo.');
+  }
+};
+
+export const loginEmpleado = async (nombre: string, password: string): Promise<any> => {
+  try {
+    const response = await api.post('/auth/login-empleado', { nombre, password });
+    if (response.data.success && response.data.token) {
+      localStorage.setItem('token', response.data.token);
+      api.defaults.headers.common['Authorization'] = `Bearer ${response.data.token}`;
+      return response.data;
+    } else {
+      throw new Error('No se recibió el token de autenticación');
+    }
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      console.error('Error en la solicitud de login de empleado:', error.response?.data || error.message);
+    } else {
+      console.error('Error en la solicitud de login de empleado:', error);
+    }
+    throw new Error('Error de autenticación de empleado. Por favor, verifica tus credenciales e intenta de nuevo.');
+  }
+};
+
+export const loginAdmin = async (nombre: string, password: string): Promise<any> => {
+  try {
+    const response = await api.post('/auth/login-admin', { nombre, password });
+    if (response.data.success && response.data.token) {
+      localStorage.setItem('token', response.data.token);
+      api.defaults.headers.common['Authorization'] = `Bearer ${response.data.token}`;
+      return response.data;
+    } else {
+      throw new Error('No se recibió el token de autenticación');
+    }
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      console.error('Error en la solicitud de login de administrador:', error.response?.data || error.message);
+    } else {
+      console.error('Error en la solicitud de login de administrador:', error);
+    }
+    throw new Error('Error de autenticación de administrador. Por favor, verifica tus credenciales e intenta de nuevo.');
+  }
+};
+
+export const registerAdmin = async (nombre: string, password: string, telefono?: string): Promise<any> => {
+  try {
+    const response = await api.post('/auth/register-admin', { nombre, password, telefono });
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      console.error('Error en el registro de administrador:', error.response?.data || error.message);
+    } else {
+      console.error('Error en el registro de administrador:', error);
+    }
+    throw new Error('Error al registrar administrador');
   }
 };
 
@@ -1169,5 +1223,85 @@ export const transferirProductoEntreVendedores = async (
     }
 
     throw new Error('Error al transferir el producto entre vendedores');
+  }
+};
+
+// Funciones para Empleados (asociados a puntos de venta/usuarios)
+export const getEmpleados = async (usuarioId: string): Promise<Empleado[]> => {
+  try {
+    const response = await api.get(`/empleados?usuario_id=${usuarioId}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error al obtener empleados:', error);
+    throw new Error('No se pudieron obtener los empleados');
+  }
+};
+
+export const createEmpleado = async (empleado: NewEmpleado): Promise<Empleado> => {
+  try {
+    const response = await api.post('/empleados', empleado);
+    return response.data;
+  } catch (error) {
+    console.error('Error al crear empleado:', error);
+    throw new Error('No se pudo crear el empleado');
+  }
+};
+
+export const updateEmpleado = async (id: string, empleado: Partial<Empleado>): Promise<Empleado> => {
+  try {
+    const response = await api.put(`/empleados/${id}`, empleado);
+    return response.data;
+  } catch (error) {
+    console.error('Error al actualizar empleado:', error);
+    throw new Error('No se pudo actualizar el empleado');
+  }
+};
+
+export const deleteEmpleado = async (id: string): Promise<void> => {
+  try {
+    await api.delete(`/empleados/${id}`);
+  } catch (error) {
+    console.error('Error al eliminar empleado:', error);
+    throw new Error('No se pudo eliminar el empleado');
+  }
+};
+
+// Funciones para Salarios
+export const getSalarios = async (usuarioId: string): Promise<any[]> => {
+  try {
+    const response = await api.get(`/salarios?usuario_id=${usuarioId}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error al obtener salarios:', error);
+    throw new Error('No se pudieron obtener los salarios');
+  }
+};
+
+export const crearActualizarSalario = async (data: { usuario_id: string; empleado_id: string; salario: number }): Promise<any> => {
+  try {
+    const response = await api.post('/salarios', data);
+    return response.data;
+  } catch (error) {
+    console.error('Error al crear/actualizar salario:', error);
+    throw new Error('No se pudo crear/actualizar el salario');
+  }
+};
+
+export const actualizarSalario = async (id: string, salario: number): Promise<any> => {
+  try {
+    const response = await api.put('/salarios', { id, salario });
+    return response.data;
+  } catch (error) {
+    console.error('Error al actualizar salario:', error);
+    throw new Error('No se pudo actualizar el salario');
+  }
+};
+
+export const eliminarSalario = async (id: string): Promise<void> => {
+  try {
+    await api.delete(`/salarios?id=${id}`);
+  } catch (error) {
+    console.error('Error al eliminar salario:', error);
+    throw new Error('No se pudo eliminar el salario');
   }
 };

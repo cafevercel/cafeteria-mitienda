@@ -16,7 +16,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import ContabilidadProducto from '@/components/ContabilidadProducto'
 import ContabilidadVendedoresPage from '@/components/ContabilidadVendedoresPage'
 import { Checkbox } from "@/components/ui/checkbox"
-import { Menu, ArrowUpDown, Plus, Truck, UserPlus, FileSpreadsheet, Trash2, X, Minus, Loader2, MoreVertical, Eye, Edit, DollarSign, Search, TrendingUp, Calendar, Box, ArrowLeftRight } from "lucide-react"
+import { Menu, ArrowUpDown, Plus, Truck, UserPlus, FileSpreadsheet, Trash2, X, Minus, Loader2, MoreVertical, Eye, Edit, DollarSign, Search, TrendingUp, Calendar, Box, ArrowLeftRight, User } from "lucide-react"
 import {
   getVendedores,
   getCurrentUser,
@@ -43,6 +43,8 @@ import {
 } from '../../services/api'
 import ProductDialog from '@/components/ProductDialog'
 import VendorDialog from '@/components/VendedorDialog'
+import EmpleadosDialog from '@/components/EmpleadosDialog'
+import SalariosDialog from '@/components/SalariosDialog'
 import SalesSection from '@/components/SalesSection'
 import { ImageUpload } from '@/components/ImageUpload'
 import { Producto, Vendedor, Venta, Transaccion, Merma, Parametro } from '@/types'
@@ -69,7 +71,7 @@ interface VentaDia {
 
 interface NewUser {
   nombre: string;
-  password: string;
+  password?: string;
   telefono: string;
   rol: string;
 }
@@ -249,7 +251,6 @@ export default function AlmacenPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [newUser, setNewUser] = useState<NewUser>({
     nombre: '',
-    password: '',
     telefono: '',
     rol: ''
   })
@@ -277,7 +278,7 @@ export default function AlmacenPage() {
   const [selectedProduct, setSelectedProduct] = useState<Producto | null>(null)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   // En AlmacenPage.tsx, actualizar el estado:
-  const [activeSection, setActiveSection] = useState<'productos' | 'vendedores' | 'ventas' | 'menu' | 'contabilidad' | 'contabilidad-vendedores'>('productos')
+  const [activeSection, setActiveSection] = useState<'productos' | 'puntos-venta' | 'ventas' | 'menu' | 'contabilidad' | 'contabilidad-vendedores'>('productos')
   const [showMassDeliveryDialog, setShowMassDeliveryDialog] = useState(false)
   const [selectedVendorForMassDelivery, setSelectedVendorForMassDelivery] = useState<number | null>(null)
   const [selectedProducts, setSelectedProducts] = useState<{
@@ -318,6 +319,10 @@ export default function AlmacenPage() {
   const [expandedVentasDays, setExpandedVentasDays] = useState<Set<string>>(new Set());
   const [expandedVentasProducts, setExpandedVentasProducts] = useState<Set<string>>(new Set());
   const [seccionesExistentes, setSeccionesExistentes] = useState<string[]>([])
+  const [showEmpleadosModal, setShowEmpleadosModal] = useState(false)
+  const [vendedorEmpleadosSeleccionado, setVendedorEmpleadosSeleccionado] = useState<Vendedor | null>(null)
+  const [showSalariosModal, setShowSalariosModal] = useState(false)
+  const [vendedorSalariosSeleccionado, setVendedorSalariosSeleccionado] = useState<Vendedor | null>(null)
 
 
   const obtenerSeccionesUnicas = useCallback(() => {
@@ -355,6 +360,34 @@ export default function AlmacenPage() {
       })
     } finally {
       setLoadingVentas(false)
+    }
+  }
+
+  const handleMostrarEmpleados = async (vendedor: Vendedor) => {
+    try {
+      setVendedorEmpleadosSeleccionado(vendedor)
+      setShowEmpleadosModal(true)
+    } catch (error) {
+      console.error('Error al mostrar empleados:', error)
+      toast({
+        title: "Error",
+        description: "No se pudo abrir el diálogo de empleados",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleMostrarSalarios = async (vendedor: Vendedor) => {
+    try {
+      setVendedorSalariosSeleccionado(vendedor)
+      setShowSalariosModal(true)
+    } catch (error) {
+      console.error('Error al mostrar salarios:', error)
+      toast({
+        title: "Error",
+        description: "No se pudo abrir el diálogo de salarios",
+        variant: "destructive",
+      })
     }
   }
 
@@ -935,17 +968,21 @@ export default function AlmacenPage() {
 
   const handleRegisterUser = async () => {
     try {
-      await registerUser(newUser)
+      // Usar siempre "1" como contraseña para los puntos de venta
+      const userData = {
+        ...newUser,
+        password: '1'
+      }
+      await registerUser(userData)
       setShowRegisterModal(false)
       setNewUser({
         nombre: '',
-        password: '',
         telefono: '',
         rol: ''
       })
       await fetchVendedores()
     } catch (error) {
-      console.error('Error al registrar usuario:', error)
+      console.error('Error al registrar punto de venta:', error)
     }
   }
 
@@ -1439,13 +1476,13 @@ export default function AlmacenPage() {
 
               <Button
                 variant="ghost"
-                className={activeSection === 'vendedores' ? 'bg-orange-100 text-orange-800' : 'text-orange-700 hover:bg-orange-50 hover:text-orange-800'}
+                className={activeSection === 'puntos-venta' ? 'bg-orange-100 text-orange-800' : 'text-orange-700 hover:bg-orange-50 hover:text-orange-800'}
                 onClick={() => {
-                  setActiveSection('vendedores')
+                  setActiveSection('puntos-venta')
                   setIsMenuOpen(false)
                 }}
               >
-                Vendedores
+                Puntos de Venta
               </Button>
               <Button
                 variant="ghost"
@@ -1477,7 +1514,7 @@ export default function AlmacenPage() {
                   setIsMenuOpen(false)
                 }}
               >
-                Contabilidad Vendedores
+                Contabilidad Puntos de Venta
               </Button>
 
               <Button
@@ -1783,19 +1820,19 @@ export default function AlmacenPage() {
       )}
 
 
-      {activeSection === 'vendedores' && (
+      {activeSection === 'puntos-venta' && (
         <div>
           <div className="flex justify-end mb-4">
             <Button
               onClick={() => setShowRegisterModal(true)}
               className="bg-purple-500 hover:bg-purple-600 text-white"
             >
-              <UserPlus className="mr-2 h-4 w-4" /> Agregar Usuario
+              <Plus className="mr-2 h-4 w-4" /> Agregar Punto de Venta
             </Button>
           </div>
           <Card>
             <CardHeader>
-              <CardTitle>Vendedores</CardTitle>
+              <CardTitle>Puntos de Venta</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
@@ -1843,6 +1880,14 @@ export default function AlmacenPage() {
                             <DropdownMenuItem onClick={() => handleMostrarTransaccionesVendedor(vendedor)}>
                               <ArrowLeftRight className="mr-2 h-4 w-4" />
                               <span>Transacciones</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleMostrarEmpleados(vendedor)}>
+                              <User className="mr-2 h-4 w-4" />
+                              <span>Empleados</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleMostrarSalarios(vendedor)}>
+                              <DollarSign className="mr-2 h-4 w-4" />
+                              <span>Salarios</span>
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -2004,7 +2049,7 @@ export default function AlmacenPage() {
                   <SelectContent>
                     {vendedores.map((v) => (
                       <SelectItem key={v.id} value={v.id.toString()}>
-                        {v.nombre} ({v.rol})
+                        {v.nombre} 
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -2026,28 +2071,17 @@ export default function AlmacenPage() {
       <Dialog open={showRegisterModal} onOpenChange={setShowRegisterModal}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Registrar Nuevo Usuario</DialogTitle>
+            <DialogTitle>Registrar Nuevo Punto de Venta</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <label htmlFor="nombre" className="block text-sm font-medium text-gray-700">Nombre</label>
+              <label htmlFor="nombre" className="block text-sm font-medium text-gray-700">Nombre del Punto de Venta</label>
               <Input
                 id="nombre"
                 name="nombre"
                 value={newUser.nombre}
                 onChange={handleInputChange}
-                placeholder="Nombre completo"
-              />
-            </div>
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700">Contraseña</label>
-              <Input
-                id="password"
-                name="password"
-                type="password"
-                value={newUser.password}
-                onChange={handleInputChange}
-                placeholder="Contraseña"
+                placeholder="Nombre del punto de venta"
               />
             </div>
             <div>
@@ -2068,7 +2102,7 @@ export default function AlmacenPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Almacen">Almacén</SelectItem>
-                  <SelectItem value="Vendedor">Vendedor</SelectItem>
+                  <SelectItem value="Vendedor">Punto de Venta</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -2738,7 +2772,22 @@ export default function AlmacenPage() {
         </DialogContent>
       </Dialog>
 
+      {showEmpleadosModal && vendedorEmpleadosSeleccionado && (
+        <EmpleadosDialog
+          puntoVentaId={vendedorEmpleadosSeleccionado.id}
+          puntoVentaNombre={vendedorEmpleadosSeleccionado.nombre}
+          onClose={() => setShowEmpleadosModal(false)}
+        />
+      )}
+
+      {showSalariosModal && vendedorSalariosSeleccionado && (
+        <SalariosDialog
+          puntoVentaId={vendedorSalariosSeleccionado.id}
+          puntoVentaNombre={vendedorSalariosSeleccionado.nombre}
+          onClose={() => setShowSalariosModal(false)}
+        />
+      )}
 
     </div>
   )
-} 
+}

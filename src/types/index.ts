@@ -226,6 +226,7 @@ export interface CalculoContabilidadVendedor {
   ventaTotal: number;
   gananciaBruta: number;
   gastos: number;
+  gastosMerma: number;
   salario: number;
   resultado: number;
   detalles: {
@@ -242,5 +243,30 @@ export interface CalculoContabilidadVendedor {
       diasSeleccionados: number;
       valorProrrateado: number;
     }>;
+    mermaDesglosada: Array<{
+      producto: string;
+      cantidad: number;
+      precio: number;
+      total: number;
+      fecha: string;
+    }>;
   };
+}
+
+// Interface para Empleados (asociados a puntos de venta/usuarios)
+export interface Empleado {
+  id: string;
+  nombre: string;
+  usuario_id: string; // Punto de venta al que pertenece
+  password: string;
+  activo: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface NewEmpleado {
+  nombre: string;
+  usuario_id: string;
+  password: string;
+  activo: boolean;
 }

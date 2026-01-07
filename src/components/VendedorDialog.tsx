@@ -369,8 +369,6 @@ export default function VendorDialog({
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
   const [ventasEspecificas, setVentasEspecificas] = useState<{ producto: string; cantidad: number }[]>([])
   const [sortByVentas, setSortByVentas] = useState<'asc' | 'desc'>('desc')
-  const [newPassword, setNewPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
   const [ventasDiariasLocales, setVentasDiariasLocales] = useState<VentaDia[]>(ventasDiarias)
   const [showDestinationDialog, setShowDestinationDialog] = useState(false)
   const [selectedDestination, setSelectedDestination] = useState<'almacen' | 'merma' | 'vendedor' | null>(null)
@@ -746,25 +744,10 @@ export default function VendorDialog({
   }
 
   const handleEdit = async () => {
-    if (newPassword && newPassword !== confirmPassword) {
-      toast({
-        title: "Error",
-        description: "Las contraseñas no coinciden.",
-        variant: "destructive",
-      })
-      return
-    }
-
     try {
       setIsLoading(true)
-      const updatedVendor = {
-        ...editedVendor,
-        ...(newPassword && { password: newPassword }),
-      }
-      await onEdit(updatedVendor)
+      await onEdit(editedVendor)
       setMode('view')
-      setNewPassword('')
-      setConfirmPassword('')
       toast({
         title: "Éxito",
         description: "Los datos del vendedor se han actualizado correctamente.",
@@ -1619,20 +1602,6 @@ export default function VendorDialog({
                 value={editedVendor.telefono}
                 onChange={handleInputChange}
                 placeholder="Teléfono"
-              />
-              <Input
-                type="password"
-                name="newPassword"
-                value={newPassword}
-                onChange={handleInputChange}
-                placeholder="Nueva contraseña (dejar en blanco para no cambiar)"
-              />
-              <Input
-                type="password"
-                name="confirmPassword"
-                value={confirmPassword}
-                onChange={handleInputChange}
-                placeholder="Confirmar nueva contraseña"
               />
               <Button onClick={handleEdit} disabled={isLoading}>
                 {isLoading ? (

@@ -181,7 +181,7 @@ export default function GastosVendedorDialog({ isOpen, onClose, onRefresh, vende
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {[2020, 2021, 2022, 2023, 2024, 2025].map((year) => (
+                  {[2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027, 2028,2029,2030].map((year) => (
                     <SelectItem key={year} value={year.toString()}>
                       {year}
                     </SelectItem>

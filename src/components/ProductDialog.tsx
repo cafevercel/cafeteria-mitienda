@@ -125,7 +125,7 @@ const LocationSelectionMode = React.memo(({
   vendedores: Vendedor[];
 }) => (
   <div className="space-y-4">
-    <h3 className="text-lg font-semibold">Seleccionar vendedor para entrega</h3>
+    <h3 className="text-lg font-semibold">Seleccionar punto para entrega</h3>
 
     <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2">
       {vendedores.map((vendor) => (
@@ -138,7 +138,6 @@ const LocationSelectionMode = React.memo(({
           <div className="w-4 h-4 rounded-full bg-blue-500"></div>
           <div>
             <div className="font-medium">{vendor.nombre}</div>
-            <div className="text-sm text-gray-500">{vendor.rol}</div>
           </div>
         </Button>
       ))}

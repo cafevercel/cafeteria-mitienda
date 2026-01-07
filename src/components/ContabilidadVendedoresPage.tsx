@@ -119,6 +119,11 @@ export default function ContabilidadVendedoresPage({ vendedores, onRefresh }: Co
     }).format(value)
   }
 
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString)
+    return format(date, "dd/MM/yyyy")
+  }
+
   const getDaysInRange = () => {
     if (!fechaInicio || !fechaFin) return 0
     const diffTime = fechaFin.getTime() - fechaInicio.getTime()
@@ -140,7 +145,7 @@ export default function ContabilidadVendedoresPage({ vendedores, onRefresh }: Co
       <div className="flex items-center justify-between">
         <h2 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
           <FileText className="h-5 w-5 sm:h-6 sm:w-6" />
-          Contabilidad de Vendedores
+          Contabilidad de Puntos de Venta
         </h2>
       </div>
 
@@ -248,11 +253,11 @@ export default function ContabilidadVendedoresPage({ vendedores, onRefresh }: Co
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
             <User className="h-5 w-5" />
-            Lista de Vendedores
+            Lista de Puntos de Venta
           </CardTitle>
           <div className="mt-4">
             <Input
-              placeholder="Filtrar vendedores..."
+              placeholder="Filtrar puntos..."
               value={filtroVendedor}
               onChange={(e) => setFiltroVendedor(e.target.value)}
             />
@@ -354,7 +359,7 @@ export default function ContabilidadVendedoresPage({ vendedores, onRefresh }: Co
 
                       {isExpanded && (
                         <div className="border-t bg-gray-50 p-3 sm:p-4">
-                          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 mb-4 sm:mb-6">
+                          <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-4 mb-4 sm:mb-6">
                             <div className="text-center p-2 sm:p-3 bg-white rounded-lg">
                               <DollarSign className="h-4 w-4 sm:h-5 sm:w-5 text-blue-500 mx-auto mb-1" />
                               <p className="text-xs sm:text-sm text-gray-500">Venta Total</p>
@@ -369,6 +374,11 @@ export default function ContabilidadVendedoresPage({ vendedores, onRefresh }: Co
                               <TrendingDown className="h-4 w-4 sm:h-5 sm:w-5 text-red-500 mx-auto mb-1" />
                               <p className="text-xs sm:text-sm text-gray-500">Gastos</p>
                               <p className="font-medium text-red-600 text-xs sm:text-sm break-words">{formatCurrency(calculo.gastos)}</p>
+                            </div>
+                            <div className="text-center p-2 sm:p-3 bg-white rounded-lg">
+                              <TrendingDown className="h-4 w-4 sm:h-5 sm:w-5 text-red-500 mx-auto mb-1" />
+                              <p className="text-xs sm:text-sm text-gray-500">Gastos Merma</p>
+                              <p className="font-medium text-red-600 text-xs sm:text-sm break-words">{formatCurrency(calculo.gastosMerma)}</p>
                             </div>
                             <div className="text-center p-2 sm:p-3 bg-white rounded-lg">
                               <TrendingDown className="h-4 w-4 sm:h-5 sm:w-5 text-red-500 mx-auto mb-1" />
@@ -441,6 +451,38 @@ export default function ContabilidadVendedoresPage({ vendedores, onRefresh }: Co
                                 )}
                               </div>
                             </div>
+
+                            {/* Merma Detail */}
+                            <div>
+                              <h4 className="font-medium mb-3 flex items-center gap-2 text-sm sm:text-base">
+                                <TrendingDown className="h-4 w-4 text-red-600" />
+                                Detalle de Merma
+                              </h4>
+                              <div className="space-y-2 max-h-60 overflow-y-auto">
+                                {calculo.detalles.mermaDesglosada.length === 0 ? (
+                                  <p className="text-xs sm:text-sm text-gray-500 italic">No hay mermas registradas</p>
+                                ) : (
+                                  calculo.detalles.mermaDesglosada.map((merma, index) => (
+                                    <div key={index} className="p-2 sm:p-3 bg-red-50 rounded border border-red-200">
+                                      <div className="space-y-1">
+                                        <p className="font-medium text-xs sm:text-sm break-words">{merma.producto}</p>
+                                        <p className="text-xs text-gray-600">
+                                          {merma.cantidad} × {formatCurrency(merma.precio)}
+                                        </p>
+                                        <div className="flex justify-between items-center pt-1">
+                                          <p className="text-xs text-gray-500">
+                                            {formatDate(merma.fecha)}
+                                          </p>
+                                          <p className="font-medium text-xs sm:text-sm text-red-600">
+                                            {formatCurrency(merma.total)}
+                                          </p>
+                                      </div>
+                                      </div>
+                                    </div>
+                                  ))
+                                )}
+                              </div>
+                            </div>
                           </div>
                         </div>
                       )}
@@ -473,13 +515,16 @@ export default function ContabilidadVendedoresPage({ vendedores, onRefresh }: Co
               const totalVentaGlobal = filteredCalculos.reduce((sum, calc) => sum + calc.ventaTotal, 0)
               const totalGananciaBrutaGlobal = filteredCalculos.reduce((sum, calc) => sum + calc.gananciaBruta, 0)
               const totalGastosGlobal = filteredCalculos.reduce((sum, calc) => sum + calc.gastos, 0)
+              // La merma solo se muestra en el primer vendedor para evitar duplicados
+              const totalGastosMermaGlobal = filteredCalculos.length > 0 ? filteredCalculos[0].gastosMerma : 0
               const totalSalariosGlobal = filteredCalculos.reduce((sum, calc) => sum + calc.salario, 0)
-              const resultadoGlobal = filteredCalculos.reduce((sum, calc) => sum + calc.resultado, 0)
+              // El resultado global debe restar la merma solo una vez
+              const resultadoGlobal = totalGananciaBrutaGlobal - totalGastosGlobal - totalGastosMermaGlobal - totalSalariosGlobal
 
               return (
                 <div className="space-y-6">
                   {/* Main totals grid */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 sm:gap-4">
                     <div className="text-center p-3 sm:p-4 bg-blue-50 rounded-lg border">
                       <DollarSign className="h-5 w-5 sm:h-6 sm:w-6 text-blue-500 mx-auto mb-2" />
                       <p className="text-xs sm:text-sm text-gray-600 font-medium">Venta Total Global</p>
@@ -495,12 +540,17 @@ export default function ContabilidadVendedoresPage({ vendedores, onRefresh }: Co
                       <p className="text-xs sm:text-sm text-gray-600 font-medium">Gastos Totales</p>
                       <p className="font-bold text-sm sm:text-lg text-red-600 break-words">{formatCurrency(totalGastosGlobal)}</p>
                     </div>
+                    <div className="text-center p-3 sm:p-4 bg-red-100 rounded-lg border">
+                      <TrendingDown className="h-5 w-5 sm:h-6 sm:w-6 text-red-600 mx-auto mb-2" />
+                      <p className="text-xs sm:text-sm text-gray-700 font-medium">Gastos Merma</p>
+                      <p className="font-bold text-sm sm:text-lg text-red-700 break-words">{formatCurrency(totalGastosMermaGlobal)}</p>
+                    </div>
                     <div className="text-center p-3 sm:p-4 bg-red-50 rounded-lg border">
                       <TrendingDown className="h-5 w-5 sm:h-6 sm:w-6 text-red-500 mx-auto mb-2" />
                       <p className="text-xs sm:text-sm text-gray-600 font-medium">Salarios Totales</p>
                       <p className="font-bold text-sm sm:text-lg text-red-600 break-words">{formatCurrency(totalSalariosGlobal)}</p>
                     </div>
-                    <div className="text-center p-3 sm:p-4 bg-gray-50 rounded-lg border sm:col-span-2 lg:col-span-1">
+                    <div className="text-center p-3 sm:p-4 bg-gray-50 rounded-lg border">
                       <Calculator className="h-5 w-5 sm:h-6 sm:w-6 text-gray-500 mx-auto mb-2" />
                       <p className="text-xs sm:text-sm text-gray-600 font-medium">Resultado Final</p>
                       <p className={cn(
@@ -541,11 +591,17 @@ export default function ContabilidadVendedoresPage({ vendedores, onRefresh }: Co
                       <FileText className="h-4 w-4" />
                       Análisis Financiero Adicional
                     </h4>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                       <div className="p-3 bg-white rounded border">
                         <p className="text-xs sm:text-sm text-gray-600">Gastos como % de Ventas</p>
                         <p className="font-semibold text-sm sm:text-base text-red-600">
                           {totalVentaGlobal > 0 ? `${((totalGastosGlobal / totalVentaGlobal) * 100).toFixed(1)}%` : '0%'}
+                        </p>
+                      </div>
+                      <div className="p-3 bg-white rounded border">
+                        <p className="text-xs sm:text-sm text-gray-600">Merma como % de Ventas</p>
+                        <p className="font-semibold text-sm sm:text-base text-red-700">
+                          {totalVentaGlobal > 0 ? `${((totalGastosMermaGlobal / totalVentaGlobal) * 100).toFixed(1)}%` : '0%'}
                         </p>
                       </div>
                       <div className="p-3 bg-white rounded border">

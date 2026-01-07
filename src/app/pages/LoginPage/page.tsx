@@ -6,11 +6,13 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { login } from "../../services/auth"
+import { loginEmpleado, loginAdmin } from "../../services/api"
 import Image from 'next/image'
 
 export default function LoginPage() {
   const [nombre, setNombre] = useState('')
   const [password, setPassword] = useState('')
+  const [tipoUsuario, setTipoUsuario] = useState<'empleado' | 'admin'>('empleado')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
@@ -19,21 +21,31 @@ export default function LoginPage() {
     e.preventDefault();
     setError('');
     setIsLoading(true);
+    
     try {
-      console.log('Intentando iniciar sesión con:', { nombre, password });
-      const userData = await login(nombre, password);
-      console.log('Respuesta del servidor:', userData);
+      console.log('Intentando iniciar sesión con:', { nombre, password, tipoUsuario });
       
-      // En tu componente LoginPage
-      if (userData.rol === 'Vendedor') {
-        console.log('Redirigiendo a la página de vendedor');
-        router.push(`/pages/VendedorPage/${userData.id}`);
-      } else if (userData.rol === 'Almacen') {
-        console.log('Redirigiendo a la página de almacén');
-        router.push('/pages/AlmacenPage');
+      if (tipoUsuario === 'admin') {
+        // Login de administrador
+        const adminData = await loginAdmin(nombre, password);
+        console.log('Login de administrador exitoso:', adminData);
+        
+        if (adminData.user && adminData.user.id) {
+          console.log('Redirigiendo a la página de almacén');
+          router.push('/pages/AlmacenPage');
+          return;
+        }
       } else {
-        console.error('Rol de usuario no reconocido:', userData.rol);
-        setError('Error: Rol de usuario no reconocido');
+        // Login de empleado
+        const empleadoData = await loginEmpleado(nombre, password);
+        console.log('Login de empleado exitoso:', empleadoData);
+        
+        // Redirigir al panel del vendedor (punto de venta asociado)
+        if (empleadoData.user && empleadoData.user.id) {
+          console.log('Redirigiendo a la página de vendedor del punto de venta');
+          router.push(`/pages/VendedorPage/${empleadoData.user.id}`);
+          return;
+        }
       }
     } catch (err) {
       console.error('Error durante el inicio de sesión:', err);
@@ -68,8 +80,24 @@ export default function LoginPage() {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
+              <label htmlFor="tipo" className="text-sm font-medium leading-none text-orange-700 peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                Tipo de Usuario
+              </label>
+              <select
+                id="tipo"
+                value={tipoUsuario}
+                onChange={(e) => setTipoUsuario(e.target.value as 'empleado' | 'admin')}
+                disabled={isLoading}
+                className="w-full border border-orange-200 rounded-md px-3 py-2 focus:border-orange-400 focus:ring-orange-400"
+              >
+                <option value="empleado">Empleado</option>
+                <option value="admin">Administrador</option>
+              </select>
+            </div>
+
+            <div className="space-y-2">
               <label htmlFor="nombre" className="text-sm font-medium leading-none text-orange-700 peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                Nombre de Usuario
+                {tipoUsuario === 'admin' ? 'Nombre de Administrador' : 'Nombre de Empleado'}
               </label>
               <Input
                 id="nombre"
@@ -77,7 +105,7 @@ export default function LoginPage() {
                 value={nombre}
                 onChange={(e) => setNombre(e.target.value)}
                 required
-                placeholder="Ingresa tu nombre de usuario"
+                placeholder={tipoUsuario === 'admin' ? 'Ingresa tu nombre de administrador' : 'Ingresa tu nombre de empleado'}
                 disabled={isLoading}
                 className="border-orange-200 focus:border-orange-400 focus:ring-orange-400"
               />
@@ -101,6 +129,11 @@ export default function LoginPage() {
             <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={isLoading}>
               {isLoading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
             </Button>
+            <div className="text-xs text-gray-500 text-center mt-2">
+              {tipoUsuario === 'admin'
+                ? 'Acceso para administradores del sistema'
+                : 'Acceso para empleados de puntos de venta'}
+            </div>
           </form>
         </CardContent>
         <CardFooter className="flex justify-center">
