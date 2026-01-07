@@ -13,6 +13,7 @@ import { es } from 'date-fns/locale'
 import * as XLSX from 'xlsx'
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { editarVenta } from '@/app/services/api'
 
 interface VendorDialogProps {
   almacen: Producto[]// Añadir esta prop
@@ -104,9 +105,10 @@ interface VentaDia {
 interface VentaDiaDesplegableProps {
   venta: VentaDia;
   onDeleteSale: (saleId: string) => Promise<void>; // Agregar esta prop
+  onEditSale: (sale: Venta) => void; // ← AGREGAR
 }
 
-const VentaDiaDesplegable: React.FC<VentaDiaDesplegableProps> = ({ venta, onDeleteSale }) => {
+const VentaDiaDesplegable: React.FC<VentaDiaDesplegableProps> = ({ venta, onDeleteSale, onEditSale }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [deletingSaleId, setDeletingSaleId] = useState<string | null>(null);
   const [expandedSales, setExpandedSales] = useState<Record<string, boolean>>({});
@@ -187,6 +189,18 @@ const VentaDiaDesplegable: React.FC<VentaDiaDesplegableProps> = ({ venta, onDele
                           <X className="h-4 w-4" />
                         )}
                       </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onEditSale(v);
+                        }}
+                        disabled={deletingSaleId === v.id}
+                      >
+                        <Edit2 className="h-4 w-4" />
+                      </Button>
+
                     </div>
                   </div>
 
@@ -219,9 +233,10 @@ const VentaDiaDesplegable: React.FC<VentaDiaDesplegableProps> = ({ venta, onDele
 interface VentaSemanaDesplegableProps {
   venta: VentaSemana;
   onDeleteSale: (saleId: string) => Promise<void>; // Agregar esta prop
+  onEditSale: (sale: Venta) => void; // ← AGREGAR
 }
 
-const VentaSemanaDesplegable: React.FC<VentaSemanaDesplegableProps> = ({ venta, onDeleteSale }) => {
+const VentaSemanaDesplegable: React.FC<VentaSemanaDesplegableProps> = ({ venta, onDeleteSale, onEditSale }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [deletingSaleId, setDeletingSaleId] = useState<string | null>(null);
   const [expandedSales, setExpandedSales] = useState<Record<string, boolean>>({});
@@ -305,6 +320,19 @@ const VentaSemanaDesplegable: React.FC<VentaSemanaDesplegableProps> = ({ venta, 
                           <X className="h-4 w-4" />
                         )}
                       </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onEditSale(v);
+                        }}
+                        disabled={deletingSaleId === v.id}
+                      >
+                        <Edit2 className="h-4 w-4" />
+                      </Button>
+
+
                     </div>
                   </div>
 
@@ -390,6 +418,11 @@ export default function VendorDialog({
   const [productToEdit, setProductToEdit] = useState<InconsistenciaData | null>(null);
   const [newQuantities, setNewQuantities] = useState<Record<string, number>>({});
   const [isUpdatingQuantity, setIsUpdatingQuantity] = useState(false);
+  const [showEditSaleDialog, setShowEditSaleDialog] = useState(false);
+  const [saleToEdit, setSaleToEdit] = useState<Venta | null>(null);
+  const [editSaleQuantity, setEditSaleQuantity] = useState(0);
+  const [editSaleParametros, setEditSaleParametros] = useState<Record<string, number>>({});
+
 
 
 
@@ -581,6 +614,82 @@ export default function VendorDialog({
       })
     }
   }
+
+  const handleEditSale = async () => {
+    if (!saleToEdit) return;
+
+    try {
+      setIsLoading(true);
+
+      const parametrosEdicion = saleToEdit.parametros && saleToEdit.parametros.length > 0
+        ? Object.entries(editSaleParametros)
+          .filter(([_, cantidad]) => cantidad > 0)
+          .map(([nombre, cantidad]) => ({ nombre, cantidad }))
+        : undefined;
+
+      await editarVenta(
+        saleToEdit.id,
+        saleToEdit.producto,
+        saleToEdit.parametros && saleToEdit.parametros.length > 0 ? 0 : editSaleQuantity,
+        saleToEdit.fecha,
+        parametrosEdicion,
+        vendor.id
+      );
+
+      // Actualizar estados locales
+      setVentasLocales(prevVentas =>
+        prevVentas.map(v => v.id === saleToEdit.id ? { ...v, cantidad: editSaleQuantity } : v)
+      );
+
+      setVentasDiariasLocales(prevVentasDiarias =>
+        prevVentasDiarias.map(ventaDia => ({
+          ...ventaDia,
+          ventas: ventaDia.ventas.map(v => v.id === saleToEdit.id ? { ...v, cantidad: editSaleQuantity } : v)
+        }))
+      );
+
+      // Recalcular ventas semanales y específicas
+      const nuevasVentasLocales = ventasLocales.map(v =>
+        v.id === saleToEdit.id ? { ...v, cantidad: editSaleQuantity } : v
+      );
+      setVentasSemanales(agruparVentasPorSemana(nuevasVentasLocales));
+      calcularVentasEspecificas();
+
+      toast({
+        title: "Éxito",
+        description: "La venta se ha editado correctamente.",
+      });
+
+      setShowEditSaleDialog(false);
+      setSaleToEdit(null);
+    } catch (error) {
+      console.error('Error al editar la venta:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo editar la venta. Por favor, inténtelo de nuevo.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleOpenEditSale = (sale: Venta) => {
+    setSaleToEdit(sale);
+    setEditSaleQuantity(sale.cantidad);
+    if (sale.parametros && sale.parametros.length > 0) {
+      const initialParams: Record<string, number> = {};
+      sale.parametros.forEach(p => {
+        initialParams[p.nombre] = p.cantidad;
+      });
+      setEditSaleParametros(initialParams);
+    } else {
+      setEditSaleParametros({});
+    }
+    setShowEditSaleDialog(true);
+  };
+
+
 
   const calcularVentasEspecificas = useCallback(() => {
     const ventasPorProducto = ventasLocales.reduce((acc, venta) => {
@@ -1074,7 +1183,8 @@ export default function VendorDialog({
                 <VentaDiaDesplegable
                   key={venta.fecha}
                   venta={venta}
-                  onDeleteSale={handleDeleteSale} // Pasar la función aquí
+                  onDeleteSale={handleDeleteSale}
+                  onEditSale={handleOpenEditSale} // ← AGREGAR // Pasar la función aquí
                 />
               ))
             ) : (
@@ -1098,7 +1208,8 @@ export default function VendorDialog({
                 <VentaSemanaDesplegable
                   key={`${venta.fechaInicio}-${venta.fechaFin}`}
                   venta={venta}
-                  onDeleteSale={handleDeleteSale} // Pasar la función aquí
+                  onDeleteSale={handleDeleteSale}
+                  onEditSale={handleOpenEditSale} // ← AGREGAR// Pasar la función aquí
                 />
               ))
             ) : (
@@ -2045,6 +2156,86 @@ export default function VendorDialog({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Diálogo de edición de venta */}
+      <Dialog open={showEditSaleDialog} onOpenChange={setShowEditSaleDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar venta</DialogTitle>
+            <DialogDescription>
+              {saleToEdit?.producto_nombre}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {saleToEdit && saleToEdit.parametros && saleToEdit.parametros.length > 0 ? (
+              <div className="space-y-3">
+                <label className="text-sm font-medium block">Cantidades por parámetro</label>
+                <div className="max-h-[300px] overflow-y-auto space-y-2">
+                  {saleToEdit.parametros.map((parametro) => (
+                    <div
+                      key={parametro.nombre}
+                      className="flex items-center justify-between gap-2 p-2 border rounded-lg bg-gray-50"
+                    >
+                      <span className="text-sm font-medium">{parametro.nombre}</span>
+                      <Input
+                        type="number"
+                        min="0"
+                        value={editSaleParametros[parametro.nombre] || 0}
+                        onChange={(e) => {
+                          const value = parseInt(e.target.value) || 0;
+                          setEditSaleParametros(prev => ({
+                            ...prev,
+                            [parametro.nombre]: value
+                          }));
+                        }}
+                        className="w-20 text-center"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div>
+                <label className="text-sm font-medium">Nueva cantidad</label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={editSaleQuantity}
+                  onChange={(e) => setEditSaleQuantity(parseInt(e.target.value) || 0)}
+                />
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowEditSaleDialog(false);
+                setSaleToEdit(null);
+              }}
+              disabled={isLoading}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleEditSale}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Guardando...
+                </>
+              ) : (
+                'Guardar cambios'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
 
 
     </Dialog>
