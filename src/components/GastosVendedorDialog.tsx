@@ -8,10 +8,11 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
-import { Plus, Trash2, Calendar } from "lucide-react"
+import { Plus, Trash2, Calendar, Edit } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import { GastoVendedor, VendedorConSalario } from '@/types'
-import { getGastosVendedor, crearGastoVendedor, eliminarGastoVendedor } from '@/app/services/api'
+import { getGastosVendedor, crearGastoVendedor, eliminarGastoVendedor, editarGastoVendedor } from '@/app/services/api'
+
 
 interface GastosVendedorDialogProps {
   isOpen: boolean
@@ -41,6 +42,46 @@ export default function GastosVendedorDialog({ isOpen, onClose, onRefresh, vende
   const [gastos, setGastos] = useState<GastoVendedor[]>([])
   const [newGasto, setNewGasto] = useState({ nombre: '', valor: '' })
   const [isLoading, setIsLoading] = useState(false)
+  const [editingGasto, setEditingGasto] = useState<GastoVendedor | null>(null)
+  const [editGasto, setEditGasto] = useState({ nombre: '', valor: '' })
+
+  const handleEditGasto = async () => {
+    if (!editingGasto || !editGasto.nombre.trim() || !editGasto.valor || parseFloat(editGasto.valor) <= 0) {
+      toast({
+        title: "Error",
+        description: "El nombre y el valor son obligatorios y el valor debe ser mayor a 0",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      await editarGastoVendedor({
+        id: editingGasto.id.toString(), // ✅ Convertir a string
+        vendedorId: vendedor?.id || '',
+        nombre: editGasto.nombre.trim(),
+        valor: parseFloat(editGasto.valor),
+        mes: selectedMonth,
+        anio: selectedYear
+      })
+
+      toast({
+        title: "Éxito",
+        description: "Gasto actualizado correctamente",
+      })
+      setEditingGasto(null)
+      setEditGasto({ nombre: '', valor: '' })
+      loadExpenses()
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "No se pudo actualizar el gasto",
+        variant: "destructive",
+      })
+    }
+  }
+
+
 
   useEffect(() => {
     if (isOpen && vendedor) {
@@ -181,7 +222,7 @@ export default function GastosVendedorDialog({ isOpen, onClose, onRefresh, vende
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {[2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027, 2028,2029,2030].map((year) => (
+                  {[2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027, 2028, 2029, 2030].map((year) => (
                     <SelectItem key={year} value={year.toString()}>
                       {year}
                     </SelectItem>
@@ -241,39 +282,90 @@ export default function GastosVendedorDialog({ isOpen, onClose, onRefresh, vende
                       key={`${gasto.nombre}-${gasto.mes}-${gasto.anio}`}
                       className="flex items-center justify-between p-3 border rounded-lg"
                     >
-                      <div className="flex-1">
-                        <div className="font-medium">{gasto.nombre}</div>
-                        <div className="text-sm text-gray-500">
-                          {formatCurrency(gasto.cantidad)} {/* Cambiado de 'valor' a 'cantidad' */}
-                        </div>
-                        <div className="text-xs text-gray-400">
-                          {new Date(gasto.fecha).toLocaleDateString('es-ES')}
-                        </div>
-                      </div>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="sm">
-                            <Trash2 className="h-4 w-4 text-red-500" />
+                      {editingGasto?.id === gasto.id ? (
+                        // Modo edición
+                        <div className="flex-1 flex gap-2">
+                          <Input
+                            placeholder="Nombre del gasto"
+                            value={editGasto.nombre}
+                            onChange={(e) => setEditGasto({ ...editGasto, nombre: e.target.value })}
+                          />
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            placeholder="Valor"
+                            value={editGasto.valor}
+                            onChange={(e) => setEditGasto({ ...editGasto, valor: e.target.value })}
+                            className="w-32"
+                          />
+                          <Button onClick={handleEditGasto} size="sm">
+                            Guardar
                           </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Confirmar eliminación</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              ¿Estás seguro de que deseas eliminar el gasto &quot;{gasto.nombre}&quot;?
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => handleDeleteGasto(gasto)}
-                              className="bg-red-500 hover:bg-red-600"
+                          <Button
+                            onClick={() => {
+                              setEditingGasto(null)
+                              setEditGasto({ nombre: '', valor: '' })
+                            }}
+                            variant="ghost"
+                            size="sm"
+                          >
+                            Cancelar
+                          </Button>
+                        </div>
+                      ) : (
+                        // Modo visualización
+                        <>
+                          <div className="flex-1">
+                            <div className="font-medium">{gasto.nombre}</div>
+                            <div className="text-sm text-gray-500">
+                              {formatCurrency(gasto.cantidad)}
+                            </div>
+                            <div className="text-xs text-gray-400">
+                              {new Date(gasto.fecha).toLocaleDateString('es-ES')}
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setEditingGasto(gasto)
+                                setEditGasto({
+                                  nombre: gasto.nombre,
+                                  valor: gasto.cantidad.toString()
+                                })
+                              }}
                             >
-                              Eliminar
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
+                              <Edit className="h-4 w-4 text-blue-500" />
+                            </Button>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="ghost" size="sm">
+                                  <Trash2 className="h-4 w-4 text-red-500" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Confirmar eliminación</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    ¿Estás seguro de que deseas eliminar el gasto &quot;{gasto.nombre}&quot;?
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => handleDeleteGasto(gasto)}
+                                    className="bg-red-500 hover:bg-red-600"
+                                  >
+                                    Eliminar
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+                        </>
+                      )}
                     </div>
                   ))}
                 </div>

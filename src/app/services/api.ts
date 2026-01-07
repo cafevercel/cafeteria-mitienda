@@ -591,6 +591,24 @@ export const crearGastoVendedor = async (data: { vendedorId: string; nombre: str
   }
 };
 
+export const editarGastoVendedor = async (data: {
+  id: string;
+  vendedorId: string;
+  nombre?: string;
+  valor?: number;
+  mes?: number;
+  anio?: number;
+}): Promise<any> => {
+  try {
+    const response = await api.put('/gastos-vendedores', data);
+    return response.data;
+  } catch (error) {
+    console.error('Error al editar gasto del vendedor:', error);
+    throw new Error('No se pudo editar el gasto del vendedor');
+  }
+};
+
+
 export const eliminarGastoVendedor = async (vendedorId: string, nombre: string, mes: number, anio: number): Promise<void> => {
   try {
     await api.delete('/gastos-vendedores', {

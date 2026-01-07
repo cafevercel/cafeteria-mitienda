@@ -108,3 +108,120 @@ export async function DELETE(request: NextRequest) {
         );
     }
 }
+
+export async function PUT(request: NextRequest) {
+    try {
+        const body = await request.json();
+        const { id, vendedorId, nombre, valor, mes, anio } = body;
+
+        // Validar campos requeridos
+        if (!id) {
+            return NextResponse.json(
+                { error: 'El ID del gasto es requerido' },
+                { status: 400 }
+            );
+        }
+
+        // Construir query dinámicamente según los campos que se quieran actualizar
+        const updates: string[] = [];
+        const params: any[] = [];
+        let paramIndex = 1;
+
+        if (nombre !== undefined) {
+            updates.push(`nombre = $${paramIndex++}`);
+            params.push(nombre);
+        }
+
+        if (valor !== undefined) {
+            updates.push(`cantidad = $${paramIndex++}`);
+            params.push(valor);
+        }
+
+        if (mes !== undefined) {
+            updates.push(`mes = $${paramIndex++}`);
+            params.push(mes);
+        }
+
+        if (anio !== undefined) {
+            updates.push(`anio = $${paramIndex++}`);
+            params.push(anio);
+        }
+
+        // Si se cambia mes o año, actualizar la fecha
+        if (mes !== undefined || anio !== undefined) {
+            // Obtener el gasto actual para tener mes/año si no se proporcionan
+            const currentGasto = await sql.query(
+                'SELECT mes, anio FROM gastos WHERE id = $1',
+                [id]
+            );
+
+            if (currentGasto.rows.length === 0) {
+                return NextResponse.json(
+                    { error: 'Gasto no encontrado' },
+                    { status: 404 }
+                );
+            }
+
+            const finalMes = mes || currentGasto.rows[0].mes;
+            const finalAnio = anio || currentGasto.rows[0].anio;
+            const nuevaFecha = new Date(finalAnio, finalMes - 1, 1).toISOString();
+
+            updates.push(`fecha = $${paramIndex++}`);
+            params.push(nuevaFecha);
+        }
+
+        if (updates.length === 0) {
+            return NextResponse.json(
+                { error: 'No hay campos para actualizar' },
+                { status: 400 }
+            );
+        }
+
+        // Agregar el ID al final de los parámetros
+        params.push(id);
+
+        // Opcional: validar que el gasto pertenece al vendedor
+        if (vendedorId) {
+            params.push(vendedorId);
+            const query = `
+                UPDATE gastos 
+                SET ${updates.join(', ')}
+                WHERE id = $${paramIndex} AND vendedor_id = $${paramIndex + 1}
+                RETURNING *
+            `;
+            const result = await sql.query(query, params);
+
+            if (result.rows.length === 0) {
+                return NextResponse.json(
+                    { error: 'Gasto no encontrado o no pertenece al vendedor' },
+                    { status: 404 }
+                );
+            }
+
+            return NextResponse.json(result.rows[0]);
+        } else {
+            const query = `
+                UPDATE gastos 
+                SET ${updates.join(', ')}
+                WHERE id = $${paramIndex}
+                RETURNING *
+            `;
+            const result = await sql.query(query, params);
+
+            if (result.rows.length === 0) {
+                return NextResponse.json(
+                    { error: 'Gasto no encontrado' },
+                    { status: 404 }
+                );
+            }
+
+            return NextResponse.json(result.rows[0]);
+        }
+    } catch (error: any) {
+        console.error('Error al actualizar gasto:', error);
+        return NextResponse.json(
+            { error: 'Error al actualizar gasto del vendedor', details: error.message },
+            { status: 500 }
+        );
+    }
+}
