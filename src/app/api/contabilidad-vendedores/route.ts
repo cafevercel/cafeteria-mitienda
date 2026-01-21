@@ -45,13 +45,13 @@ export async function GET(request: NextRequest) {
       gastos_vendedor AS (
         SELECT
           g.vendedor_id::text as vendedor_id,
-          SUM(g.cantidad) as total_gastos,
+          SUM(g.cantidad * LEAST((${fechaFin}::date - ${fechaInicio}::date + 1), 30)::float / 30.0) as total_gastos,
           json_agg(
             json_build_object(
               'nombre', g.nombre,
               'valorMensual', g.cantidad,
-              'diasSeleccionados', 30,
-              'valorProrrateado', g.cantidad,
+              'diasSeleccionados', (${fechaFin}::date - ${fechaInicio}::date + 1),
+              'valorProrrateado', (g.cantidad * LEAST((${fechaFin}::date - ${fechaInicio}::date + 1), 30)::float / 30.0),
               'fecha', g.fecha
             ) ORDER BY g.fecha DESC
           ) FILTER (WHERE g.nombre IS NOT NULL) as detalles_gastos
@@ -151,20 +151,20 @@ export async function GET(request: NextRequest) {
         detalles: {
           ventas: Array.isArray(row.detalles_ventas) && row.detalles_ventas[0] !== null
             ? row.detalles_ventas.map((v: any) => ({
-                producto: v.producto,
-                cantidad: parseInt(v.cantidad) || 0,
-                precioVenta: parseFloat(v.precioVenta) || 0,
-                precioCompra: parseFloat(v.precioCompra) || 0,
-                gananciaProducto: parseFloat(v.gananciaProducto) || 0
-              }))
+              producto: v.producto,
+              cantidad: parseInt(v.cantidad) || 0,
+              precioVenta: parseFloat(v.precioVenta) || 0,
+              precioCompra: parseFloat(v.precioCompra) || 0,
+              gananciaProducto: parseFloat(v.gananciaProducto) || 0
+            }))
             : [],
           gastosDesglosados: Array.isArray(row.detalles_gastos) && row.detalles_gastos[0] !== null
             ? row.detalles_gastos.map((g: any) => ({
-                nombre: g.nombre,
-                valorMensual: parseFloat(g.valorMensual) || 0,
-                diasSeleccionados: parseInt(g.diasSeleccionados) || 30,
-                valorProrrateado: parseFloat(g.valorProrrateado) || 0
-              }))
+              nombre: g.nombre,
+              valorMensual: parseFloat(g.valorMensual) || 0,
+              diasSeleccionados: parseInt(g.diasSeleccionados) || 30,
+              valorProrrateado: parseFloat(g.valorProrrateado) || 0
+            }))
             : [],
           mermaDesglosada: []  // Vacío por vendedor
         }
