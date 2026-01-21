@@ -22,7 +22,17 @@ export async function GET(request: NextRequest) {
     // ✅ UNA SOLA QUERY OPTIMIZADA con CTEs y conversión de tipos
     const startTime = Date.now();
     const result = await sql`
-      WITH ventas_vendedor AS (
+      WITH date_range AS (
+        SELECT generate_series(${fechaInicio}::date, ${fechaFin}::date, '1 day'::interval) as day
+      ),
+      period_factor AS (
+        SELECT
+          COALESCE(SUM(
+            1.0 / EXTRACT(DAY FROM (date_trunc('MONTH', day) + interval '1 month - 1 day'))
+          ), 0) as factor
+        FROM date_range
+      ),
+      ventas_vendedor AS (
         SELECT
           v.vendedor::text as vendedor,
           SUM(v.total) as venta_total,
@@ -45,13 +55,21 @@ export async function GET(request: NextRequest) {
       gastos_vendedor AS (
         SELECT
           g.vendedor_id::text as vendedor_id,
-          SUM(g.cantidad * LEAST((${fechaFin}::date - ${fechaInicio}::date + 1), 30)::float / 30.0) as total_gastos,
+          SUM(
+            g.cantidad *
+            (
+                (LEAST((date_trunc('MONTH', g.fecha) + interval '1 month - 1 day')::date, ${fechaFin}::date) - 
+                 GREATEST(date_trunc('MONTH', g.fecha)::date, ${fechaInicio}::date) + 1)::float
+                /
+                EXTRACT(DAY FROM (date_trunc('MONTH', g.fecha) + interval '1 month - 1 day'))
+            )
+          ) as total_gastos,
           json_agg(
             json_build_object(
               'nombre', g.nombre,
               'valorMensual', g.cantidad,
-              'diasSeleccionados', (${fechaFin}::date - ${fechaInicio}::date + 1),
-              'valorProrrateado', (g.cantidad * LEAST((${fechaFin}::date - ${fechaInicio}::date + 1), 30)::float / 30.0),
+              'diasSeleccionados', (LEAST((date_trunc('MONTH', g.fecha) + interval '1 month - 1 day')::date, ${fechaFin}::date) - GREATEST(date_trunc('MONTH', g.fecha)::date, ${fechaInicio}::date) + 1),
+              'valorProrrateado', (g.cantidad * ((LEAST((date_trunc('MONTH', g.fecha) + interval '1 month - 1 day')::date, ${fechaFin}::date) - GREATEST(date_trunc('MONTH', g.fecha)::date, ${fechaInicio}::date) + 1)::float / EXTRACT(DAY FROM (date_trunc('MONTH', g.fecha) + interval '1 month - 1 day')))),
               'fecha', g.fecha
             ) ORDER BY g.fecha DESC
           ) FILTER (WHERE g.nombre IS NOT NULL) as detalles_gastos
@@ -62,7 +80,7 @@ export async function GET(request: NextRequest) {
       salarios_vendedor AS (
         SELECT
           s.usuario_id::text as vendedor_id,
-          SUM(s.salario) as total_salario
+          SUM(s.salario * (SELECT factor FROM period_factor)) as total_salario
         FROM salarios s
         WHERE s.activo = true
         GROUP BY s.usuario_id::text
