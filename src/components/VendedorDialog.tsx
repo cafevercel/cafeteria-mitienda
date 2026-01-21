@@ -627,10 +627,14 @@ export default function VendorDialog({
           .map(([nombre, cantidad]) => ({ nombre, cantidad }))
         : undefined;
 
+      const cantidadTotal = parametrosEdicion && parametrosEdicion.length > 0
+        ? parametrosEdicion.reduce((sum, p) => sum + p.cantidad, 0)
+        : editSaleQuantity;
+
       await editarVenta(
         saleToEdit.id,
         saleToEdit.producto,
-        saleToEdit.parametros && saleToEdit.parametros.length > 0 ? 0 : editSaleQuantity,
+        saleToEdit.parametros && saleToEdit.parametros.length > 0 ? cantidadTotal : editSaleQuantity,
         saleToEdit.fecha,
         parametrosEdicion,
         vendor.id
@@ -638,19 +642,31 @@ export default function VendorDialog({
 
       // Actualizar estados locales
       setVentasLocales(prevVentas =>
-        prevVentas.map(v => v.id === saleToEdit.id ? { ...v, cantidad: editSaleQuantity } : v)
+        prevVentas.map(v => v.id === saleToEdit.id ? {
+          ...v,
+          cantidad: cantidadTotal,
+          parametros: parametrosEdicion || v.parametros
+        } : v)
       );
 
       setVentasDiariasLocales(prevVentasDiarias =>
         prevVentasDiarias.map(ventaDia => ({
           ...ventaDia,
-          ventas: ventaDia.ventas.map(v => v.id === saleToEdit.id ? { ...v, cantidad: editSaleQuantity } : v)
+          ventas: ventaDia.ventas.map(v => v.id === saleToEdit.id ? {
+            ...v,
+            cantidad: cantidadTotal,
+            parametros: parametrosEdicion || v.parametros
+          } : v)
         }))
       );
 
       // Recalcular ventas semanales y específicas
       const nuevasVentasLocales = ventasLocales.map(v =>
-        v.id === saleToEdit.id ? { ...v, cantidad: editSaleQuantity } : v
+        v.id === saleToEdit.id ? {
+          ...v,
+          cantidad: cantidadTotal,
+          parametros: parametrosEdicion || v.parametros
+        } : v
       );
       setVentasSemanales(agruparVentasPorSemana(nuevasVentasLocales));
       calcularVentasEspecificas();
