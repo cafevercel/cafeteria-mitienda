@@ -1162,10 +1162,13 @@ export default function VendorDialog({
 
     return (
       <Tabs defaultValue="por-dia">
-        <TabsList>
+        <TabsList className="w-full overflow-x-auto justify-start sm:justify-center">
           <TabsTrigger value="por-dia">Por día</TabsTrigger>
           <TabsTrigger value="por-semana">Por semana</TabsTrigger>
-          <TabsTrigger value="especificas">Ventas Específicas</TabsTrigger>
+          <TabsTrigger value="especificas">
+            <span className="sm:hidden">Específicas</span>
+            <span className="hidden sm:inline">Ventas Específicas</span>
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="por-dia">
           <div className="space-y-4">
