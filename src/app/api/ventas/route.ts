@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
 
     // Verificar si el producto tiene parámetros y obtener stock del vendedor
     const productoResult = await query(
-      `SELECT p.precio, p.tiene_parametros, up.cantidad as stock_disponible 
+      `SELECT p.precio, p.precio_compra, p.tiene_parametros, up.cantidad as stock_disponible 
        FROM productos p 
        JOIN usuario_productos up ON p.id = up.producto_id 
        WHERE p.id = $1 AND up.usuario_id = $2`,
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Producto no encontrado' }, { status: 404 });
     }
 
-    const { precio: precioUnitario, stock_disponible, tiene_parametros } = productoResult.rows[0];
+    const { precio: precioUnitario, precio_compra: precioCompra, stock_disponible, tiene_parametros } = productoResult.rows[0];
 
     // Verificar stock según si tiene parámetros o no
     if (tiene_parametros && parametros) {
@@ -58,13 +58,15 @@ export async function POST(request: NextRequest) {
     }
 
     // Crear venta
+    // ✅ MODIFICADO: Incluye precio_compra en el INSERT
     const ventaResult = await query(
-      `INSERT INTO ventas (producto, cantidad, precio_unitario, total, vendedor, fecha) 
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      `INSERT INTO ventas (producto, cantidad, precio_unitario, precio_compra, total, vendedor, fecha) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
       [
         productoId,
         cantidad,
         precioUnitario,
+        precioCompra || 0, // Fallback si es nulo
         precioUnitario * cantidad,
         vendedorId,
         fechaVenta

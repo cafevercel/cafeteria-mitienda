@@ -36,15 +36,15 @@ export async function GET(request: NextRequest) {
         SELECT
           v.vendedor::text as vendedor,
           SUM(v.total) as venta_total,
-          SUM(v.total - (COALESCE(p.precio_compra, 0) * v.cantidad)) as ganancia_bruta,
+          SUM(v.total - (COALESCE(v.precio_compra, 0) * v.cantidad)) as ganancia_bruta,
           json_agg(
             json_build_object(
               'producto', p.nombre,
               'cantidad', v.cantidad,
               'precioVenta', v.precio_unitario,
-              'precioCompra', COALESCE(p.precio_compra, 0),
+              'precioCompra', COALESCE(v.precio_compra, 0), 
               'total', v.total,
-              'gananciaProducto', v.total - (COALESCE(p.precio_compra, 0) * v.cantidad)
+              'gananciaProducto', v.total - (COALESCE(v.precio_compra, 0) * v.cantidad) 
             ) ORDER BY v.fecha DESC
           ) FILTER (WHERE v.id IS NOT NULL) as detalles_ventas
         FROM ventas v
