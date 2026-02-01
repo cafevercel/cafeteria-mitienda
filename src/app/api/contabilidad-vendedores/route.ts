@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
           ) FILTER (WHERE v.id IS NOT NULL) as detalles_ventas
         FROM ventas v
         JOIN productos p ON v.producto = p.id
-        WHERE v.fecha >= ${fechaInicio}::date AND v.fecha <= ${fechaFin}::date
+        WHERE v.fecha::date >= ${fechaInicio}::date AND v.fecha::date <= ${fechaFin}::date
         GROUP BY v.vendedor::text
       ),
       gastos_vendedor AS (
@@ -74,7 +74,7 @@ export async function GET(request: NextRequest) {
             ) ORDER BY g.fecha DESC
           ) FILTER (WHERE g.nombre IS NOT NULL) as detalles_gastos
         FROM gastos g
-        WHERE g.fecha >= ${fechaInicio}::date AND g.fecha <= ${fechaFin}::date
+        WHERE g.fecha::date >= ${fechaInicio}::date AND g.fecha::date <= ${fechaFin}::date
         GROUP BY g.vendedor_id::text
       ),
       salarios_vendedor AS (
@@ -99,7 +99,7 @@ export async function GET(request: NextRequest) {
           ) FILTER (WHERE p.nombre IS NOT NULL) as detalles_merma
         FROM merma m
         JOIN productos p ON m.producto_id = p.id
-        WHERE m.fecha >= ${fechaInicio}::date AND m.fecha <= ${fechaFin}::date
+        WHERE m.fecha::date >= ${fechaInicio}::date AND m.fecha::date <= ${fechaFin}::date
       )
       SELECT
         u.id as vendedor_id,
@@ -138,7 +138,7 @@ export async function GET(request: NextRequest) {
         ) FILTER (WHERE p.nombre IS NOT NULL) as detalles_merma
       FROM merma m
       JOIN productos p ON m.producto_id = p.id
-      WHERE m.fecha >= ${fechaInicio}::date AND m.fecha <= ${fechaFin}::date
+      WHERE m.fecha::date >= ${fechaInicio}::date AND m.fecha::date <= ${fechaFin}::date
     `;
 
     const totalMerma = parseFloat(mermaResult.rows[0]?.total_merma || 0);
