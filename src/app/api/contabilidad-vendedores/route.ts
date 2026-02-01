@@ -87,13 +87,13 @@ export async function GET(request: NextRequest) {
       ),
       merma_total AS (
         SELECT
-          SUM(p.precio * m.cantidad) as total_merma,
+          SUM(COALESCE(p.precio_compra, 0) * m.cantidad) as total_merma,
           json_agg(
             json_build_object(
               'producto', p.nombre,
               'cantidad', m.cantidad,
-              'precio', p.precio,
-              'total', p.precio * m.cantidad,
+              'precio', COALESCE(p.precio_compra, 0),
+              'total', COALESCE(p.precio_compra, 0) * m.cantidad,
               'fecha', m.fecha
             ) ORDER BY m.fecha DESC
           ) FILTER (WHERE p.nombre IS NOT NULL) as detalles_merma
@@ -126,13 +126,13 @@ export async function GET(request: NextRequest) {
     // Obtener merma total por separado
     const mermaResult = await sql`
       SELECT
-        SUM(p.precio * m.cantidad) as total_merma,
+        SUM(COALESCE(p.precio_compra, 0) * m.cantidad) as total_merma,
         json_agg(
           json_build_object(
             'producto', p.nombre,
             'cantidad', m.cantidad,
-            'precio', p.precio,
-            'total', p.precio * m.cantidad,
+            'precio', COALESCE(p.precio_compra, 0),
+            'total', COALESCE(p.precio_compra, 0) * m.cantidad,
             'fecha', m.fecha
           ) ORDER BY m.fecha DESC
         ) FILTER (WHERE p.nombre IS NOT NULL) as detalles_merma
