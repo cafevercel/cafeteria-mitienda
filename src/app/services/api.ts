@@ -1,7 +1,7 @@
 //api.ts
 
 import axios from 'axios';
-import { Venta, Vendedor, Transaccion, VentaParametro, IngresoBalance, Gasto, Producto, GastoBalance, Balance, MenuSection, Agrego, Costo, ProductoCocina, Empleado, NewEmpleado } from '@/types';
+import { Venta, Vendedor, Transaccion, VentaParametro, IngresoBalance, Gasto, Producto, GastoBalance, Balance, MenuSection, Agrego, Costo, ProductoCocina, Empleado, NewEmpleado, VisitaMenu } from '@/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
 
@@ -1321,5 +1321,44 @@ export const eliminarSalario = async (id: string): Promise<void> => {
   } catch (error) {
     console.error('Error al eliminar salario:', error);
     throw new Error('No se pudo eliminar el salario');
+  }
+};
+
+// Funciones para visitas del menú
+
+export const registrarVisitaMenu = async (data: {
+  url: string;
+  ip_address?: string;
+  user_agent?: string;
+  referrer?: string;
+}): Promise<VisitaMenu> => {
+  try {
+    const response = await api.post('/menu/visitas', data);
+    return response.data;
+  } catch (error) {
+    console.error('Error al registrar visita:', error);
+    throw new Error('No se pudo registrar la visita');
+  }
+};
+
+export const getVisitasMenu = async (params?: {
+  fecha_inicio?: string;
+  fecha_fin?: string;
+  url?: string;
+  agrupacion?: 'dia' | 'mes' | 'total';
+}): Promise<{ success: boolean; data: VisitaMenu[]; total: number; agrupacion: string }> => {
+  try {
+    const queryParams = new URLSearchParams();
+    if (params?.fecha_inicio) queryParams.append('fecha_inicio', params.fecha_inicio);
+    if (params?.fecha_fin) queryParams.append('fecha_fin', params.fecha_fin);
+    if (params?.url) queryParams.append('url', params.url);
+    if (params?.agrupacion) queryParams.append('agrupacion', params.agrupacion);
+
+    const url = `/menu/visitas${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+    const response = await api.get(url);
+    return response.data;
+  } catch (error) {
+    console.error('Error al obtener visitas:', error);
+    throw new Error('No se pudieron obtener las visitas');
   }
 };

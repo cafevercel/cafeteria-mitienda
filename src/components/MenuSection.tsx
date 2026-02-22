@@ -20,7 +20,10 @@ import {
     Search,
     Edit,
     Package,
-    Plus
+    Plus,
+    BarChart3,
+    Eye,
+    Calendar
 } from "lucide-react"
 import {
     AlertDialog,
@@ -40,8 +43,8 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog"
-import { getMenuSections, saveMenuSectionOrder, eliminarSeccionMenu, getInventario, editarProducto } from '@/app/services/api'
-import { MenuSection, Producto, Agrego, AgregoForm, Costo, CostoForm } from '@/types'
+import { getMenuSections, saveMenuSectionOrder, eliminarSeccionMenu, getInventario, editarProducto, getVisitasMenu } from '@/app/services/api'
+import { MenuSection, Producto, Agrego, AgregoForm, Costo, CostoForm, VisitaMenu } from '@/types'
 
 const MenuSectionComponent = () => {
     // Estados para pestañas de orden
@@ -75,6 +78,13 @@ const MenuSectionComponent = () => {
     //costos adicionales
     const [editingCostos, setEditingCostos] = useState<CostoForm[]>([])
     const [tieneCostos, setTieneCostos] = useState(false)
+
+    // Estados para visitas del menú
+    const [visitas, setVisitas] = useState<VisitaMenu[]>([])
+    const [loadingVisitas, setLoadingVisitas] = useState(false)
+    const [filtroFechaInicio, setFiltroFechaInicio] = useState('')
+    const [filtroFechaFin, setFiltroFechaFin] = useState('')
+    const [agrupacionVisitas, setAgrupacionVisitas] = useState<'dia' | 'mes' | 'total'>('dia')
 
 
     const fetchSections = async () => {
@@ -110,10 +120,37 @@ const MenuSectionComponent = () => {
         }
     }
 
+    const fetchVisitas = async () => {
+        try {
+            setLoadingVisitas(true)
+            const params: any = {
+                agrupacion: agrupacionVisitas
+            }
+            if (filtroFechaInicio) params.fecha_inicio = filtroFechaInicio
+            if (filtroFechaFin) params.fecha_fin = filtroFechaFin
+
+            const result = await getVisitasMenu(params)
+            setVisitas(result.data)
+        } catch (error) {
+            toast({
+                title: "Error",
+                description: "No se pudieron cargar las visitas",
+                variant: "destructive",
+            })
+        } finally {
+            setLoadingVisitas(false)
+        }
+    }
+
     useEffect(() => {
         fetchSections()
         fetchProductos()
     }, [])
+
+    // Cargar visitas cuando cambien los filtros
+    useEffect(() => {
+        fetchVisitas()
+    }, [filtroFechaInicio, filtroFechaFin, agrupacionVisitas])
 
     // Filtrar productos basado en búsqueda y filtro de sección
     useEffect(() => {
@@ -474,9 +511,10 @@ const MenuSectionComponent = () => {
                 </CardHeader>
                 <CardContent>
                     <Tabs defaultValue="orden" className="w-full">
-                        <TabsList className="grid w-full grid-cols-2">
+                        <TabsList className="grid w-full grid-cols-3">
                             <TabsTrigger value="orden">Orden de Secciones</TabsTrigger>
-                            <TabsTrigger value="productos">Productos</TabsTrigger> {/* ← Cambiar nombre */}
+                            <TabsTrigger value="productos">Productos</TabsTrigger>
+                            <TabsTrigger value="visitas">Visitas del Menú</TabsTrigger>
                         </TabsList>
 
                         {/* Pestaña de Orden */}
@@ -701,6 +739,173 @@ const MenuSectionComponent = () => {
                                     ))}
                                 </div>
                             )}
+                        </TabsContent>
+
+                        {/* Pestaña de Visitas */}
+                        <TabsContent value="visitas" className="space-y-4">
+                            <div className="flex justify-between items-center">
+                                <h3 className="text-lg font-medium">Monitoreo de Visitas del Menú</h3>
+                                <Button
+                                    variant="outline"
+                                    onClick={fetchVisitas}
+                                    disabled={loadingVisitas}
+                                >
+                                    <RefreshCw className={`h-4 w-4 mr-2 ${loadingVisitas ? 'animate-spin' : ''}`} />
+                                    Actualizar
+                                </Button>
+                            </div>
+
+                            {/* Filtros */}
+                            <div className="flex flex-wrap gap-4 items-center">
+                                <div className="flex items-center gap-2">
+                                    <Calendar className="h-4 w-4 text-gray-500" />
+                                    <Input
+                                        type="date"
+                                        value={filtroFechaInicio}
+                                        onChange={(e) => setFiltroFechaInicio(e.target.value)}
+                                        className="w-auto"
+                                    />
+                                    <span className="text-gray-500">hasta</span>
+                                    <Input
+                                        type="date"
+                                        value={filtroFechaFin}
+                                        onChange={(e) => setFiltroFechaFin(e.target.value)}
+                                        className="w-auto"
+                                    />
+                                </div>
+                                <Select value={agrupacionVisitas} onValueChange={(value: 'dia' | 'mes' | 'total') => setAgrupacionVisitas(value)}>
+                                    <SelectTrigger className="w-40">
+                                        <SelectValue placeholder="Agrupar por" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="dia">Por día</SelectItem>
+                                        <SelectItem value="mes">Por mes</SelectItem>
+                                        <SelectItem value="total">Total</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                        setFiltroFechaInicio('')
+                                        setFiltroFechaFin('')
+                                    }}
+                                >
+                                    Limpiar filtros
+                                </Button>
+                            </div>
+
+                            {/* Estadísticas */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <Card>
+                                    <CardHeader className="pb-2">
+                                        <CardTitle className="text-sm font-medium text-gray-600">Total de visitas</CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="text-2xl font-bold text-blue-600">
+                                            {visitas.reduce((sum, v) => sum + v.visitas, 0).toLocaleString()}
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                                <Card>
+                                    <CardHeader className="pb-2">
+                                        <CardTitle className="text-sm font-medium text-gray-600">Período analizado</CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="text-sm">
+                                            {filtroFechaInicio && filtroFechaFin ? (
+                                                <span>{filtroFechaInicio} - {filtroFechaFin}</span>
+                                            ) : (
+                                                <span className="text-gray-500">Todo el historial</span>
+                                            )}
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                                <Card>
+                                    <CardHeader className="pb-2">
+                                        <CardTitle className="text-sm font-medium text-gray-600">URL monitoreada</CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="text-sm font-mono text-blue-600 break-all">
+                                            https://menu-mercado.vercel.app/
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            </div>
+
+                            {/* Tabla de visitas */}
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Visitas {agrupacionVisitas === 'dia' ? 'por día' : agrupacionVisitas === 'mes' ? 'por mes' : 'totales'}</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    {loadingVisitas ? (
+                                        <div className="flex items-center justify-center py-8">
+                                            <RefreshCw className="h-6 w-6 animate-spin mr-2" />
+                                            <span>Cargando visitas...</span>
+                                        </div>
+                                    ) : visitas.length === 0 ? (
+                                        <div className="text-center py-8 text-gray-500">
+                                            <Eye className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                                            <p>No hay visitas registradas para los filtros seleccionados</p>
+                                        </div>
+                                    ) : (
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full border-collapse">
+                                                <thead>
+                                                    <tr className="border-b bg-gray-50">
+                                                        {agrupacionVisitas === 'total' ? (
+                                                            <>
+                                                                <th className="text-left p-3 font-medium text-gray-700">URL</th>
+                                                                <th className="text-right p-3 font-medium text-gray-700">Visitas</th>
+                                                                <th className="text-left p-3 font-medium text-gray-700">Primera visita</th>
+                                                                <th className="text-left p-3 font-medium text-gray-700">Última visita</th>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <th className="text-left p-3 font-medium text-gray-700">Fecha</th>
+                                                                <th className="text-right p-3 font-medium text-gray-700">Visitas</th>
+                                                            </>
+                                                        )}
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {visitas.map((visita, index) => (
+                                                        <tr key={index} className="border-b hover:bg-gray-50">
+                                                            {agrupacionVisitas === 'total' ? (
+                                                                <>
+                                                                    <td className="p-3 font-mono text-sm text-blue-600">{visita.url}</td>
+                                                                    <td className="p-3 text-right font-semibold">{visita.visitas.toLocaleString()}</td>
+                                                                    <td className="p-3 text-sm text-gray-600">
+                                                                        {visita.primera_visita ? new Date(visita.primera_visita).toLocaleDateString('es-ES') : '-'}
+                                                                    </td>
+                                                                    <td className="p-3 text-sm text-gray-600">
+                                                                        {visita.ultima_visita ? new Date(visita.ultima_visita).toLocaleDateString('es-ES') : '-'}
+                                                                    </td>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <td className="p-3 font-medium">
+                                                                        {visita.fecha ? new Date(visita.fecha).toLocaleDateString('es-ES', {
+                                                                            weekday: 'long',
+                                                                            year: 'numeric',
+                                                                            month: 'long',
+                                                                            day: 'numeric'
+                                                                        }) : '-'}
+                                                                    </td>
+                                                                    <td className="p-3 text-right font-semibold text-blue-600">
+                                                                        {visita.visitas.toLocaleString()}
+                                                                    </td>
+                                                                </>
+                                                            )}
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
                         </TabsContent>
                     </Tabs>
                 </CardContent>

@@ -270,3 +270,16 @@ export interface NewEmpleado {
   password: string;
   activo: boolean;
 }
+
+export interface VisitaMenu {
+  id?: number;
+  url: string;
+  fecha: string | null;  // Para agrupación por día/mes
+  visitas: number;      // Para todos los tipos de agrupación
+  ip_address?: string;
+  user_agent?: string;
+  referrer?: string;
+  // Campos solo para agrupación 'total'
+  primera_visita?: string | null;
+  ultima_visita?: string | null;
+}
