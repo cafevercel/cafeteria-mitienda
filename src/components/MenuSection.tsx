@@ -510,22 +510,23 @@ const MenuSectionComponent = () => {
                     </p>
                 </CardHeader>
                 <CardContent>
-                    <Tabs defaultValue="orden" className="w-full">
-                        <TabsList className="grid w-full grid-cols-3">
-                            <TabsTrigger value="orden">Orden de Secciones</TabsTrigger>
-                            <TabsTrigger value="productos">Productos</TabsTrigger>
-                            <TabsTrigger value="visitas">Visitas del Menú</TabsTrigger>
-                        </TabsList>
+                        <Tabs defaultValue="orden" className="w-full">
+                            <TabsList className="grid w-full grid-cols-3 h-auto">
+                                <TabsTrigger value="orden" className="text-xs sm:text-sm px-2 py-3">Orden</TabsTrigger>
+                                <TabsTrigger value="productos" className="text-xs sm:text-sm px-2 py-3">Productos</TabsTrigger>
+                                <TabsTrigger value="visitas" className="text-xs sm:text-sm px-2 py-3">Visitas</TabsTrigger>
+                            </TabsList>
 
                         {/* Pestaña de Orden */}
                         <TabsContent value="orden" className="space-y-4">
-                            <div className="flex justify-between items-center">
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                                 <h3 className="text-lg font-medium">Orden del Menú</h3>
-                                <div className="flex gap-2">
+                                <div className="flex gap-2 w-full sm:w-auto">
                                     <Button
                                         variant="outline"
                                         onClick={fetchSections}
                                         disabled={loading}
+                                        className="flex-1 sm:flex-none"
                                     >
                                         <RefreshCw className="h-4 w-4 mr-2" />
                                         Actualizar
@@ -533,7 +534,7 @@ const MenuSectionComponent = () => {
                                     <Button
                                         onClick={handleSaveOrder}
                                         disabled={!hasChanges || saving}
-                                        className="bg-green-600 hover:bg-green-700"
+                                        className="bg-green-600 hover:bg-green-700 flex-1 sm:flex-none"
                                     >
                                         <Save className="h-4 w-4 mr-2" />
                                         {saving ? 'Guardando...' : 'Guardar Orden'}
@@ -568,19 +569,19 @@ const MenuSectionComponent = () => {
                                                             <div
                                                                 ref={provided.innerRef}
                                                                 {...provided.draggableProps}
-                                                                className={`flex items-center p-4 bg-white border rounded-lg shadow-sm transition-all ${snapshot.isDragging
+                                                                className={`flex flex-col sm:flex-row items-start sm:items-center p-4 bg-white border rounded-lg shadow-sm transition-all gap-3 sm:gap-4 ${snapshot.isDragging
                                                                     ? 'shadow-lg rotate-2 bg-blue-50'
                                                                     : 'hover:shadow-md'
                                                                     }`}
                                                             >
                                                                 <div
                                                                     {...provided.dragHandleProps}
-                                                                    className="mr-3 text-gray-400 hover:text-gray-600 cursor-grab active:cursor-grabbing"
+                                                                    className="mr-0 sm:mr-3 text-gray-400 hover:text-gray-600 cursor-grab active:cursor-grabbing self-center sm:self-auto order-1"
                                                                 >
                                                                     <GripVertical className="h-5 w-5" />
                                                                 </div>
 
-                                                                <div className="w-12 h-12 relative mr-4 flex-shrink-0">
+                                                                <div className="w-12 h-12 relative mr-0 sm:mr-4 flex-shrink-0 order-3 sm:order-2">
                                                                     <Image
                                                                         src={section.sample_image || '/placeholder.svg'}
                                                                         alt={section.name}
@@ -592,7 +593,7 @@ const MenuSectionComponent = () => {
                                                                     />
                                                                 </div>
 
-                                                                <div className="flex-1">
+                                                                <div className="flex-1 order-2 sm:order-3 text-center sm:text-left">
                                                                     <h3 className="font-medium text-gray-900">
                                                                         {section.name}
                                                                     </h3>
@@ -601,7 +602,7 @@ const MenuSectionComponent = () => {
                                                                     </p>
                                                                 </div>
 
-                                                                <div className="flex items-center gap-3">
+                                                                <div className="flex items-center gap-3 order-4 w-full sm:w-auto justify-center sm:justify-end">
                                                                     <span className="text-sm text-gray-400">
                                                                         Posición {index + 1}
                                                                     </span>
@@ -642,12 +643,13 @@ const MenuSectionComponent = () => {
 
                         {/* Pestaña de Productos - actualizar el título */}
                         <TabsContent value="productos" className="space-y-4">
-                            <div className="flex justify-between items-center">
-                                <h3 className="text-lg font-medium">Gestión de Productos</h3> {/* ← Cambiar título */}
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                                <h3 className="text-lg font-medium">Gestión de Productos</h3>
                                 <Button
                                     variant="outline"
                                     onClick={fetchProductos}
                                     disabled={loadingProductos}
+                                    className="w-full sm:w-auto"
                                 >
                                     <RefreshCw className="h-4 w-4 mr-2" />
                                     Actualizar
@@ -655,7 +657,7 @@ const MenuSectionComponent = () => {
                             </div>
 
                             {/* Filtros */}
-                            <div className="flex gap-4 items-center">
+                            <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
                                 <div className="relative flex-1">
                                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                                     <Input
@@ -666,7 +668,7 @@ const MenuSectionComponent = () => {
                                     />
                                 </div>
                                 <Select value={sectionFilter} onValueChange={(value: 'all' | 'with' | 'without') => setSectionFilter(value)}>
-                                    <SelectTrigger className="w-48">
+                                    <SelectTrigger className="w-full sm:w-48">
                                         <SelectValue placeholder="Filtrar por sección" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -693,9 +695,9 @@ const MenuSectionComponent = () => {
                                     {filteredProductos.map((producto) => (
                                         <div
                                             key={producto.id}
-                                            className="flex items-center p-4 bg-white border rounded-lg shadow-sm hover:shadow-md transition-all"
+                                            className="flex flex-col sm:flex-row items-start sm:items-center p-4 bg-white border rounded-lg shadow-sm hover:shadow-md transition-all gap-3 sm:gap-4"
                                         >
-                                            <div className="w-12 h-12 relative mr-4 flex-shrink-0">
+                                            <div className="w-12 h-12 relative mr-0 sm:mr-4 flex-shrink-0 order-1">
                                                 <Image
                                                     src={producto.foto || '/placeholder.svg'}
                                                     alt={producto.nombre}
@@ -707,7 +709,7 @@ const MenuSectionComponent = () => {
                                                 />
                                             </div>
 
-                                            <div className="flex-1">
+                                            <div className="flex-1 order-2 text-center sm:text-left">
                                                 <h3 className="font-medium text-gray-900">
                                                     {producto.nombre}
                                                 </h3>
@@ -716,8 +718,8 @@ const MenuSectionComponent = () => {
                                                 </p>
                                             </div>
 
-                                            <div className="flex items-center gap-4">
-                                                <div className="text-right">
+                                            <div className="flex items-center gap-4 order-3 w-full sm:w-auto justify-center sm:justify-end">
+                                                <div className="text-center sm:text-right">
                                                     <p className="text-sm font-medium text-gray-700">
                                                         {producto.seccion || 'Sin sección'}
                                                     </p>
@@ -743,12 +745,13 @@ const MenuSectionComponent = () => {
 
                         {/* Pestaña de Visitas */}
                         <TabsContent value="visitas" className="space-y-4">
-                            <div className="flex justify-between items-center">
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                                 <h3 className="text-lg font-medium">Monitoreo de Visitas del Menú</h3>
                                 <Button
                                     variant="outline"
                                     onClick={fetchVisitas}
                                     disabled={loadingVisitas}
+                                    className="w-full sm:w-auto"
                                 >
                                     <RefreshCw className={`h-4 w-4 mr-2 ${loadingVisitas ? 'animate-spin' : ''}`} />
                                     Actualizar
@@ -756,25 +759,26 @@ const MenuSectionComponent = () => {
                             </div>
 
                             {/* Filtros */}
-                            <div className="flex flex-wrap gap-4 items-center">
-                                <div className="flex items-center gap-2">
-                                    <Calendar className="h-4 w-4 text-gray-500" />
+                            <div className="flex flex-col sm:flex-row flex-wrap gap-3 items-stretch sm:items-center">
+                                <div className="flex flex-col sm:flex-row items-center gap-2 flex-1">
+                                    <Calendar className="h-4 w-4 text-gray-500 order-2 sm:order-1" />
                                     <Input
                                         type="date"
                                         value={filtroFechaInicio}
                                         onChange={(e) => setFiltroFechaInicio(e.target.value)}
-                                        className="w-auto"
+                                        className="w-full sm:w-auto order-1 sm:order-2"
                                     />
-                                    <span className="text-gray-500">hasta</span>
+                                    <span className="text-gray-500 order-3 hidden sm:inline">hasta</span>
+                                    <span className="text-gray-500 order-3 sm:hidden">-</span>
                                     <Input
                                         type="date"
                                         value={filtroFechaFin}
                                         onChange={(e) => setFiltroFechaFin(e.target.value)}
-                                        className="w-auto"
+                                        className="w-full sm:w-auto order-4"
                                     />
                                 </div>
                                 <Select value={agrupacionVisitas} onValueChange={(value: 'dia' | 'mes' | 'total') => setAgrupacionVisitas(value)}>
-                                    <SelectTrigger className="w-40">
+                                    <SelectTrigger className="w-full sm:w-40">
                                         <SelectValue placeholder="Agrupar por" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -790,29 +794,30 @@ const MenuSectionComponent = () => {
                                         setFiltroFechaInicio('')
                                         setFiltroFechaFin('')
                                     }}
+                                    className="w-full sm:w-auto"
                                 >
                                     Limpiar filtros
                                 </Button>
                             </div>
 
                             {/* Estadísticas */}
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
                                 <Card>
-                                    <CardHeader className="pb-2">
-                                        <CardTitle className="text-sm font-medium text-gray-600">Total de visitas</CardTitle>
+                                    <CardHeader className="pb-2 pt-3">
+                                        <CardTitle className="text-xs sm:text-sm font-medium text-gray-600">Total de visitas</CardTitle>
                                     </CardHeader>
-                                    <CardContent>
-                                        <div className="text-2xl font-bold text-blue-600">
+                                    <CardContent className="pb-3">
+                                        <div className="text-xl sm:text-2xl font-bold text-blue-600">
                                             {visitas.reduce((sum, v) => sum + v.visitas, 0).toLocaleString()}
                                         </div>
                                     </CardContent>
                                 </Card>
                                 <Card>
-                                    <CardHeader className="pb-2">
-                                        <CardTitle className="text-sm font-medium text-gray-600">Período analizado</CardTitle>
+                                    <CardHeader className="pb-2 pt-3">
+                                        <CardTitle className="text-xs sm:text-sm font-medium text-gray-600">Período analizado</CardTitle>
                                     </CardHeader>
-                                    <CardContent>
-                                        <div className="text-sm">
+                                    <CardContent className="pb-3">
+                                        <div className="text-xs sm:text-sm">
                                             {filtroFechaInicio && filtroFechaFin ? (
                                                 <span>{filtroFechaInicio} - {filtroFechaFin}</span>
                                             ) : (
@@ -822,11 +827,11 @@ const MenuSectionComponent = () => {
                                     </CardContent>
                                 </Card>
                                 <Card>
-                                    <CardHeader className="pb-2">
-                                        <CardTitle className="text-sm font-medium text-gray-600">URL monitoreada</CardTitle>
+                                    <CardHeader className="pb-2 pt-3">
+                                        <CardTitle className="text-xs sm:text-sm font-medium text-gray-600">URL monitoreada</CardTitle>
                                     </CardHeader>
-                                    <CardContent>
-                                        <div className="text-sm font-mono text-blue-600 break-all">
+                                    <CardContent className="pb-3">
+                                        <div className="text-xs sm:text-sm font-mono text-blue-600 break-all">
                                             https://menu-mercado.vercel.app/
                                         </div>
                                     </CardContent>
@@ -850,21 +855,21 @@ const MenuSectionComponent = () => {
                                             <p>No hay visitas registradas para los filtros seleccionados</p>
                                         </div>
                                     ) : (
-                                        <div className="overflow-x-auto">
-                                            <table className="w-full border-collapse">
+                                        <div className="overflow-x-auto -mx-4 sm:mx-0">
+                                            <table className="w-full border-collapse min-w-[500px]">
                                                 <thead>
                                                     <tr className="border-b bg-gray-50">
                                                         {agrupacionVisitas === 'total' ? (
                                                             <>
-                                                                <th className="text-left p-3 font-medium text-gray-700">URL</th>
-                                                                <th className="text-right p-3 font-medium text-gray-700">Visitas</th>
-                                                                <th className="text-left p-3 font-medium text-gray-700">Primera visita</th>
-                                                                <th className="text-left p-3 font-medium text-gray-700">Última visita</th>
+                                                                <th className="text-left p-2 sm:p-3 font-medium text-gray-700 text-sm">URL</th>
+                                                                <th className="text-right p-2 sm:p-3 font-medium text-gray-700 text-sm">Visitas</th>
+                                                                <th className="text-left p-2 sm:p-3 font-medium text-gray-700 text-sm">Primera visita</th>
+                                                                <th className="text-left p-2 sm:p-3 font-medium text-gray-700 text-sm">Última visita</th>
                                                             </>
                                                         ) : (
                                                             <>
-                                                                <th className="text-left p-3 font-medium text-gray-700">Fecha</th>
-                                                                <th className="text-right p-3 font-medium text-gray-700">Visitas</th>
+                                                                <th className="text-left p-2 sm:p-3 font-medium text-gray-700 text-sm">Fecha</th>
+                                                                <th className="text-right p-2 sm:p-3 font-medium text-gray-700 text-sm">Visitas</th>
                                                             </>
                                                         )}
                                                     </tr>
@@ -874,18 +879,18 @@ const MenuSectionComponent = () => {
                                                         <tr key={index} className="border-b hover:bg-gray-50">
                                                             {agrupacionVisitas === 'total' ? (
                                                                 <>
-                                                                    <td className="p-3 font-mono text-sm text-blue-600">{visita.url}</td>
-                                                                    <td className="p-3 text-right font-semibold">{visita.visitas.toLocaleString()}</td>
-                                                                    <td className="p-3 text-sm text-gray-600">
+                                                                    <td className="p-2 sm:p-3 font-mono text-xs sm:text-sm text-blue-600 break-all">{visita.url}</td>
+                                                                    <td className="p-2 sm:p-3 text-right font-semibold text-sm">{visita.visitas.toLocaleString()}</td>
+                                                                    <td className="p-2 sm:p-3 text-sm text-gray-600">
                                                                         {visita.primera_visita ? new Date(visita.primera_visita).toLocaleDateString('es-ES') : '-'}
                                                                     </td>
-                                                                    <td className="p-3 text-sm text-gray-600">
+                                                                    <td className="p-2 sm:p-3 text-sm text-gray-600">
                                                                         {visita.ultima_visita ? new Date(visita.ultima_visita).toLocaleDateString('es-ES') : '-'}
                                                                     </td>
                                                                 </>
                                                             ) : (
                                                                 <>
-                                                                    <td className="p-3 font-medium">
+                                                                    <td className="p-2 sm:p-3 font-medium text-sm">
                                                                         {visita.fecha ? new Date(visita.fecha).toLocaleDateString('es-ES', {
                                                                             weekday: 'long',
                                                                             year: 'numeric',
@@ -893,7 +898,7 @@ const MenuSectionComponent = () => {
                                                                             day: 'numeric'
                                                                         }) : '-'}
                                                                     </td>
-                                                                    <td className="p-3 text-right font-semibold text-blue-600">
+                                                                    <td className="p-2 sm:p-3 text-right font-semibold text-blue-600 text-sm">
                                                                         {visita.visitas.toLocaleString()}
                                                                     </td>
                                                                 </>
