@@ -81,6 +81,7 @@ export async function GET(request: NextRequest) {
       p.precio,
       p.foto,
       p.tiene_parametros,
+      p.codigo_barras,
       p.porcentaje_ganancia as "porcentajeGanancia",
       up.cantidad,
       COALESCE(
@@ -113,7 +114,7 @@ export async function GET(request: NextRequest) {
     }
 
     queryText += `
-    GROUP BY p.id, p.nombre, p.precio, p.foto, p.tiene_parametros, p.porcentaje_ganancia, up.cantidad
+    GROUP BY p.id, p.nombre, p.precio, p.foto, p.tiene_parametros, p.porcentaje_ganancia, up.cantidad, p.codigo_barras
     ORDER BY p.nombre
     `;
 
@@ -130,6 +131,7 @@ export async function GET(request: NextRequest) {
       precio: producto.precio,
       foto: producto.foto,
       tieneParametros: producto.tiene_parametros,
+      codigo_barras: producto.codigo_barras,
       porcentajeGanancia: producto.porcentajeGanancia || 0,
       cantidad: producto.cantidad,
       parametros: producto.parametros
@@ -191,6 +193,7 @@ export async function POST(request: NextRequest) {
       p.precio,
       p.foto,
       p.tiene_parametros,
+      p.codigo_barras,
       p.porcentaje_ganancia as "porcentajeGanancia",
       up.cantidad,
       up.fecha_agregado,
@@ -208,7 +211,7 @@ export async function POST(request: NextRequest) {
     LEFT JOIN usuario_producto_parametros upp ON p.id = upp.producto_id
     WHERE up.usuario_id = $1 AND up.cocina IS NOT TRUE
     GROUP BY p.id, p.nombre, p.precio, p.foto, p.tiene_parametros, 
-             p.porcentaje_ganancia, up.cantidad, up.fecha_agregado
+             p.codigo_barras, p.porcentaje_ganancia, up.cantidad, up.fecha_agregado
     ORDER BY up.fecha_agregado DESC
     LIMIT $2 OFFSET $3
   `, [usuarioId, limite, offset]);
@@ -229,6 +232,7 @@ export async function POST(request: NextRequest) {
       precio: producto.precio,
       foto: producto.foto,
       tieneParametros: producto.tiene_parametros,
+      codigo_barras: producto.codigo_barras,
       porcentajeGanancia: producto.porcentajeGanancia || 0,
       cantidad: producto.cantidad,
       fechaAgregado: producto.fecha_agregado,

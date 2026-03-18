@@ -46,6 +46,7 @@ const obtenerProductoConParametros = async (productoId: string) => {
             p.precio_compra,
             p.porcentaje_ganancia as "porcentajeGanancia",
             p.seccion,
+            p.codigo_barras as "codigo_barras",
             -- ✅ SUBCONSULTA SEPARADA para parámetros
             (
                 SELECT COALESCE(
@@ -113,6 +114,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
         const precioCompra = formData.get('precio_compra') as string;
         const porcentajeGanancia = formData.get('porcentajeGanancia') as string;
         const seccion = formData.get('seccion') as string;
+        const codigoBarras = formData.get('codigo_barras') as string || null;
 
         // EXISTENTE: Manejar agregos
         const tieneAgrego = formData.get('tiene_agrego') === 'true';
@@ -141,7 +143,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
             let updateParams: any[];
 
             if (tieneParametros) {
-                updateQuery = 'UPDATE productos SET nombre = $1, precio = $2, foto = $3, tiene_parametros = $4, tiene_agrego = $5, tiene_costo = $6, precio_compra = $7, porcentaje_ganancia = $8, seccion = $9 WHERE id = $10 RETURNING *';
+                updateQuery = 'UPDATE productos SET nombre = $1, precio = $2, foto = $3, tiene_parametros = $4, tiene_agrego = $5, tiene_costo = $6, precio_compra = $7, porcentaje_ganancia = $8, seccion = $9, codigo_barras = $10 WHERE id = $11 RETURNING *';
                 updateParams = [
                     nombre,
                     Number(precio),
@@ -152,10 +154,11 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
                     precioCompra ? Number(precioCompra) : currentProduct.rows[0].precio_compra || 0,
                     porcentajeGanancia ? Number(porcentajeGanancia) : currentProduct.rows[0].porcentaje_ganancia || 0,
                     seccion || '',
+                    codigoBarras,
                     id
                 ];
             } else {
-                updateQuery = 'UPDATE productos SET nombre = $1, precio = $2, cantidad = $3, foto = $4, tiene_parametros = $5, tiene_agrego = $6, tiene_costo = $7, precio_compra = $8, porcentaje_ganancia = $9, seccion = $10 WHERE id = $11 RETURNING *';
+                updateQuery = 'UPDATE productos SET nombre = $1, precio = $2, cantidad = $3, foto = $4, tiene_parametros = $5, tiene_agrego = $6, tiene_costo = $7, precio_compra = $8, porcentaje_ganancia = $9, seccion = $10, codigo_barras = $11 WHERE id = $12 RETURNING *';
                 updateParams = [
                     nombre,
                     Number(precio),
@@ -167,6 +170,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
                     precioCompra ? Number(precioCompra) : currentProduct.rows[0].precio_compra || 0,
                     porcentajeGanancia ? Number(porcentajeGanancia) : currentProduct.rows[0].porcentaje_ganancia || 0,
                     seccion || '',
+                    codigoBarras,
                     id
                 ];
             }

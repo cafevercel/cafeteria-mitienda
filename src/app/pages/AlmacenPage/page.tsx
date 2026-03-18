@@ -16,7 +16,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import ContabilidadProducto from '@/components/ContabilidadProducto'
 import ContabilidadVendedoresPage from '@/components/ContabilidadVendedoresPage'
 import { Checkbox } from "@/components/ui/checkbox"
-import { Menu, ArrowUpDown, Plus, Truck, UserPlus, FileSpreadsheet, Trash2, X, Minus, Loader2, MoreVertical, Eye, Edit, DollarSign, Search, TrendingUp, Calendar, Box, ArrowLeftRight, User } from "lucide-react"
+import { Menu, ArrowUpDown, Plus, Truck, UserPlus, FileSpreadsheet, Trash2, X, Minus, Loader2, MoreVertical, Eye, Edit, DollarSign, Search, TrendingUp, Calendar, Box, ArrowLeftRight, User, Scan } from "lucide-react"
 import {
   getVendedores,
   getCurrentUser,
@@ -42,6 +42,7 @@ import {
   transferirProductoEntreVendedores
 } from '../../services/api'
 import ProductDialog from '@/components/ProductDialog'
+import BarcodeScanner from '@/components/BarcodeScanner'
 import VendorDialog from '@/components/VendedorDialog'
 import EmpleadosDialog from '@/components/EmpleadosDialog'
 import SalariosDialog from '@/components/SalariosDialog'
@@ -89,6 +90,7 @@ interface NewProduct {
     nombre: string;
     cantidad: number;
   }>;
+  codigo_barras: string;
 }
 
 const parseLocalDate = (dateString: string): Date => {
@@ -271,7 +273,8 @@ export default function AlmacenPage() {
     tieneParametros: false,
     porcentajeGanancia: 0,
     seccion: '',
-    parametros: []
+    parametros: [],
+    codigo_barras: ''
   });
 
   const [searchTerm, setSearchTerm] = useState("")
@@ -1179,6 +1182,8 @@ export default function AlmacenPage() {
     return () => clearTimeout(timeoutId);
   }, [newProduct.nombre]);
 
+  const [showAddBarcodeScanner, setShowAddBarcodeScanner] = useState(false);
+
   const handleProductInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type } = e.target
 
@@ -1226,6 +1231,7 @@ export default function AlmacenPage() {
       formData.append('precioCompra', newProduct.precioCompra.toString());
       formData.append('porcentajeGanancia', newProduct.porcentajeGanancia.toString());
       formData.append('seccion', newProduct.seccion); // Agregar esta línea
+      formData.append('codigo_barras', newProduct.codigo_barras);
 
       if (newProduct.tieneParametros) {
         formData.append('tieneParametros', 'true');
@@ -1253,7 +1259,8 @@ export default function AlmacenPage() {
         foto: '',
         tieneParametros: false,
         seccion: '', // Agregar esta línea
-        parametros: []
+        parametros: [],
+        codigo_barras: ''
       });
 
       toast({
@@ -1361,6 +1368,7 @@ export default function AlmacenPage() {
       formData.append('seccion', editedProduct.seccion || ''); // Agregar esta línea
       formData.append('tiene_agrego', (editedProduct.tiene_agrego || false).toString());
       formData.append('tiene_costo', (editedProduct.tiene_costo || false).toString());
+      formData.append('codigo_barras', editedProduct.codigo_barras || '');
 
       if (editedProduct.agregos) {
         formData.append('agregos', JSON.stringify(editedProduct.agregos));
@@ -2135,6 +2143,38 @@ export default function AlmacenPage() {
               )}
             </div>
 
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">Código de Barras</label>
+              <div className="flex gap-2">
+                <Input
+                  value={newProduct.codigo_barras}
+                  onChange={(e) => setNewProduct(prev => ({ ...prev, codigo_barras: e.target.value }))}
+                  placeholder="Escanee o ingrese código"
+                  className="flex-1"
+                />
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => {
+                    const random = Math.floor(Math.random() * 900000000000) + 100000000000;
+                    setNewProduct(prev => ({ ...prev, codigo_barras: random.toString() }));
+                  }}
+                >
+                  Aleatorio
+                </Button>
+              </div>
+              <Button 
+                type="button" 
+                variant="secondary" 
+                className="w-full bg-blue-50 border-blue-100 text-blue-600 hover:bg-blue-100"
+                onClick={() => setShowAddBarcodeScanner(true)}
+              >
+                <Scan className="w-4 h-4 mr-2" />
+                Escanear Código
+              </Button>
+            </div>
+
             <div>
               <label htmlFor="precio" className="block text-sm font-medium text-gray-700">Precio</label>
               <Input
@@ -2302,6 +2342,19 @@ export default function AlmacenPage() {
                 {verificandoNombre ? 'Verificando...' : 'Agregar'}
               </Button>
             </div>
+            
+            <BarcodeScanner 
+              open={showAddBarcodeScanner}
+              onClose={() => setShowAddBarcodeScanner(false)}
+              onScan={(barcode) => {
+                setNewProduct(prev => ({ ...prev, codigo_barras: barcode }));
+                setShowAddBarcodeScanner(false);
+                toast({
+                  title: "Código Escaneado",
+                  description: `Se detectó: ${barcode}`,
+                });
+              }}
+            />
           </div>
         </DialogContent>
       </Dialog>

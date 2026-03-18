@@ -10,6 +10,9 @@ import { Producto, Vendedor, Parametro } from '@/types';
 import { Plus, Minus } from 'lucide-react';
 import { ImageUpload } from '@/components/ImageUpload';
 import { formatearPorcentajeGanancia } from "@/lib/formatters";
+import { Scan } from 'lucide-react';
+import BarcodeScanner from './BarcodeScanner';
+import BarcodeDisplay from './BarcodeDisplay';
 
 type DeliveryStep = 'location' | 'quantities';
 // type DeliveryLocation = 'cafeteria' | 'cocina'; // Removed in favor of user selection
@@ -174,6 +177,9 @@ const EditMode = React.memo(({
   onImageChange,
   onSave,
   onCancel,
+  onShowBarcodeScanner,
+  onBarcodeChange,
+  onGenerateRandomBarcode,
 }: {
   editedProduct: Producto;
   imageUrl: string;
@@ -188,8 +194,41 @@ const EditMode = React.memo(({
   onImageChange: (url: string) => void;
   onSave: () => void;
   onCancel: () => void;
+  onShowBarcodeScanner: () => void;
+  onBarcodeChange: (barcode: string) => void;
+  onGenerateRandomBarcode: () => void;
 }) => (
   <div className="space-y-4">
+    <div className="space-y-2">
+      <Label>Código de Barras</Label>
+      <div className="flex gap-2">
+        <Input
+          name="codigo_barras"
+          value={editedProduct.codigo_barras || ''}
+          onChange={onInputChange}
+          placeholder="Código de barras"
+          className="flex-1"
+        />
+        <Button 
+          type="button" 
+          variant="outline" 
+          size="sm"
+          onClick={onGenerateRandomBarcode}
+        >
+          Aleatorio
+        </Button>
+      </div>
+      <Button 
+        type="button" 
+        variant="secondary" 
+        className="w-full bg-blue-50 hover:bg-blue-100 text-blue-600 border-blue-100"
+        onClick={onShowBarcodeScanner}
+      >
+        <Scan className="w-4 h-4 mr-2" />
+        Escanear Código
+      </Button>
+    </div>
+
     <div>
       <Label>Nombre</Label>
       <Input
@@ -488,6 +527,13 @@ const ViewMode = React.memo(({
       ) : (
         <p className="text-gray-700">Cantidad disponible: {product.cantidad}</p>
       )}
+
+      {product.codigo_barras && (
+        <div className="mt-4 border-t pt-4">
+          <Label className="text-xs text-gray-500 mb-2 block">Código de Barras</Label>
+          <BarcodeDisplay value={product.codigo_barras} name={product.nombre} />
+        </div>
+      )}
     </div>
 
     <div className="flex justify-between gap-2">
@@ -521,7 +567,10 @@ export default function ProductDialog({
     foto: product.foto || '',
     precio_compra: product.precio_compra || 0,
     porcentajeGanancia: product.porcentajeGanancia || 0,
+    codigo_barras: product.codigo_barras || '',
   });
+
+  const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
 
   const [mostrarPorcentajeGanancia, setMostrarPorcentajeGanancia] = useState<boolean>(
     !!product.porcentajeGanancia
@@ -549,6 +598,7 @@ export default function ProductDialog({
       tiene_costo: product.tiene_costo || false,
       agregos: product.agregos || [],
       costos: product.costos || [],
+      codigo_barras: product.codigo_barras || '',
     });
     setImageUrl(product.foto || '');
     setMostrarPorcentajeGanancia(tienePorcentajeGanancia);
@@ -894,6 +944,14 @@ export default function ProductDialog({
               onImageChange={handleImageChange}
               onSave={handleEdit}
               onCancel={() => handleSetMode('view')}
+              onShowBarcodeScanner={() => setShowBarcodeScanner(true)}
+              onBarcodeChange={(barcode) => {
+                setEditedProduct(prev => ({ ...prev, codigo_barras: barcode }));
+              }}
+              onGenerateRandomBarcode={() => {
+                const random = Math.floor(Math.random() * 900000000000) + 100000000000;
+                setEditedProduct(prev => ({ ...prev, codigo_barras: random.toString() }));
+              }}
             />
           ) : mode === 'deliver' && deliveryStep === 'location' ? (
             <LocationSelectionMode
@@ -925,6 +983,18 @@ export default function ProductDialog({
             />
           )}
         </div>
+        <BarcodeScanner 
+          open={showBarcodeScanner}
+          onClose={() => setShowBarcodeScanner(false)}
+          onScan={(barcode) => {
+            setEditedProduct(prev => ({ ...prev, codigo_barras: barcode }));
+            setShowBarcodeScanner(false);
+            toast({
+              title: "Código Escaneado",
+              description: `Se detectó el código: ${barcode}`,
+            });
+          }}
+        />
       </DialogContent>
     </Dialog>
   );

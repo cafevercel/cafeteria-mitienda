@@ -76,6 +76,7 @@ export interface Producto {
   costos?: Costo[];           // ← NUEVO
   porcentajeGanancia?: number;
   seccion?: string;
+  codigo_barras?: string; // ← NUEVO
 }
 
 export interface VentaParametro {

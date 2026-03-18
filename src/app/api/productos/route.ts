@@ -15,6 +15,7 @@ export async function POST(request: NextRequest) {
         const parametros = parametrosRaw ? JSON.parse(parametrosRaw) : [];
         const porcentajeGanancia = formData.get('porcentajeGanancia') as string;
         const seccion = formData.get('seccion') as string;
+        const codigoBarras = formData.get('codigo_barras') as string || formData.get('codigoBarras') as string || null;
 
         let fotoUrl = '';
 
@@ -25,10 +26,10 @@ export async function POST(request: NextRequest) {
         await query('BEGIN');
 
         try {
-            // ACTUALIZAR: Agregar tiene_costo con valor por defecto FALSE
+            // ACTUALIZAR: Agregar tiene_costo con valor por defecto FALSE y codigo_barras
             const result = await query(
-                'INSERT INTO productos (nombre, precio, precio_compra, cantidad, foto, tiene_parametros, tiene_agrego, tiene_costo, porcentaje_ganancia, seccion) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *',
-                [nombre, Number(precio), Number(precioCompra), Number(cantidad), fotoUrl, tieneParametros, false, false, Number(porcentajeGanancia) || 0, seccion || '']
+                'INSERT INTO productos (nombre, precio, precio_compra, cantidad, foto, tiene_parametros, tiene_agrego, tiene_costo, porcentaje_ganancia, seccion, codigo_barras) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *',
+                [nombre, Number(precio), Number(precioCompra), Number(cantidad), fotoUrl, tieneParametros, false, false, Number(porcentajeGanancia) || 0, seccion || '', codigoBarras]
             );
 
             const productoId = result.rows[0].id;
@@ -44,7 +45,7 @@ export async function POST(request: NextRequest) {
 
             await query('COMMIT');
 
-            // ACTUALIZAR: Incluir costos en la consulta
+            // ACTUALIZAR: Incluir costos y codigo_barras en la consulta
             const productoCompleto = await query(`
     SELECT 
         p.id,
@@ -58,6 +59,7 @@ export async function POST(request: NextRequest) {
         p.precio_compra,
         p.porcentaje_ganancia as "porcentajeGanancia",
         p.seccion,
+        p.codigo_barras as "codigo_barras",
         -- ✅ SUBCONSULTA SEPARADA para parámetros
         (
             SELECT COALESCE(
@@ -119,7 +121,7 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
     try {
-        // ✅ ACTUALIZAR: Usar subconsultas para evitar duplicación
+        // ✅ ACTUALIZAR: Usar subconsultas para evitar duplicación e incluir codigo_barras
         const result = await query(`
             SELECT 
                 p.id,
@@ -133,6 +135,7 @@ export async function GET(request: NextRequest) {
                 p.precio_compra,
                 p.porcentaje_ganancia as "porcentajeGanancia",
                 p.seccion,
+                p.codigo_barras as "codigo_barras",
                 -- ✅ SUBCONSULTA SEPARADA para parámetros
                 (
                     SELECT COALESCE(

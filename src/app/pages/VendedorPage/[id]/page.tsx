@@ -11,7 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
-import { MenuIcon, Search, X, ChevronDown, ChevronUp, ArrowLeftRight, Minus, Plus, DollarSign, ArrowUpDown } from 'lucide-react'
+import { MenuIcon, Search, X, ChevronDown, ChevronUp, ArrowLeftRight, Minus, Plus, DollarSign, ArrowUpDown, Scan } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { format, parseISO, isValid, startOfWeek, endOfWeek, addDays } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -27,12 +27,15 @@ import {
   getVendedores
 } from '../../../services/api'
 import { WeekPicker } from '@/components/Weekpicker'
+import BarcodeScanner from '@/components/BarcodeScanner'
+import { toast } from "@/hooks/use-toast"
 
 interface Producto {
   id: string;
   nombre: string;
   precio: number;
   cantidad: number;
+  codigo_barras?: string;
   foto: string | null;
   tiene_parametros: boolean;
   parametros?: ProductoParametro[];
@@ -181,6 +184,9 @@ const useVendedorData = (vendedorId: string) => {
   const [fecha, setFecha] = useState('');
   const [isProcessingVenta, setIsProcessingVenta] = useState(false)
   const [vendedorNombre, setVendedorNombre] = useState<string>('')
+  const [showBarcodeScanner, setShowBarcodeScanner] = useState(false)
+  const [pendingSales, setPendingSales] = useState<any[]>([])
+  const [isSyncing, setIsSyncing] = useState(false)
 
   const fetchVendedorNombre = useCallback(async () => {
 
@@ -236,55 +242,49 @@ const useVendedorData = (vendedorId: string) => {
 
   const handleEnviarVenta = async () => {
     if (productosSeleccionados.length === 0) {
-      alert('Por favor, seleccione al menos un producto.');
+      toast({ title: "Carrito vacío", description: "Seleccione al menos un producto.", variant: "destructive" });
       return;
     }
     if (!fecha) {
-      alert('Por favor, seleccione una fecha.');
-      return;
-    }
-    if (!vendedorId) {
-      alert('No se pudo identificar el vendedor.');
+      toast({ title: "Falta fecha", description: "Seleccione una fecha para la venta.", variant: "destructive" });
       return;
     }
 
-    setIsProcessingVenta(true); // 👈 Activar estado de procesando
+    // Si offline, guardar directamente
+    if (!navigator.onLine) {
+      savePendingSale(productosSeleccionados);
+      return;
+    }
+
+    setIsProcessingVenta(true);
 
     try {
-      console.log('Iniciando proceso de venta');
-
       await Promise.all(productosSeleccionados.map(async producto => {
-        try {
-          const cantidadTotal = producto.parametrosVenta
-            ? producto.parametrosVenta.reduce((sum, param) => sum + param.cantidad, 0)
-            : producto.cantidadVendida;
+        const cantidadTotal = producto.parametrosVenta
+          ? producto.parametrosVenta.reduce((sum, param) => sum + param.cantidad, 0)
+          : producto.cantidadVendida;
 
-          const response = await realizarVenta(
-            producto.id,
-            cantidadTotal,
-            fecha,
-            producto.parametrosVenta,
-            vendedorId
-          );
-
-          console.log(`Venta realizada para producto ${producto.id}:`, response);
-          return response;
-        } catch (error) {
-          console.error(`Error en venta de producto ${producto.id}:`, error);
-          throw error;
-        }
+        await realizarVenta(
+          producto.id,
+          cantidadTotal,
+          fecha,
+          producto.parametrosVenta,
+          vendedorId
+        );
       }));
 
       setProductosSeleccionados([]);
-      setFecha('');
       await fetchProductos();
       await fetchVentasRegistro();
-      alert('Venta realizada con éxito');
-    } catch (error) {
+      toast({ title: "Venta exitosa", description: "La venta se ha registrado en el servidor." });
+    } catch (error: any) {
       console.error('Error al realizar la venta:', error);
-      setError(error instanceof Error ? error.message : 'Error al realizar la venta');
+      const confirmSaveOffline = window.confirm("Error al conectar con el servidor. ¿Desea guardar la venta offline?");
+      if (confirmSaveOffline) {
+        savePendingSale(productosSeleccionados);
+      }
     } finally {
-      setIsProcessingVenta(false); // 👈 Desactivar estado de procesando
+      setIsProcessingVenta(false);
     }
   };
 
@@ -530,6 +530,108 @@ const useVendedorData = (vendedorId: string) => {
     }
   }, [transacciones, vendedorNombre, fetchVendedorNombre]);
 
+  // Offline Sales Logic
+  useEffect(() => {
+    const saved = localStorage.getItem(`pendingSales_${vendedorId}`);
+    if (saved) {
+      setPendingSales(JSON.parse(saved));
+    }
+  }, [vendedorId]);
+
+  const savePendingSale = useCallback((saleItems: any[]) => {
+    const salesToSave = saleItems.map(p => ({
+      id_local: `${Date.now()}_${p.id}`,
+      productoId: p.id,
+      nombre: p.nombre, // Para mostrar en la UI
+      cantidad: p.cantidadVendida,
+      fecha: fecha || new Date().toISOString(),
+      parametros: p.parametrosVenta,
+      status: 'pending'
+    }));
+
+    const updated = [...pendingSales, ...salesToSave];
+    setPendingSales(updated);
+    localStorage.setItem(`pendingSales_${vendedorId}`, JSON.stringify(updated));
+    setProductosSeleccionados([]);
+    toast({
+      title: "Venta guardada offline",
+      description: "La venta se sincronizará cuando haya conexión.",
+    });
+  }, [pendingSales, vendedorId, fecha, setProductosSeleccionados]);
+
+  const syncSales = useCallback(async () => {
+    if (pendingSales.length === 0) return;
+    setIsSyncing(true);
+    try {
+      const response = await fetch('/api/ventas/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sales: pendingSales, vendedorId })
+      });
+
+      const result = await response.json();
+      if (result.success || (result.synced && result.synced.length > 0)) {
+        // Eliminar las que se sincronizaron con éxito
+        const syncedIds = result.synced.map((s: any) => s.id_local);
+        const remaining = pendingSales.filter(p => !syncedIds.includes(p.id_local));
+        
+        setPendingSales(remaining);
+        localStorage.setItem(`pendingSales_${vendedorId}`, JSON.stringify(remaining));
+
+        if (result.errors && result.errors.length > 0) {
+          toast({
+            title: "Sincronización parcial",
+            description: `Se sincronizaron ${result.synced.length} ventas. ${result.errors.length} fallaron.`,
+            variant: "destructive"
+          });
+        } else {
+          toast({ 
+            title: "Sincronización exitosa", 
+            description: `Se sincronizaron ${result.synced.length} ventas.` 
+          });
+          await fetchVentasRegistro();
+          await fetchProductos();
+        }
+      } else {
+        throw new Error(result.error || 'Error al sincronizar');
+      }
+    } catch (err: any) {
+      toast({
+        title: "Error de sincronización",
+        description: err.message,
+        variant: "destructive"
+      });
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [pendingSales, vendedorId, fetchVentasRegistro, fetchProductos]);
+
+  const handleScan = useCallback((barcode: string) => {
+    const producto = productosDisponibles.find(p => p.codigo_barras === barcode);
+    if (producto) {
+      // Agregar al carrito
+      const itemExistente = productosSeleccionados.find(p => p.id === producto.id);
+      if (itemExistente) {
+        setProductosSeleccionados(prev => prev.map(p => 
+          p.id === producto.id ? { ...p, cantidadVendida: p.cantidadVendida + 1 } : p
+        ));
+      } else {
+        setProductosSeleccionados(prev => [...prev, { ...producto, cantidadVendida: 1 }]);
+      }
+      toast({
+        title: "Producto agregado",
+        description: `${producto.nombre} añadido al carrito`,
+      });
+      setShowBarcodeScanner(false);
+    } else {
+      toast({
+        title: "Código no encontrado",
+        description: `No hay productos con el código ${barcode}`,
+        variant: "destructive",
+      });
+    }
+  }, [productosDisponibles, productosSeleccionados, setProductosSeleccionados]);
+
   return {
     isLoading,
     error,
@@ -554,7 +656,15 @@ const useVendedorData = (vendedorId: string) => {
     setProductosSeleccionados,
     fecha,
     setFecha,
-    vendedorNombre
+    vendedorNombre,
+    showBarcodeScanner,
+    setShowBarcodeScanner,
+    handleScan,
+    pendingSales,
+    setPendingSales,
+    savePendingSale,
+    syncSales,
+    isSyncing
   }
 }
 
@@ -1518,7 +1628,14 @@ export default function VendedorPage() {
     setProductosSeleccionados,
     fecha,
     setFecha,
-    vendedorNombre
+    vendedorNombre,
+    showBarcodeScanner,
+    setShowBarcodeScanner,
+    handleScan,
+    pendingSales,
+    savePendingSale,
+    syncSales,
+    isSyncing
   } = useVendedorData(vendedorId)
 
   const [busqueda, setBusqueda] = useState('')
@@ -1829,6 +1946,9 @@ export default function VendedorPage() {
           <Tabs defaultValue="vender">
             <TabsList>
               <TabsTrigger value="vender">Vender</TabsTrigger>
+              <TabsTrigger value="pendientes">
+                Pendientes {pendingSales.length > 0 && <span className="ml-1 px-1.5 py-0.5 bg-red-500 text-white text-[10px] rounded-full">{pendingSales.length}</span>}
+              </TabsTrigger>
               <TabsTrigger value="registro">Registro de Ventas</TabsTrigger>
             </TabsList>
             <TabsContent value="vender">
@@ -1840,9 +1960,19 @@ export default function VendedorPage() {
                 />
                 <h2 className="text-xl font-semibold">2. Selecciona los productos</h2>
                 <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button onClick={() => setIsDialogOpen(true)}>Seleccionar Productos</Button>
-                  </DialogTrigger>
+                  <div className="flex gap-2">
+                    <DialogTrigger asChild>
+                      <Button onClick={() => setIsDialogOpen(true)}>Seleccionar Productos</Button>
+                    </DialogTrigger>
+                    <Button 
+                      variant="secondary" 
+                      className="bg-orange-100 text-orange-800 hover:bg-orange-200"
+                      onClick={() => setShowBarcodeScanner(true)}
+                    >
+                      <Scan className="w-4 h-4 mr-2" />
+                      Escanear
+                    </Button>
+                  </div>
                   <DialogContent className="sm:max-w-[425px]">
                     <DialogHeader>
                       <DialogTitle>Seleccionar Productos</DialogTitle>
@@ -2028,6 +2158,43 @@ export default function VendedorPage() {
                     </div>
                   )}
                 </div>
+              </div>
+            </TabsContent>
+            <TabsContent value="pendientes">
+              <div className="space-y-4">
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-xl font-semibold">Ventas Pendientes</h2>
+                  <Button 
+                    onClick={syncSales} 
+                    disabled={isSyncing || pendingSales.length === 0}
+                    className="bg-green-600 hover:bg-green-700 text-white"
+                  >
+                    {isSyncing ? "Sincronizando..." : `Sincronizar (${pendingSales.length})`}
+                  </Button>
+                </div>
+                {pendingSales.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500 bg-white rounded-lg border border-dashed border-gray-300">
+                    No hay ventas pendientes de sincronizar
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {pendingSales.map((sale) => (
+                      <div key={sale.id_local} className="p-3 bg-white rounded-lg border border-orange-200 shadow-sm flex justify-between items-center">
+                        <div>
+                          <p className="font-semibold text-orange-950">{sale.nombre}</p>
+                          <p className="text-xs text-orange-700">{formatDate(sale.fecha)}</p>
+                          <p className="text-sm font-medium">Cantidad: {sale.cantidad}</p>
+                          {sale.parametros && sale.parametros.length > 0 && (
+                            <div className="text-xs text-gray-500 mt-1 bg-gray-50 p-1 rounded">
+                              {sale.parametros.map((p: any) => `${p.nombre}: ${p.cantidad}`).join(', ')}
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-xs font-bold text-orange-500 uppercase px-2 py-1 bg-orange-50 rounded">Pendiente</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </TabsContent>
             <TabsContent value="registro">
