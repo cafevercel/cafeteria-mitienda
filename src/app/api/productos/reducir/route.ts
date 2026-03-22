@@ -14,7 +14,8 @@ export async function PUT(request: NextRequest) {
         await query('BEGIN');
 
         try {
-            // ✅ NUEVO: Obtener el nombre del vendedor si existe
+            // ✅ NUEVO: Resolver el ID numérico del vendedor
+            let finalVendedorId = vendedorId;
             let nombreVendedor = 'Cafetería'; // Valor por defecto
 
             if (vendedorId && vendedorId !== 'cafeteria' && vendedorId !== 'almacen') {
@@ -25,9 +26,21 @@ export async function PUT(request: NextRequest) {
 
                 if (vendedorResult.rows.length > 0) {
                     nombreVendedor = vendedorResult.rows[0].nombre;
+                    finalVendedorId = vendedorId;
                 }
-            } else if (vendedorId === 'almacen') {
-                nombreVendedor = 'Almacen';
+            } else {
+                // Si es 'cafeteria', 'almacen' o null, buscamos el ID de 'Cafetería'
+                const cafeteriaResult = await query(
+                    "SELECT id, nombre FROM usuarios WHERE nombre = 'Cafetería' LIMIT 1"
+                );
+                if (cafeteriaResult.rows.length > 0) {
+                    finalVendedorId = cafeteriaResult.rows[0].id;
+                    nombreVendedor = cafeteriaResult.rows[0].nombre;
+                }
+                
+                if (vendedorId === 'almacen') {
+                    nombreVendedor = 'Almacen';
+                }
             }
 
             // Verificar si el producto tiene parámetros
@@ -47,8 +60,8 @@ export async function PUT(request: NextRequest) {
                 // Verificar y actualizar cada parámetro
                 for (const param of parametros) {
                     const paramResult = await query(
-                        'SELECT cantidad FROM usuario_producto_parametros WHERE producto_id = $1 AND nombre = $2',
-                        [productoId, param.nombre]
+                        'SELECT cantidad FROM usuario_producto_parametros WHERE producto_id = $1 AND nombre = $2 AND usuario_id = $3',
+                        [productoId, param.nombre, finalVendedorId]
                     );
 
                     if (paramResult.rows.length === 0 || paramResult.rows[0].cantidad < param.cantidad) {
@@ -57,8 +70,8 @@ export async function PUT(request: NextRequest) {
 
                     // Actualizar cantidad del parámetro en usuario_producto_parametros
                     await query(
-                        'UPDATE usuario_producto_parametros SET cantidad = cantidad - $1 WHERE producto_id = $2 AND nombre = $3',
-                        [param.cantidad, productoId, param.nombre]
+                        'UPDATE usuario_producto_parametros SET cantidad = cantidad - $1 WHERE producto_id = $2 AND nombre = $3 AND usuario_id = $4',
+                        [param.cantidad, productoId, param.nombre, finalVendedorId]
                     );
 
                     // Actualizar cantidad en producto_parametros (almacén)
@@ -73,8 +86,8 @@ export async function PUT(request: NextRequest) {
 
                 // ✅ MODIFICADO: Registrar transacción principal con nombre del vendedor
                 const transaccionResult = await query(
-                    'INSERT INTO transacciones (producto, cantidad, tipo, desde, hacia, fecha, parametro_nombre) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
-                    [productoId, cantidadTotal, 'Baja', nombreVendedor, 'Almacen', new Date(), null]
+                    'INSERT INTO transacciones (producto, cantidad, tipo, desde, hacia, fecha, es_cocina) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
+                    [productoId, cantidadTotal, 'Baja', nombreVendedor, 'Almacen', new Date(), false]
                 );
 
                 const transaccionId = transaccionResult.rows[0].id;
@@ -87,6 +100,11 @@ export async function PUT(request: NextRequest) {
                     );
                 }
 
+                // Incrementar stock total en productos (Almacén)
+                await query(
+                    'UPDATE productos SET cantidad = cantidad + $1 WHERE id = $2',
+                    [cantidadTotal, productoId]
+                );
             } else {
                 // Lógica para productos sin parámetros
                 if (!cantidad) {
@@ -94,12 +112,12 @@ export async function PUT(request: NextRequest) {
                 }
 
                 const usuarioProductoResult = await query(
-                    'SELECT cantidad FROM usuario_productos WHERE producto_id = $1',
-                    [productoId]
+                    'SELECT cantidad FROM usuario_productos WHERE producto_id = $1 AND usuario_id = $2',
+                    [productoId, finalVendedorId]
                 );
 
                 if (usuarioProductoResult.rows.length === 0) {
-                    throw new Error('Este producto no existe en el inventario');
+                    throw new Error('Este producto no existe en el inventario del vendedor');
                 }
 
                 if (cantidad > usuarioProductoResult.rows[0].cantidad) {
@@ -108,8 +126,8 @@ export async function PUT(request: NextRequest) {
 
                 // Actualizar cantidad principal 
                 await query(
-                    'UPDATE usuario_productos SET cantidad = cantidad - $1 WHERE producto_id = $2',
-                    [cantidad, productoId]
+                    'UPDATE usuario_productos SET cantidad = cantidad - $1 WHERE producto_id = $2 AND usuario_id = $3',
+                    [cantidad, productoId, finalVendedorId]
                 );
 
                 // Actualizar cantidad en almacén
@@ -120,14 +138,14 @@ export async function PUT(request: NextRequest) {
 
                 // ✅ MODIFICADO: Registrar transacción con nombre del vendedor
                 await query(
-                    'INSERT INTO transacciones (producto, cantidad, tipo, desde, hacia, fecha) VALUES ($1, $2, $3, $4, $5, $6)',
-                    [productoId, cantidad, 'Baja', nombreVendedor, 'Almacen', new Date()]
+                    'INSERT INTO transacciones (producto, cantidad, tipo, desde, hacia, fecha, es_cocina) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+                    [productoId, cantidad, 'Baja', nombreVendedor, 'Almacen', new Date(), false]
                 );
             }
 
             await query('COMMIT');
 
-            // Obtener datos actualizados
+            // Obtener datos actualizados del producto filtrando por vendedor
             const updatedData = await query(`
                 SELECT 
                     up.producto_id as id,
@@ -147,10 +165,10 @@ export async function PUT(request: NextRequest) {
                     ) as parametros
                 FROM usuario_productos up
                 JOIN productos p ON up.producto_id = p.id
-                LEFT JOIN usuario_producto_parametros upp ON up.producto_id = upp.producto_id
-                WHERE up.producto_id = $1
+                LEFT JOIN usuario_producto_parametros upp ON up.producto_id = upp.producto_id AND upp.usuario_id = up.usuario_id
+                WHERE up.producto_id = $1 AND up.usuario_id = $2
                 GROUP BY up.producto_id, p.nombre, p.precio, up.cantidad, p.foto, p.tiene_parametros
-            `, [productoId]);
+            `, [productoId, finalVendedorId]);
 
             return NextResponse.json(updatedData.rows[0]);
         } catch (error) {
