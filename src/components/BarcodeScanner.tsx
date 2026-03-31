@@ -37,6 +37,13 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onScan, onClose, open }
     Html5QrcodeSupportedFormats.UPC_E,
     Html5QrcodeSupportedFormats.CODE_128,
     Html5QrcodeSupportedFormats.CODE_39,
+    Html5QrcodeSupportedFormats.ITF,
+    Html5QrcodeSupportedFormats.QR_CODE,
+    Html5QrcodeSupportedFormats.DATA_MATRIX,
+    Html5QrcodeSupportedFormats.AZTEC,
+    Html5QrcodeSupportedFormats.CODABAR,
+    Html5QrcodeSupportedFormats.RSS_14,
+    Html5QrcodeSupportedFormats.RSS_EXPANDED,
   ];
 
   // Stop camera stream
@@ -53,7 +60,14 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onScan, onClose, open }
     setCameraError(null);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+        video: { 
+          facingMode: 'environment', 
+          width: { ideal: 1920 }, 
+          height: { ideal: 1080 },
+          // Intentar forzar enfoque si el navegador lo permite
+          //@ts-ignore 
+          focusMode: 'continuous'
+        }
       });
       streamRef.current = stream;
       if (videoRef.current) {
@@ -83,7 +97,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onScan, onClose, open }
     if (!ctx) return;
 
     ctx.drawImage(video, 0, 0);
-    const imageData = canvas.toDataURL('image/jpeg', 0.9);
+    const imageData = canvas.toDataURL('image/png');
     setCapturedImage(imageData);
     setStep('crop');
   };
@@ -111,19 +125,50 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onScan, onClose, open }
       }
 
       const image = imgRef.current;
-      const { width, height, x, y } = croppedImagePixels;
+      
+      // Calcular la escala entre el tamaño mostrado y el tamaño real de la imagen
+      const scaleX = image.naturalWidth / image.width;
+      const scaleY = image.naturalHeight / image.height;
 
+      // Dimensiones del recorte real
+      const sourceWidth = croppedImagePixels.width * scaleX;
+      const sourceHeight = croppedImagePixels.height * scaleY;
+      
+      // Añadimos un pequeño margen blanco (Quiet Zone) alrededor del código
+      // Esto es crucial para que los algoritmos de detección funcionen correctamente
+      const padding = Math.max(sourceWidth, sourceHeight) * 0.05; // 5% de padding
+      
       const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
+      canvas.width = sourceWidth + (padding * 2);
+      canvas.height = sourceHeight + (padding * 2);
+      
       const ctx = canvas.getContext('2d');
       if (!ctx) {
         resolve(null);
         return;
       }
 
-      ctx.drawImage(image, x, y, width, height, 0, 0, width, height);
-      resolve(canvas.toDataURL('image/jpeg', 0.9));
+      // Fondo blanco (Quiet Zone)
+      ctx.fillStyle = "#FFFFFF";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Mejorar contraste y brillo para códigos de barras en fotos del mundo real
+      ctx.filter = 'contrast(1.3) brightness(1.05)';
+
+      // Dibujar usando las coordenadas escaladas al tamaño real de la imagen, centrada con padding
+      ctx.drawImage(
+        image,
+        croppedImagePixels.x * scaleX,
+        croppedImagePixels.y * scaleY,
+        sourceWidth,
+        sourceHeight,
+        padding,
+        padding,
+        sourceWidth,
+        sourceHeight
+      );
+      
+      resolve(canvas.toDataURL('image/png'));
     });
   }, [croppedImagePixels, capturedImage]);
 
@@ -144,10 +189,18 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onScan, onClose, open }
       // Convert base64 to Blob for Html5Qrcode
       const response = await fetch(cropped);
       const blob = await response.blob();
-      const file = new File([blob], 'barcode.jpg', { type: 'image/jpeg' });
+      const file = new File([blob], 'barcode.png', { type: 'image/png' });
 
-      const scanner = new Html5Qrcode('barcode-scan-area');
-      const decodedText = await scanner.scanFile(file, false);
+      // Configuración del escáner - Mejoramos la precisión
+      const scanner = new Html5Qrcode('barcode-scan-area', {
+        formatsToSupport: formats,
+        verbose: false,
+        experimentalFeatures: {
+          useBarCodeDetectorIfSupported: true
+        }
+      });
+
+      const decodedText = await scanner.scanFile(file, true);
 
       // Success - get result and close
       onScan(decodedText);
@@ -301,37 +354,49 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onScan, onClose, open }
         {/* STEP: Scanning */}
         {step === 'scanning' && (
           <div className="space-y-4">
-            {isScanning ? (
-              <div className="flex flex-col items-center justify-center py-12">
-                <Loader2 className="w-12 h-12 text-blue-500 animate-spin mb-4" />
-                <p className="text-sm font-medium text-gray-600">Escaneando...</p>
-              </div>
-            ) : (
-              <>
-                <div id="barcode-scan-area" className="flex justify-center" />
-                {scanError && (
-                  <Alert variant="destructive">
-                    <AlertDescription>{scanError}</AlertDescription>
-                  </Alert>
-                )}
-                <div className="flex gap-2">
-                  <Button
-                    onClick={scanBarcode}
-                    className="flex-1 bg-green-600 hover:bg-green-700"
-                  >
-                    <Loader2 className="mr-2 h-4 w-4" />
-                    Reintentar
-                  </Button>
-                  <Button
-                    onClick={resetToCamera}
-                    variant="outline"
-                  >
-                    <RotateCcw className="mr-2 h-4 w-4" />
-                    Volver
-                  </Button>
+            <div className="flex flex-col items-center justify-center">
+              {isScanning && (
+                <div className="mb-4 flex flex-col items-center">
+                  <Loader2 className="w-8 h-8 text-blue-500 animate-spin mb-2" />
+                  <p className="text-sm font-medium text-gray-600">Procesando imagen...</p>
                 </div>
-              </>
-            )}
+              )}
+              
+              {/* Contenedor necesario para Html5Qrcode - DEBE estar en el DOM */}
+              <div 
+                id="barcode-scan-area" 
+                className={`w-full max-w-[300px] bg-slate-50 rounded-lg border-2 border-dashed border-slate-200 overflow-hidden ${!isScanning && !scanError ? 'hidden' : ''}`}
+                style={{ minHeight: '150px' }}
+              />
+
+              {scanError && (
+                <div className="mt-4 w-full">
+                  <Alert variant="destructive">
+                    <AlertDescription className="text-center">{scanError}</AlertDescription>
+                  </Alert>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-2">
+              {!isScanning && (
+                <Button
+                  onClick={scanBarcode}
+                  className="flex-1 bg-green-600 hover:bg-green-700"
+                >
+                  <RotateCcw className="mr-2 h-4 w-4" />
+                  Reintentar
+                </Button>
+              )}
+              <Button
+                onClick={resetToCamera}
+                variant="outline"
+                className={isScanning ? "w-full" : ""}
+              >
+                <RotateCcw className="mr-2 h-4 w-4" />
+                Volver
+              </Button>
+            </div>
           </div>
         )}
 
