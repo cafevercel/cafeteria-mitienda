@@ -509,7 +509,13 @@ export default function AlmacenPage() {
 
   const handleExportToExcel = () => {
     const header = ["Nombre", "Precio", "Cantidad"];
-    const data = inventario.map(producto => [producto.nombre, producto.precio, producto.cantidad]);
+    const data = inventario
+      .map(producto => ({
+        ...producto,
+        cantidadReal: calcularCantidadTotal(producto)
+      }))
+      .filter(item => item.cantidadReal > 0)
+      .map(producto => [producto.nombre, producto.precio, producto.cantidadReal]);
 
     const ws = XLSX.utils.aoa_to_sheet([header, ...data]);
     const wb = XLSX.utils.book_new();

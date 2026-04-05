@@ -769,11 +769,24 @@ export default function VendorDialog({
     let fileName = '';
 
     if (mode === 'productos') {
-      dataToExport = productos.map(producto => ({
-        Nombre: producto.nombre,
-        Precio: producto.precio,
-        Cantidad: producto.cantidad
-      }));
+      const getCantidadTotal = (producto: Producto) => {
+        if (producto.parametros && producto.parametros.length > 0) {
+          return producto.parametros.reduce((total, param) => total + (param.cantidad || 0), 0)
+        }
+        return producto.cantidad
+      }
+
+      dataToExport = productos
+        .map(producto => ({
+          ...producto,
+          cantidadReal: getCantidadTotal(producto)
+        }))
+        .filter(item => item.cantidadReal > 0)
+        .map(producto => ({
+          Nombre: producto.nombre,
+          Precio: producto.precio,
+          Cantidad: producto.cantidadReal
+        }));
       fileName = `productos_${vendor.nombre}_${format(new Date(), 'yyyy-MM-dd')}.xlsx`;
     } else if (mode === 'ventas') {
       dataToExport = ventas.map(venta => ({
