@@ -306,6 +306,8 @@ export default function AlmacenPage() {
   const [mermaSortBy, setMermaSortBy] = useState<'nombre' | 'cantidad'>('nombre')
   const [nombreExiste, setNombreExiste] = useState(false);
   const [verificandoNombre, setVerificandoNombre] = useState(false);
+  const [barcodeExiste, setBarcodeExiste] = useState(false);
+  const [verificandoBarcode, setVerificandoBarcode] = useState(false);
   const { updateProductQuantity } = useVendorProducts();
   const [reduceDialogOpen, setReduceDialogOpen] = useState(false)
   const [productToReduce, setProductToReduce] = useState<Producto | null>(null)
@@ -1188,6 +1190,29 @@ export default function AlmacenPage() {
     return () => clearTimeout(timeoutId);
   }, [newProduct.nombre]);
 
+  useEffect(() => {
+    const verificarBarcode = async () => {
+      if (!newProduct.codigo_barras || !newProduct.codigo_barras.trim()) {
+        setBarcodeExiste(false);
+        return;
+      }
+
+      setVerificandoBarcode(true);
+      try {
+        const response = await fetch(`/api/productos/verificar-barcode?barcode=${newProduct.codigo_barras.trim()}`);
+        const data = await response.json();
+        setBarcodeExiste(data.exists);
+      } catch (error) {
+        console.error('Error al verificar código de barras:', error);
+      } finally {
+        setVerificandoBarcode(false);
+      }
+    };
+
+    const timeoutId = setTimeout(verificarBarcode, 500);
+    return () => clearTimeout(timeoutId);
+  }, [newProduct.codigo_barras]);
+
   const [showAddBarcodeScanner, setShowAddBarcodeScanner] = useState(false);
 
   const handleProductInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1226,6 +1251,15 @@ export default function AlmacenPage() {
         toast({
           title: "Error",
           description: "El nombre del producto ya existe",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (barcodeExiste) {
+        toast({
+          title: "Error",
+          description: "El código de barras ya existe",
           variant: "destructive",
         });
         return;
@@ -2156,7 +2190,7 @@ export default function AlmacenPage() {
                   value={newProduct.codigo_barras}
                   onChange={(e) => setNewProduct(prev => ({ ...prev, codigo_barras: e.target.value }))}
                   placeholder="Escanee o ingrese código"
-                  className="flex-1"
+                  className={`flex-1 ${barcodeExiste ? 'border-red-500 ring-red-500' : ''}`}
                 />
                 <Button 
                   type="button" 
@@ -2170,6 +2204,12 @@ export default function AlmacenPage() {
                   Aleatorio
                 </Button>
               </div>
+              {verificandoBarcode && (
+                <p className="text-xs text-gray-500 mt-1">Verificando código...</p>
+              )}
+              {barcodeExiste && (
+                <p className="text-xs text-red-500 font-medium mt-1">Este código de barras ya existe en el sistema.</p>
+              )}
               <Button 
                 type="button" 
                 variant="secondary" 
@@ -2343,9 +2383,9 @@ export default function AlmacenPage() {
               <Button
                 onClick={handleAddProduct}
                 className="w-full"
-                disabled={nombreExiste || verificandoNombre}
+                disabled={nombreExiste || verificandoNombre || barcodeExiste || verificandoBarcode}
               >
-                {verificandoNombre ? 'Verificando...' : 'Agregar'}
+                {verificandoNombre || verificandoBarcode ? 'Verificando...' : 'Agregar'}
               </Button>
             </div>
             

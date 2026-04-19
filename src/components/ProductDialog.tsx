@@ -180,6 +180,8 @@ const EditMode = React.memo(({
   onShowBarcodeScanner,
   onBarcodeChange,
   onGenerateRandomBarcode,
+  verificandoBarcode,
+  barcodeExiste,
 }: {
   editedProduct: Producto;
   imageUrl: string;
@@ -197,6 +199,8 @@ const EditMode = React.memo(({
   onShowBarcodeScanner: () => void;
   onBarcodeChange: (barcode: string) => void;
   onGenerateRandomBarcode: () => void;
+  verificandoBarcode?: boolean;
+  barcodeExiste?: boolean;
 }) => (
   <div className="space-y-4">
     <div className="space-y-2">
@@ -207,7 +211,7 @@ const EditMode = React.memo(({
           value={editedProduct.codigo_barras || ''}
           onChange={onInputChange}
           placeholder="Código de barras"
-          className="flex-1"
+          className={`flex-1 ${barcodeExiste ? 'border-red-500 ring-red-500' : ''}`}
         />
         <Button 
           type="button" 
@@ -218,6 +222,12 @@ const EditMode = React.memo(({
           Aleatorio
         </Button>
       </div>
+      {verificandoBarcode && (
+        <p className="text-xs text-gray-500">Verificando código...</p>
+      )}
+      {barcodeExiste && (
+        <p className="text-xs text-red-500 font-medium">Este código de barras ya existe en el sistema.</p>
+      )}
       <Button 
         type="button" 
         variant="secondary" 
@@ -368,7 +378,9 @@ const EditMode = React.memo(({
     </div>
 
     <div className="flex justify-between gap-2 mt-4">
-      <Button onClick={onSave} className="flex-1">Guardar cambios</Button>
+      <Button onClick={onSave} className="flex-1" disabled={barcodeExiste || verificandoBarcode}>
+        Guardar cambios
+      </Button>
       <Button variant="outline" onClick={onCancel} className="flex-1">
         Cancelar
       </Button>
@@ -581,6 +593,53 @@ export default function ProductDialog({
   const [simpleDeliveryQuantity, setSimpleDeliveryQuantity] = useState<number>(0);
   const [selectedVendor, setSelectedVendor] = useState<Vendedor | null>(null);
   const [deliveryStep, setDeliveryStep] = useState<DeliveryStep>('location');
+
+  const [verificandoBarcode, setVerificandoBarcode] = useState(false);
+  const [barcodeExiste, setBarcodeExiste] = useState(false);
+
+  const verificarBarcode = useCallback(async (barcode: string) => {
+    if (!barcode || barcode.trim() === '') {
+      setBarcodeExiste(false);
+      return;
+    }
+
+    // Si es el mismo código que ya tenía el producto, no es duplicado
+    if (product.id && barcode === product.codigo_barras) {
+      setBarcodeExiste(false);
+      return;
+    }
+
+    setVerificandoBarcode(true);
+    try {
+      const response = await fetch(`/api/productos/verificar-barcode?barcode=${barcode}`);
+      const data = await response.json();
+      
+      if (data.exists) {
+        setBarcodeExiste(true);
+        toast({
+          title: "Código de barras duplicado",
+          description: "Este código ya está asignado a otro producto.",
+          variant: "destructive",
+        });
+      } else {
+        setBarcodeExiste(false);
+      }
+    } catch (error) {
+      console.error('Error verificando código de barras:', error);
+    } finally {
+      setVerificandoBarcode(false);
+    }
+  }, [product.codigo_barras, product.id]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (mode === 'edit' && editedProduct.codigo_barras !== product.codigo_barras) {
+        verificarBarcode(editedProduct.codigo_barras || '');
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [editedProduct.codigo_barras, mode, product.codigo_barras, verificarBarcode]);
 
   // Efecto para sincronizar el estado con el producto recibido
   useEffect(() => {
@@ -952,6 +1011,8 @@ export default function ProductDialog({
                 const random = Math.floor(Math.random() * 900000000000) + 100000000000;
                 setEditedProduct(prev => ({ ...prev, codigo_barras: random.toString() }));
               }}
+              verificandoBarcode={verificandoBarcode}
+              barcodeExiste={barcodeExiste}
             />
           ) : mode === 'deliver' && deliveryStep === 'location' ? (
             <LocationSelectionMode
