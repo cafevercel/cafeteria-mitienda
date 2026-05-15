@@ -431,7 +431,8 @@ export default function AlmacenPage() {
 
   const getFilteredProducts = (productos: Producto[]): Producto[] => {
     const filteredBySearch = productos.filter((producto) =>
-      producto.nombre.toLowerCase().includes(searchTerm.toLowerCase())
+      producto.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (producto.codigo_barras && producto.codigo_barras.toLowerCase().includes(searchTerm.toLowerCase()))
     );
 
     switch (activeProductTab) {
@@ -964,7 +965,8 @@ export default function AlmacenPage() {
       return producto.cantidad > 0;
     })
     .filter((producto) =>
-      producto.nombre.toLowerCase().includes(productSearchTerm.toLowerCase())
+      producto.nombre.toLowerCase().includes(productSearchTerm.toLowerCase()) ||
+      (producto.codigo_barras && producto.codigo_barras.toLowerCase().includes(productSearchTerm.toLowerCase()))
     );
 
 
@@ -1375,7 +1377,8 @@ export default function AlmacenPage() {
   };
 
   const filteredInventario = sortedInventario.filter((producto) =>
-    producto.nombre.toLowerCase().includes(searchTerm.toLowerCase())
+    producto.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (producto.codigo_barras && producto.codigo_barras.toLowerCase().includes(searchTerm.toLowerCase()))
   )
 
   const handleUpdateProductQuantity = async (

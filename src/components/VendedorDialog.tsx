@@ -837,7 +837,7 @@ export default function VendorDialog({
     }
 
     return products
-      .filter(p => p.nombre.toLowerCase().includes(searchTerm.toLowerCase()))
+      .filter(p => p.nombre.toLowerCase().includes(searchTerm.toLowerCase()) || (p.codigo_barras && p.codigo_barras.toLowerCase().includes(searchTerm.toLowerCase())))
       .sort((a, b) => {
         if (sortBy === 'nombre') {
           return sortOrder === 'asc'

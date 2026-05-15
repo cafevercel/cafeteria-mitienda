@@ -1676,7 +1676,8 @@ export default function VendedorPage() {
   })
 
   const productosFiltrados = sortedProductos.filter(p =>
-    p.nombre.toLowerCase().includes(busqueda.toLowerCase())
+    p.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
+    (p.codigo_barras && p.codigo_barras.toLowerCase().includes(busqueda.toLowerCase()))
   )
 
 
@@ -1811,7 +1812,8 @@ export default function VendedorPage() {
 
 
   const productosAgotadosFiltrados = productosAgotados.filter(p =>
-    p.nombre.toLowerCase().includes(busqueda.toLowerCase())
+    p.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
+    (p.codigo_barras && p.codigo_barras.toLowerCase().includes(busqueda.toLowerCase()))
   )
 
   const cambiarSeccion = (seccion: 'productos' | 'ventas' | 'registro') => {
@@ -1990,7 +1992,8 @@ export default function VendedorPage() {
                     </div>
                     <ScrollArea className="h-[300px] pr-4">
                       {productosDisponibles.filter(p =>
-                        p.nombre.toLowerCase().includes(busqueda.toLowerCase())
+                        p.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
+                        (p.codigo_barras && p.codigo_barras.toLowerCase().includes(busqueda.toLowerCase()))
                       ).map((producto) => (
                         <Card key={producto.id} className="mb-2">
                           <CardContent className="p-4 flex items-center justify-between">
