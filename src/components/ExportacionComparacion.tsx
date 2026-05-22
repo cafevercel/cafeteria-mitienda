@@ -483,39 +483,6 @@ export default function ExportacionComparacion({ vendedores, almacen }: Exportac
                 <Download className="mr-2 h-4 w-4" /> Configurar Exportación
               </Button>
             </div>
-
-            <div className="grid md:grid-cols-3 gap-6">
-              <div className="flex items-start gap-3 p-4 bg-orange-50/55 rounded-xl border border-orange-100/30">
-                <Info className="h-5 w-5 text-orange-600 flex-shrink-0 mt-0.5" />
-                <div>
-                  <h4 className="text-sm font-semibold text-orange-900">Formato Homogéneo</h4>
-                  <p className="text-xs text-orange-700/80 mt-1">
-                    Exporta un formato estructurado compatible con lectores de códigos de barra para realizar inventarios físicos veloces.
-                  </p>
-                </div>
-              </div>
-              
-              <div className="flex items-start gap-3 p-4 bg-orange-50/55 rounded-xl border border-orange-100/30">
-                <PackageCheck className="h-5 w-5 text-orange-600 flex-shrink-0 mt-0.5" />
-                <div>
-                  <h4 className="text-sm font-semibold text-orange-900">Totalización de Variantes</h4>
-                  <p className="text-xs text-orange-700/80 mt-1">
-                    Suma automáticamente las existencias de variantes (tallas, sabores, etc.) en una fila unificada bajo el código de barra principal.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3 p-4 bg-orange-50/55 rounded-xl border border-orange-100/30">
-                <FileDown className="h-5 w-5 text-orange-600 flex-shrink-0 mt-0.5" />
-                <div>
-                  <h4 className="text-sm font-semibold text-orange-900">Vendedores Incluidos</h4>
-                  <p className="text-xs text-orange-700/80 mt-1">
-                    Permite consolidar en un solo archivo tanto las existencias del almacén principal como de puntos de venta asociados.
-                  </p>
-                </div>
-              </div>
-            </div>
-
             <div className="flex flex-col items-center justify-center py-12 text-orange-900/50 mt-6 border-2 border-dashed border-orange-200/60 rounded-xl bg-orange-50/20">
               <div className="bg-white p-4 rounded-full shadow-sm mb-4 border border-orange-100">
                 <FileSpreadsheet className="h-10 w-10 text-orange-500 animate-pulse" />
