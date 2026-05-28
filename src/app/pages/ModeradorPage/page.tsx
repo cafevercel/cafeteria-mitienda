@@ -605,6 +605,7 @@ export default function ModeradorPage() {
       const targetVendor = vendedores.find(v => v.id.toString() === selectedVendedorDeliver);
 
       let totalItems = 0;
+      const productosEntregados: { nombre: string; cantidad: number }[] = [];
       for (const [productId, productData] of Object.entries(selectedProductsDeliver)) {
         const { cantidad, parametros } = productData;
         const producto = inventario.find(p => p.id.toString() === productId.toString());
@@ -633,11 +634,20 @@ export default function ModeradorPage() {
           Number(selectedVendedorDeliver)
         );
         totalItems += cantidadTotal;
+        productosEntregados.push({ nombre: producto.nombre, cantidad: cantidadTotal });
       }
 
       if (totalItems > 0) {
         toast({ title: "Entregado", description: "Productos despachados con éxito" });
-        await logAccion('entregar_producto', `Entregó ${totalItems} unidades totales al punto de venta "${targetVendor?.nombre}"`);
+        let detalleEntrega: string;
+        if (productosEntregados.length === 1) {
+          const prod = productosEntregados[0];
+          detalleEntrega = `Entregó ${prod.cantidad} unidades de "${prod.nombre}" al punto de venta "${targetVendor?.nombre}"`;
+        } else {
+          const listaProductos = productosEntregados.map(p => `"${p.nombre}": ${p.cantidad}`).join(', ');
+          detalleEntrega = `Entregó ${totalItems} unidades totales (${listaProductos}) al punto de venta "${targetVendor?.nombre}"`;
+        }
+        await logAccion('entregar_producto', detalleEntrega);
       } else {
         toast({ title: "Advertencia", description: "Debe ingresar una cantidad mayor que cero para los productos seleccionados", variant: "default" });
       }
@@ -1167,6 +1177,13 @@ export default function ModeradorPage() {
 
                     <div className="max-h-[50vh] overflow-y-auto space-y-2 pr-2 border rounded-md p-2 bg-gray-50/50">
                       {inventario
+                        .filter(p => {
+                          // Filtrar productos con stock > 0
+                          if (p.tiene_parametros && p.parametros) {
+                            return p.parametros.some(param => param.cantidad > 0);
+                          }
+                          return p.cantidad > 0;
+                        })
                         .filter(p =>
                           p.nombre.toLowerCase().includes(searchTermDeliver.toLowerCase()) ||
                           (p.codigo_barras && p.codigo_barras.toLowerCase().includes(searchTermDeliver.toLowerCase()))
