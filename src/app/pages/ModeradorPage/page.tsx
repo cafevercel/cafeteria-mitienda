@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Shield,
   Plus,
+  Minus,
   Truck,
   ArrowLeftRight,
   ClipboardList,
@@ -21,7 +22,9 @@ import {
   UserCheck,
   Search,
   Scan,
-  DollarSign
+  DollarSign,
+  Edit,
+  X
 } from 'lucide-react';
 import { toast } from "@/hooks/use-toast";
 import {
@@ -29,6 +32,7 @@ import {
   getInventario,
   getVendedores,
   agregarProducto,
+  editarProducto,
   entregarProducto,
   transferirProductoEntreVendedores,
   getTransacciones,
@@ -40,7 +44,7 @@ import ProductDialog from '@/components/ProductDialog';
 import BarcodeScanner from '@/components/BarcodeScanner';
 import { ImageUpload } from '@/components/ImageUpload';
 
-type ModeradorSection = 'crear' | 'entregar' | 'mover' | 'transacciones';
+type ModeradorSection = 'crear' | 'entregar' | 'mover' | 'transacciones' | 'editar';
 
 // Componente de autocompletado para secciones
 const SeccionAutocomplete = React.memo(({
@@ -175,6 +179,30 @@ export default function ModeradorPage() {
   const [loadingTransacciones, setLoadingTransacciones] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
+  // Action states: Editar Producto
+  const [searchTermEdit, setSearchTermEdit] = useState('');
+  const [selectedProductEdit, setSelectedProductEdit] = useState<Producto | null>(null);
+  const [editForm, setEditForm] = useState({
+    nombre: '',
+    precio: 0,
+    precioCompra: 0,
+    cantidad: 0,
+    foto: '',
+    tieneParametros: false,
+    porcentajeGanancia: 0,
+    seccion: '',
+    parametros: [] as Array<{ nombre: string; cantidad: number }>,
+    codigo_barras: ''
+  });
+  const [originalProduct, setOriginalProduct] = useState<Producto | null>(null);
+  const [imageUploadingEdit, setImageUploadingEdit] = useState(false);
+  const [verificandoNombreEdit, setVerificandoNombreEdit] = useState(false);
+  const [nombreExisteEdit, setNombreExisteEdit] = useState(false);
+  const [verificandoBarcodeEdit, setVerificandoBarcodeEdit] = useState(false);
+  const [barcodeExisteEdit, setBarcodeExisteEdit] = useState(false);
+  const [newParamNameEdit, setNewParamNameEdit] = useState('');
+  const [newParamQtyEdit, setNewParamQtyEdit] = useState(0);
+
   // Search inputs
   const [searchTermDeliver, setSearchTermDeliver] = useState('');
   const [searchTermMove, setSearchTermMove] = useState('');
@@ -188,7 +216,7 @@ export default function ModeradorPage() {
 
   // Scanner
   const [showScanner, setShowScanner] = useState(false);
-  const [scannerFor, setScannerFor] = useState<'crear' | 'entregar' | 'mover'>('crear');
+  const [scannerFor, setScannerFor] = useState<'crear' | 'entregar' | 'mover' | 'editar'>('crear');
 
   useEffect(() => {
     const timer = setTimeout(async () => {
@@ -229,6 +257,47 @@ export default function ModeradorPage() {
     return () => clearTimeout(timer);
   }, [newProduct.codigo_barras]);
 
+  // Verificación de nombre para edición
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      if (editForm.nombre.trim() && originalProduct && editForm.nombre !== originalProduct.nombre) {
+        setVerificandoNombreEdit(true);
+        try {
+          const existe = await verificarNombreProducto(editForm.nombre);
+          setNombreExisteEdit(existe);
+        } catch (error) {
+          console.error(error);
+        } finally {
+          setVerificandoNombreEdit(false);
+        }
+      } else {
+        setNombreExisteEdit(false);
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [editForm.nombre, originalProduct]);
+
+  // Verificación de barcode para edición
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      if (editForm.codigo_barras.trim() && originalProduct && editForm.codigo_barras !== originalProduct.codigo_barras) {
+        setVerificandoBarcodeEdit(true);
+        try {
+          const res = await fetch(`/api/productos/verificar-barcode?barcode=${editForm.codigo_barras}`);
+          const data = await res.json();
+          setBarcodeExisteEdit(data.exists);
+        } catch (error) {
+          console.error(error);
+        } finally {
+          setVerificandoBarcodeEdit(false);
+        }
+      } else {
+        setBarcodeExisteEdit(false);
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [editForm.codigo_barras, originalProduct]);
+
   const checkAuth = useCallback(async () => {
     try {
       setLoading(true);
@@ -236,7 +305,7 @@ export default function ModeradorPage() {
       if (user?.rol === 'Moderador') {
         setIsAuthenticated(true);
         setModeradorInfo({ id: user.id, nombre: user.nombre });
-        
+
         // Fetch static resources
         const [vends, inv] = await Promise.all([getVendedores(), getInventario()]);
         setVendedores(vends);
@@ -294,6 +363,177 @@ export default function ModeradorPage() {
     setNewParamQty(0);
   };
 
+  // HELPER: Seleccionar producto para editar
+  const selectProductForEdit = (producto: Producto) => {
+    setSelectedProductEdit(producto);
+    setOriginalProduct(producto);
+    setEditForm({
+      nombre: producto.nombre || '',
+      precio: producto.precio || 0,
+      precioCompra: producto.precio_compra || 0,
+      cantidad: producto.cantidad || 0,
+      foto: producto.foto || '',
+      tieneParametros: producto.tiene_parametros || false,
+      porcentajeGanancia: producto.porcentajeGanancia || 0,
+      seccion: producto.seccion || '',
+      parametros: producto.parametros ? [...producto.parametros] : [],
+      codigo_barras: producto.codigo_barras || ''
+    });
+    setNombreExisteEdit(false);
+    setBarcodeExisteEdit(false);
+  };
+
+  // HELPER: Detectar cambios entre original y editado
+  const detectarCambios = (): string[] => {
+    if (!originalProduct) return [];
+    const cambios: string[] = [];
+
+    if (editForm.nombre !== originalProduct.nombre) {
+      cambios.push(`Nombre: "${originalProduct.nombre}" → "${editForm.nombre}"`);
+    }
+    if (editForm.precio !== originalProduct.precio) {
+      cambios.push(`Precio Venta: $${originalProduct.precio} → $${editForm.precio}`);
+    }
+    if (editForm.precioCompra !== (originalProduct.precio_compra || 0)) {
+      cambios.push(`Precio Compra: $${originalProduct.precio_compra || 0} → $${editForm.precioCompra}`);
+    }
+    if (editForm.seccion !== (originalProduct.seccion || '')) {
+      cambios.push(`Sección: "${originalProduct.seccion || 'N/A'}" → "${editForm.seccion || 'N/A'}"`);
+    }
+    if (editForm.codigo_barras !== (originalProduct.codigo_barras || '')) {
+      cambios.push(`Código Barras: "${originalProduct.codigo_barras || 'N/A'}" → "${editForm.codigo_barras || 'N/A'}"`);
+    }
+    if (editForm.porcentajeGanancia !== (originalProduct.porcentajeGanancia || 0)) {
+      cambios.push(`% Ganancia: ${originalProduct.porcentajeGanancia || 0}% → ${editForm.porcentajeGanancia}%`);
+    }
+    if (editForm.tieneParametros !== originalProduct.tiene_parametros) {
+      cambios.push(`Tiene Parámetros: ${originalProduct.tiene_parametros ? 'Sí' : 'No'} → ${editForm.tieneParametros ? 'Sí' : 'No'}`);
+    }
+
+    // Detectar cambios en cantidad (solo si no tiene parámetros)
+    if (!editForm.tieneParametros && editForm.cantidad !== originalProduct.cantidad) {
+      cambios.push(`Cantidad: ${originalProduct.cantidad} → ${editForm.cantidad}`);
+    }
+
+    // Detectar cambios en parámetros
+    if (editForm.tieneParametros) {
+      const originalParams = originalProduct.parametros || [];
+      const editParams = editForm.parametros;
+
+      editParams.forEach(ep => {
+        const origP = originalParams.find(op => op.nombre === ep.nombre);
+        if (!origP) {
+          cambios.push(`Parámetro nuevo: "${ep.nombre}" (${ep.cantidad})`);
+        } else if (origP.cantidad !== ep.cantidad) {
+          cambios.push(`Parámetro "${ep.nombre}": ${origP.cantidad} → ${ep.cantidad}`);
+        }
+      });
+
+      originalParams.forEach(op => {
+        if (!editParams.find(ep => ep.nombre === op.nombre)) {
+          cambios.push(`Parámetro eliminado: "${op.nombre}" (era ${op.cantidad})`);
+        }
+      });
+    }
+
+    // Detectar cambio de foto
+    if (editForm.foto && editForm.foto !== (originalProduct.foto || '')) {
+      cambios.push(`Imagen: actualizada`);
+    }
+
+    return cambios;
+  };
+
+  // HELPER: Agregar parámetro en edición
+  const addParamToEditForm = () => {
+    if (!newParamNameEdit.trim()) return;
+    setEditForm(prev => ({
+      ...prev,
+      parametros: [...prev.parametros, { nombre: newParamNameEdit, cantidad: newParamQtyEdit }]
+    }));
+    setNewParamNameEdit('');
+    setNewParamQtyEdit(0);
+  };
+
+  // 5. EDITAR PRODUCTO ACTION
+  const handleEditProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedProductEdit || !originalProduct) return;
+    if (nombreExisteEdit || barcodeExisteEdit) return;
+
+    const cambios = detectarCambios();
+    if (cambios.length === 0) {
+      toast({ title: "Sin cambios", description: "No se detectaron modificaciones en el producto." });
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const formData = new FormData();
+      formData.append('nombre', editForm.nombre);
+      formData.append('precio', String(editForm.precio));
+      formData.append('precioCompra', String(editForm.precioCompra));
+      formData.append('cantidad', String(editForm.tieneParametros ? 0 : editForm.cantidad));
+      formData.append('foto', editForm.foto || '');
+      formData.append('tieneParametros', String(editForm.tieneParametros));
+      formData.append('seccion', editForm.seccion);
+      formData.append('codigo_barras', editForm.codigo_barras);
+      formData.append('porcentajeGanancia', String(editForm.porcentajeGanancia));
+
+      if (editForm.tieneParametros) {
+        formData.append('parametros', JSON.stringify(editForm.parametros));
+      }
+
+      await editarProducto(selectedProductEdit.id.toString(), formData);
+
+      toast({ title: "Éxito", description: `Producto "${editForm.nombre}" actualizado correctamente.` });
+
+      // LOG ACCION con detalle exacto de lo que cambió
+      const detalleCambios = cambios.join(' | ');
+      await logAccion('editar_producto', `Editó el producto "${originalProduct.nombre}". Cambios: ${detalleCambios}`);
+
+      // Reset form
+      setSelectedProductEdit(null);
+      setOriginalProduct(null);
+      setEditForm({
+        nombre: '',
+        precio: 0,
+        precioCompra: 0,
+        cantidad: 0,
+        foto: '',
+        tieneParametros: false,
+        porcentajeGanancia: 0,
+        seccion: '',
+        parametros: [],
+        codigo_barras: ''
+      });
+      await refreshData();
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message || "No se pudo actualizar el producto", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setSelectedProductEdit(null);
+    setOriginalProduct(null);
+    setEditForm({
+      nombre: '',
+      precio: 0,
+      precioCompra: 0,
+      cantidad: 0,
+      foto: '',
+      tieneParametros: false,
+      porcentajeGanancia: 0,
+      seccion: '',
+      parametros: [],
+      codigo_barras: ''
+    });
+    setNombreExisteEdit(false);
+    setBarcodeExisteEdit(false);
+  };
+
   const handleCreateProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newProduct.nombre.trim() || nombreExiste || barcodeExiste) return;
@@ -310,15 +550,15 @@ export default function ModeradorPage() {
       formData.append('seccion', newProduct.seccion);
       formData.append('codigo_barras', newProduct.codigo_barras);
       formData.append('porcentajeGanancia', String(newProduct.porcentajeGanancia));
-      
+
       if (newProduct.tieneParametros) {
         formData.append('parametros', JSON.stringify(newProduct.parametros));
       }
 
       await agregarProducto(formData);
-      
+
       toast({ title: "Éxito", description: `Producto "${newProduct.nombre}" creado exitosamente.` });
-      
+
       // LOG ACCION
       const detallesProducto = [
         `Nombre: "${newProduct.nombre}"`,
@@ -327,13 +567,13 @@ export default function ModeradorPage() {
         `Precio Compra: $${newProduct.precioCompra}`,
         `Ganancia: ${newProduct.porcentajeGanancia}%`,
         `Código: ${newProduct.codigo_barras}`,
-        newProduct.tieneParametros 
-          ? `Parámetros: ${newProduct.parametros.map(p => `${p.nombre} (${p.cantidad})`).join(', ')}` 
+        newProduct.tieneParametros
+          ? `Parámetros: ${newProduct.parametros.map(p => `${p.nombre} (${p.cantidad})`).join(', ')}`
           : `Cantidad Inicial: ${newProduct.cantidad}`
       ].join(' | ');
 
       await logAccion('crear_producto', `Creó un nuevo producto. ${detallesProducto}`);
-      
+
       // Reset form
       setNewProduct({
         nombre: '',
@@ -363,7 +603,7 @@ export default function ModeradorPage() {
     try {
       setLoading(true);
       const targetVendor = vendedores.find(v => v.id.toString() === selectedVendedorDeliver);
-      
+
       let totalItems = 0;
       for (const [productId, productData] of Object.entries(selectedProductsDeliver)) {
         const { cantidad, parametros } = productData;
@@ -461,9 +701,9 @@ export default function ModeradorPage() {
 
       const payloadParams = selectedProductMove.tiene_parametros && selectedProductMove.parametros
         ? selectedProductMove.parametros.map(p => ({
-            nombre: p.nombre,
-            cantidad: paramQuantitiesMove[p.nombre] || 0
-          })).filter(p => p.cantidad > 0)
+          nombre: p.nombre,
+          cantidad: paramQuantitiesMove[p.nombre] || 0
+        })).filter(p => p.cantidad > 0)
         : undefined;
 
       await transferirProductoEntreVendedores(
@@ -498,7 +738,7 @@ export default function ModeradorPage() {
       setLoadingTransacciones(true);
       const data = await getTransacciones();
       setTransacciones(data);
-      
+
       // LOG ACCION
       await logAccion('ver_transacciones', `Consultó el historial general de transacciones del almacén`);
     } catch (error) {
@@ -514,9 +754,18 @@ export default function ModeradorPage() {
     }
   }, [activeTab, fetchTransacciones]);
 
+  // Estado para resaltar producto encontrado por escaneo
+  const [highlightedProductId, setHighlightedProductId] = useState<string | null>(null);
+
   // QR/Barcode Scan handle
   const handleBarcodeScanned = (barcode: string) => {
     setShowScanner(false);
+    
+    // Limpiar highlight después de 3 segundos
+    const clearHighlight = () => {
+      setTimeout(() => setHighlightedProductId(null), 3000);
+    };
+    
     if (scannerFor === 'crear') {
       setNewProduct(prev => ({ ...prev, codigo_barras: barcode }));
       toast({ title: "Código Escaneado", description: `Código: ${barcode}` });
@@ -530,18 +779,50 @@ export default function ModeradorPage() {
             parametros: found.tiene_parametros ? {} : undefined,
           }
         }));
-        toast({ title: "Producto Añadido", description: found.nombre });
+        setHighlightedProductId(found.id.toString());
+        toast({ title: "Producto Añadido", description: `${found.nombre} (${found.codigo_barras})` });
+        clearHighlight();
       } else {
-        toast({ title: "No encontrado", description: "Código de barras no registrado en el inventario", variant: "destructive" });
+        toast({ title: "No encontrado", description: `Código "${barcode}" no registrado en el inventario`, variant: "destructive" });
       }
     } else if (scannerFor === 'mover') {
       const found = inventarioOrigen.find(p => p.codigo_barras === barcode);
       if (found) {
         setSelectedProductMove(found);
-        toast({ title: "Producto Encontrado", description: found.nombre });
+        setHighlightedProductId(found.id.toString());
+        toast({ title: "Producto Encontrado", description: `${found.nombre} (${found.codigo_barras})` });
+        clearHighlight();
       } else {
-        toast({ title: "No encontrado", description: "Código de barras no registrado en el punto de origen", variant: "destructive" });
+        toast({ title: "No encontrado", description: `Código "${barcode}" no registrado en el punto de origen`, variant: "destructive" });
       }
+    } else if (scannerFor === 'editar') {
+      if (selectedProductEdit) {
+        // Estamos en modo edición, actualizar el código de barras
+        setEditForm(prev => ({ ...prev, codigo_barras: barcode }));
+        toast({ title: "Código Escaneado", description: `Código: ${barcode}` });
+      } else {
+        // Estamos en modo selección, buscar producto
+        const found = inventario.find(p => p.codigo_barras === barcode);
+        if (found) {
+          selectProductForEdit(found);
+          toast({ title: "Producto Encontrado", description: `${found.nombre} (${found.codigo_barras})` });
+        } else {
+          toast({ title: "No encontrado", description: `Código "${barcode}" no registrado en el inventario`, variant: "destructive" });
+        }
+      }
+    }
+  };
+
+  // Función para buscar producto por código de barras (sin escanear)
+  const handleSearchByBarcode = (searchTerm: string, setSearchTerm: (term: string) => void) => {
+    if (!searchTerm.trim()) return;
+    
+    const found = inventario.find(p => p.codigo_barras === searchTerm.trim());
+    if (found) {
+      setSearchTerm(found.nombre);
+      toast({ title: "Producto Encontrado", description: `${found.nombre} (${found.codigo_barras})` });
+    } else {
+      toast({ title: "No encontrado", description: `Código "${searchTerm}" no registrado`, variant: "destructive" });
     }
   };
 
@@ -570,7 +851,7 @@ export default function ModeradorPage() {
               </span>
             </div>
           </div>
-          
+
           <Button variant="ghost" onClick={handleLogout} className="text-red-600 hover:bg-red-50 gap-2 border border-transparent hover:border-red-100">
             <LogOut className="w-4 h-4" /> Cerrar Sesión
           </Button>
@@ -579,7 +860,7 @@ export default function ModeradorPage() {
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-4 gap-6">
-        
+
         {/* Navigation Sidebar */}
         <div className="lg:col-span-1 space-y-3">
           <Button
@@ -588,6 +869,13 @@ export default function ModeradorPage() {
             className={`w-full justify-start gap-3 h-12 text-left ${activeTab === 'crear' ? 'bg-orange-600 text-white hover:bg-orange-700' : 'bg-white border-orange-100 hover:bg-orange-50 text-orange-950'}`}
           >
             <Plus className="w-5 h-5" /> Crear Producto
+          </Button>
+          <Button
+            onClick={() => setActiveTab('editar')}
+            variant={activeTab === 'editar' ? 'default' : 'outline'}
+            className={`w-full justify-start gap-3 h-12 text-left ${activeTab === 'editar' ? 'bg-orange-600 text-white hover:bg-orange-700' : 'bg-white border-orange-100 hover:bg-orange-50 text-orange-950'}`}
+          >
+            <Edit className="w-5 h-5" /> Editar Producto
           </Button>
           <Button
             onClick={() => setActiveTab('entregar')}
@@ -603,6 +891,7 @@ export default function ModeradorPage() {
           >
             <ArrowLeftRight className="w-5 h-5" /> Mover entre Vendedores
           </Button>
+
           <Button
             onClick={() => setActiveTab('transacciones')}
             variant={activeTab === 'transacciones' ? 'default' : 'outline'}
@@ -614,7 +903,7 @@ export default function ModeradorPage() {
 
         {/* Content Section */}
         <div className="lg:col-span-3">
-          
+
           {/* TAB 1: CREAR PRODUCTO */}
           {activeTab === 'crear' && (
             <Card className="border-orange-100 shadow-sm">
@@ -695,9 +984,9 @@ export default function ModeradorPage() {
                         placeholder="Código de barras"
                         className={`flex-1 ${barcodeExiste ? 'border-red-500 ring-red-500' : ''}`}
                       />
-                      <Button 
-                        type="button" 
-                        variant="outline" 
+                      <Button
+                        type="button"
+                        variant="outline"
                         onClick={() => {
                           const random = Math.floor(Math.random() * 900000000000) + 100000000000;
                           setNewProduct(prev => ({ ...prev, codigo_barras: random.toString() }));
@@ -838,12 +1127,31 @@ export default function ModeradorPage() {
                   <div className="space-y-1.5 pt-2">
                     <Label>Seleccionar Productos a Entregar</Label>
                     <div className="flex gap-2 mb-2">
-                      <Input
-                        placeholder="Buscar producto por nombre o código..."
-                        value={searchTermDeliver}
-                        onChange={e => setSearchTermDeliver(e.target.value)}
-                        className="flex-1"
-                      />
+                      <div className="relative flex-1">
+                        <Input
+                          placeholder="Buscar producto por nombre o código de barras..."
+                          value={searchTermDeliver}
+                          onChange={e => setSearchTermDeliver(e.target.value)}
+                          className="pr-10"
+                        />
+                        {searchTermDeliver && (
+                          <button
+                            type="button"
+                            onClick={() => setSearchTermDeliver('')}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => handleSearchByBarcode(searchTermDeliver, setSearchTermDeliver)}
+                        title="Buscar por código de barras exacto"
+                      >
+                        <Search className="w-4 h-4" />
+                      </Button>
                       <Button
                         type="button"
                         variant="secondary"
@@ -853,108 +1161,121 @@ export default function ModeradorPage() {
                         }}
                         className="bg-orange-50 border border-orange-100 text-orange-950"
                       >
-                        <Scan className="w-4 h-4 mr-2" /> Escanear QR
+                        <Scan className="w-4 h-4 mr-2" /> Escanear
                       </Button>
                     </div>
 
                     <div className="max-h-[50vh] overflow-y-auto space-y-2 pr-2 border rounded-md p-2 bg-gray-50/50">
                       {inventario
-                        .filter(p => p.nombre.toLowerCase().includes(searchTermDeliver.toLowerCase()) || p.codigo_barras?.includes(searchTermDeliver))
+                        .filter(p =>
+                          p.nombre.toLowerCase().includes(searchTermDeliver.toLowerCase()) ||
+                          (p.codigo_barras && p.codigo_barras.toLowerCase().includes(searchTermDeliver.toLowerCase()))
+                        )
                         .map((producto) => (
-                        <div key={producto.id} className="flex flex-col p-3 border rounded-lg bg-white">
-                          <div className="flex items-start gap-3">
-                            <div className="flex items-center h-5">
-                              <Checkbox
-                                id={`product-${producto.id}`}
-                                checked={!!selectedProductsDeliver[producto.id]}
-                                onCheckedChange={(checked) => {
-                                  if (checked) {
-                                    setSelectedProductsDeliver((prev) => ({
-                                      ...prev,
-                                      [producto.id]: {
-                                        cantidad: 0,
-                                        parametros: producto.tiene_parametros ? {} : undefined,
-                                      },
-                                    }));
-                                  } else {
-                                    setSelectedProductsDeliver((prev) => {
-                                      const { [producto.id]: _, ...rest } = prev;
-                                      return rest;
-                                    });
-                                  }
-                                }}
-                              />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <label htmlFor={`product-${producto.id}`} className="font-medium text-sm block cursor-pointer">
-                                {producto.nombre} {producto.seccion ? `(${producto.seccion})` : ''}
-                              </label>
-                              <div className="text-xs text-gray-600 mt-1 space-y-1">
-                                <p>Disponible: {producto.tiene_parametros && producto.parametros ? producto.parametros.reduce((a, b) => a + b.cantidad, 0) : producto.cantidad}</p>
-                              </div>
-                            </div>
-                          </div>
-
-                          {selectedProductsDeliver[producto.id] && (
-                            <div className="mt-3 pl-8 space-y-3">
-                              {!producto.tiene_parametros ? (
-                                <div className="flex items-center gap-2">
-                                  <label className="text-sm text-gray-600 flex-shrink-0">Cantidad a entregar:</label>
-                                  <Input
-                                    type="number"
-                                    value={selectedProductsDeliver[producto.id]?.cantidad || ''}
-                                    onChange={(e) =>
+                          <div
+                            key={producto.id}
+                            className={`flex flex-col p-3 border rounded-lg bg-white transition-all duration-300 ${
+                              highlightedProductId === producto.id.toString()
+                                ? 'ring-2 ring-green-500 bg-green-50'
+                                : ''
+                            }`}
+                          >
+                            <div className="flex items-start gap-3">
+                              <div className="flex items-center h-5">
+                                <Checkbox
+                                  id={`product-${producto.id}`}
+                                  checked={!!selectedProductsDeliver[producto.id]}
+                                  onCheckedChange={(checked) => {
+                                    if (checked) {
                                       setSelectedProductsDeliver((prev) => ({
                                         ...prev,
                                         [producto.id]: {
-                                          ...prev[producto.id],
-                                          cantidad: parseInt(e.target.value, 10) || 0,
+                                          cantidad: 0,
+                                          parametros: producto.tiene_parametros ? {} : undefined,
                                         },
-                                      }))
+                                      }));
+                                    } else {
+                                      setSelectedProductsDeliver((prev) => {
+                                        const { [producto.id]: _, ...rest } = prev;
+                                        return rest;
+                                      });
                                     }
-                                    className="w-24 h-8"
-                                    min={1}
-                                    max={producto.cantidad}
-                                  />
+                                  }}
+                                />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <label htmlFor={`product-${producto.id}`} className="font-medium text-sm block cursor-pointer">
+                                  {producto.nombre} {producto.seccion ? `(${producto.seccion})` : ''}
+                                </label>
+                                <div className="text-xs text-gray-600 mt-1 space-y-1">
+                                  <p>Disponible: {producto.tiene_parametros && producto.parametros ? producto.parametros.reduce((a, b) => a + b.cantidad, 0) : producto.cantidad}</p>
+                                  {producto.codigo_barras && (
+                                    <p className="text-gray-400 font-mono">Código: {producto.codigo_barras}</p>
+                                  )}
                                 </div>
-                              ) : (
-                                <div className="space-y-2">
-                                  {producto.parametros?.map((parametro) => (
-                                    <div key={parametro.nombre} className="flex items-center gap-2">
-                                      <label className="text-sm text-gray-600 flex-1">
-                                        {parametro.nombre}:
-                                        <span className="text-xs text-gray-500 ml-1">
-                                          (Disp: {parametro.cantidad})
-                                        </span>
-                                      </label>
-                                      <Input
-                                        type="number"
-                                        value={selectedProductsDeliver[producto.id]?.parametros?.[parametro.nombre] || ''}
-                                        onChange={(e) => {
-                                          const value = parseInt(e.target.value, 10) || 0;
-                                          setSelectedProductsDeliver((prev) => ({
-                                            ...prev,
-                                            [producto.id]: {
-                                              ...prev[producto.id],
-                                              parametros: {
-                                                ...prev[producto.id]?.parametros,
-                                                [parametro.nombre]: Math.min(value, parametro.cantidad),
-                                              },
-                                            },
-                                          }));
-                                        }}
-                                        className="w-24 h-8"
-                                        min={0}
-                                        max={parametro.cantidad}
-                                      />
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
+                              </div>
                             </div>
-                          )}
-                        </div>
-                      ))}
+
+                            {selectedProductsDeliver[producto.id] && (
+                              <div className="mt-3 pl-8 space-y-3">
+                                {!producto.tiene_parametros ? (
+                                  <div className="flex items-center gap-2">
+                                    <label className="text-sm text-gray-600 flex-shrink-0">Cantidad a entregar:</label>
+                                    <Input
+                                      type="number"
+                                      value={selectedProductsDeliver[producto.id]?.cantidad || ''}
+                                      onChange={(e) =>
+                                        setSelectedProductsDeliver((prev) => ({
+                                          ...prev,
+                                          [producto.id]: {
+                                            ...prev[producto.id],
+                                            cantidad: parseInt(e.target.value, 10) || 0,
+                                          },
+                                        }))
+                                      }
+                                      className="w-24 h-8"
+                                      min={1}
+                                      max={producto.cantidad}
+                                    />
+                                  </div>
+                                ) : (
+                                  <div className="space-y-2">
+                                    {producto.parametros?.map((parametro) => (
+                                      <div key={parametro.nombre} className="flex items-center gap-2">
+                                        <label className="text-sm text-gray-600 flex-1">
+                                          {parametro.nombre}:
+                                          <span className="text-xs text-gray-500 ml-1">
+                                            (Disp: {parametro.cantidad})
+                                          </span>
+                                        </label>
+                                        <Input
+                                          type="number"
+                                          value={selectedProductsDeliver[producto.id]?.parametros?.[parametro.nombre] || ''}
+                                          onChange={(e) => {
+                                            const value = parseInt(e.target.value, 10) || 0;
+                                            setSelectedProductsDeliver((prev) => ({
+                                              ...prev,
+                                              [producto.id]: {
+                                                ...prev[producto.id],
+                                                parametros: {
+                                                  ...prev[producto.id]?.parametros,
+                                                  [parametro.nombre]: Math.min(value, parametro.cantidad),
+                                                },
+                                              },
+                                            }));
+                                          }}
+                                          className="w-24 h-8"
+                                          min={0}
+                                          max={parametro.cantidad}
+                                        />
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        ))}
                       {inventario.length === 0 && (
                         <div className="text-center py-4 text-gray-500">No hay productos en inventario.</div>
                       )}
@@ -1028,36 +1349,44 @@ export default function ModeradorPage() {
 
                   <div className="space-y-1.5">
                     <Label>Seleccionar Producto a Traspasar</Label>
-                    <Input
-                      placeholder="Buscar producto por nombre o código..."
-                      value={searchTermMove}
-                      onChange={e => setSearchTermMove(e.target.value)}
-                      className="mb-2"
-                    />
-                    <div className="flex gap-2">
-                      <Select
-                        value={selectedProductMove?.id || ''}
-                        onValueChange={val => {
-                          const prod = inventarioOrigen.find(p => p.id.toString() === val);
-                          setSelectedProductMove(prod || null);
-                          setParamQuantitiesMove({});
-                        }}
+                    <div className="flex gap-2 mb-2">
+                      <div className="relative flex-1">
+                        <Input
+                          placeholder="Buscar producto por nombre o código de barras..."
+                          value={searchTermMove}
+                          onChange={e => setSearchTermMove(e.target.value)}
+                          className="pr-10"
+                        />
+                        {searchTermMove && (
+                          <button
+                            type="button"
+                            onClick={() => setSearchTermMove('')}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
                         disabled={!selectedFromVendedorMove || loadingFromInventory}
+                        onClick={() => {
+                          if (searchTermMove.trim()) {
+                            const found = inventarioOrigen.find(p => p.codigo_barras === searchTermMove.trim());
+                            if (found) {
+                              setSelectedProductMove(found);
+                              setParamQuantitiesMove({});
+                              toast({ title: "Producto Encontrado", description: `${found.nombre} (${found.codigo_barras})` });
+                            } else {
+                              toast({ title: "No encontrado", description: `Código "${searchTermMove}" no registrado`, variant: "destructive" });
+                            }
+                          }
+                        }}
+                        title="Buscar por código de barras exacto"
                       >
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder={loadingFromInventory ? "Cargando stock..." : "Selecciona un producto del origen"} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {inventarioOrigen
-                            .filter(p => p.nombre.toLowerCase().includes(searchTermMove.toLowerCase()) || p.codigo_barras?.includes(searchTermMove))
-                            .map(p => (
-                            <SelectItem key={p.id} value={p.id.toString()}>
-                              {p.nombre} - Stock: {p.tiene_parametros && p.parametros ? p.parametros.reduce((a, b) => a + b.cantidad, 0) : p.cantidad}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-
+                        <Search className="w-4 h-4" />
+                      </Button>
                       <Button
                         type="button"
                         variant="secondary"
@@ -1068,15 +1397,41 @@ export default function ModeradorPage() {
                         }}
                         className="bg-orange-50 border border-orange-100 text-orange-950"
                       >
-                        <Scan className="w-4 h-4 mr-2" /> Escanear QR
+                        <Scan className="w-4 h-4 mr-2" /> Escanear
                       </Button>
                     </div>
+                    <Select
+                      value={selectedProductMove?.id || ''}
+                      onValueChange={val => {
+                        const prod = inventarioOrigen.find(p => p.id.toString() === val);
+                        setSelectedProductMove(prod || null);
+                        setParamQuantitiesMove({});
+                      }}
+                      disabled={!selectedFromVendedorMove || loadingFromInventory}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder={loadingFromInventory ? "Cargando stock..." : "Selecciona un producto del origen"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {inventarioOrigen
+                          .filter(p =>
+                            p.nombre.toLowerCase().includes(searchTermMove.toLowerCase()) ||
+                            (p.codigo_barras && p.codigo_barras.toLowerCase().includes(searchTermMove.toLowerCase()))
+                          )
+                          .map(p => (
+                            <SelectItem key={p.id} value={p.id.toString()}>
+                              {p.nombre} - Stock: {p.tiene_parametros && p.parametros ? p.parametros.reduce((a, b) => a + b.cantidad, 0) : p.cantidad}
+                              {p.codigo_barras && ` [${p.codigo_barras}]`}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   {selectedProductMove && (
                     <div className="p-4 bg-orange-50/50 rounded-lg border border-orange-100 space-y-3">
                       <h4 className="font-bold text-orange-950 text-sm">Configurar transferencia</h4>
-                      
+
                       {selectedProductMove.tiene_parametros && selectedProductMove.parametros ? (
                         <div className="space-y-3">
                           {selectedProductMove.parametros.map(p => (
@@ -1184,13 +1539,12 @@ export default function ModeradorPage() {
                               </td>
                               <td className="px-4 py-3 text-gray-900 font-semibold">{t.producto}</td>
                               <td className="px-4 py-3">
-                                <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                                  t.tipo === 'Entrega' 
-                                    ? 'bg-blue-100 text-blue-800' 
-                                    : t.tipo === 'Baja' 
-                                      ? 'bg-red-100 text-red-800' 
+                                <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full ${t.tipo === 'Entrega'
+                                    ? 'bg-blue-100 text-blue-800'
+                                    : t.tipo === 'Baja'
+                                      ? 'bg-red-100 text-red-800'
                                       : 'bg-gray-100 text-gray-800'
-                                }`}>
+                                  }`}>
                                   {t.tipo}
                                 </span>
                               </td>
@@ -1199,7 +1553,7 @@ export default function ModeradorPage() {
                               <td className="px-4 py-3 text-right font-bold text-gray-950">{t.cantidad}</td>
                             </tr>
                           ))}
-                        
+
                         {transacciones.length === 0 && (
                           <tr>
                             <td colSpan={6} className="text-center py-8 text-gray-400 font-medium">
@@ -1210,6 +1564,359 @@ export default function ModeradorPage() {
                       </tbody>
                     </table>
                   </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* TAB 5: EDITAR PRODUCTO */}
+          {activeTab === 'editar' && (
+            <Card className="border-orange-100 shadow-sm">
+              <CardHeader className="bg-white border-b border-orange-50">
+                <CardTitle className="text-xl font-bold text-orange-950 flex items-center gap-2">
+                  <Edit className="w-5 h-5 text-orange-600" /> Editar Producto Existente
+                </CardTitle>
+                <CardDescription>
+                  Modifica los datos de un producto del inventario. Todos los cambios quedan registrados en la bitácora.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="pt-6">
+                {!selectedProductEdit ? (
+                  /* SELECCIÓN DE PRODUCTO */
+                  <div className="space-y-4">
+                    <div className="space-y-1.5">
+                      <Label>Buscar Producto a Editar</Label>
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <Input
+                            placeholder="Buscar por nombre o código de barras..."
+                            value={searchTermEdit}
+                            onChange={e => setSearchTermEdit(e.target.value)}
+                            className="pr-10"
+                          />
+                          {searchTermEdit && (
+                            <button
+                              type="button"
+                              onClick={() => setSearchTermEdit('')}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => {
+                            if (searchTermEdit.trim()) {
+                              const found = inventario.find(p => p.codigo_barras === searchTermEdit.trim());
+                              if (found) {
+                                selectProductForEdit(found);
+                                toast({ title: "Producto Encontrado", description: `${found.nombre} (${found.codigo_barras})` });
+                              } else {
+                                toast({ title: "No encontrado", description: `Código "${searchTermEdit}" no registrado`, variant: "destructive" });
+                              }
+                            }
+                          }}
+                          title="Buscar por código de barras exacto"
+                        >
+                          <Search className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={() => {
+                            setScannerFor('editar');
+                            setShowScanner(true);
+                          }}
+                          className="bg-orange-50 border border-orange-100 text-orange-950"
+                        >
+                          <Scan className="w-4 h-4 mr-2" /> Escanear
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="max-h-[50vh] overflow-y-auto space-y-2 pr-2 border rounded-md p-2 bg-gray-50/50">
+                      {inventario
+                        .filter(p =>
+                          p.nombre.toLowerCase().includes(searchTermEdit.toLowerCase()) ||
+                          (p.codigo_barras && p.codigo_barras.toLowerCase().includes(searchTermEdit.toLowerCase()))
+                        )
+                        .map((producto) => (
+                          <div
+                            key={producto.id}
+                            onClick={() => selectProductForEdit(producto)}
+                            className="flex items-center gap-3 p-3 border rounded-lg bg-white cursor-pointer hover:bg-orange-50 hover:border-orange-200 transition-colors"
+                          >
+                            <div className="w-10 h-10 bg-gray-100 rounded-md flex items-center justify-center overflow-hidden flex-shrink-0">
+                              {producto.foto ? (
+                                <img src={producto.foto} alt={producto.nombre} className="w-full h-full object-cover" />
+                              ) : (
+                                <Box className="w-5 h-5 text-gray-400" />
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-sm text-gray-800 truncate">{producto.nombre}</p>
+                              <div className="text-xs text-gray-500 space-y-0.5">
+                                <p>
+                                  ${producto.precio} · {producto.seccion || 'Sin sección'} · Stock: {producto.tiene_parametros && producto.parametros ? producto.parametros.reduce((a, b) => a + b.cantidad, 0) : producto.cantidad}
+                                </p>
+                                {producto.codigo_barras && (
+                                  <p className="text-gray-400 font-mono">Código: {producto.codigo_barras}</p>
+                                )}
+                              </div>
+                            </div>
+                            <Edit className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                          </div>
+                        ))}
+                      {inventario.length === 0 && (
+                        <div className="text-center py-8 text-gray-500">No hay productos en inventario.</div>
+                      )}
+                      {inventario.length > 0 && inventario.filter(p =>
+                        p.nombre.toLowerCase().includes(searchTermEdit.toLowerCase()) ||
+                        (p.codigo_barras && p.codigo_barras.toLowerCase().includes(searchTermEdit.toLowerCase()))
+                      ).length === 0 && searchTermEdit && (
+                          <div className="text-center py-8 text-gray-500">{`No se encontraron productos con "${searchTermEdit}"`}</div>
+                        )}
+                    </div>
+                  </div>
+                ) : (
+                  /* FORMULARIO DE EDICIÓN */
+                  <form onSubmit={handleEditProduct} className="space-y-4">
+                    {/* Info del producto seleccionado */}
+                    <div className="flex items-center gap-3 p-3 bg-orange-50 rounded-lg border border-orange-100">
+                      <div className="w-12 h-12 bg-white rounded-md flex items-center justify-center overflow-hidden flex-shrink-0">
+                        {editForm.foto ? (
+                          <img src={editForm.foto} alt={editForm.nombre} className="w-full h-full object-cover" />
+                        ) : (
+                          <Box className="w-6 h-6 text-gray-400" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-sm text-orange-900">{originalProduct?.nombre}</p>
+                        <p className="text-xs text-orange-600">Editando producto existente</p>
+                      </div>
+                      <Button type="button" variant="ghost" size="sm" onClick={handleCancelEdit} className="text-gray-500 hover:text-red-600">
+                        Cambiar
+                      </Button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="edit-nombre">Nombre del Producto</Label>
+                        <Input
+                          id="edit-nombre"
+                          value={editForm.nombre}
+                          onChange={e => setEditForm(prev => ({ ...prev, nombre: e.target.value }))}
+                          placeholder="Ej. Coca Cola 350ml"
+                          required
+                          className={`${nombreExisteEdit ? 'border-red-500 ring-red-500' : ''}`}
+                        />
+                        {verificandoNombreEdit && <p className="text-xs text-gray-500 mt-1">Verificando nombre...</p>}
+                        {!verificandoNombreEdit && nombreExisteEdit && <p className="text-xs text-red-500 font-medium mt-1">Este nombre de producto ya existe</p>}
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="edit-seccion">Sección o Categoría</Label>
+                        <SeccionAutocomplete
+                          value={editForm.seccion}
+                          onChange={(value) => setEditForm(prev => ({ ...prev, seccion: value }))}
+                          seccionesExistentes={seccionesExistentes}
+                          placeholder="Ej. Bebidas, Golosinas"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="edit-precio">Precio de Venta ($)</Label>
+                        <Input
+                          id="edit-precio"
+                          type="number"
+                          step="0.01"
+                          value={editForm.precio}
+                          onChange={e => setEditForm(prev => ({ ...prev, precio: parseFloat(e.target.value) || 0 }))}
+                          required
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="edit-precioCompra">Precio de Compra ($)</Label>
+                        <Input
+                          id="edit-precioCompra"
+                          type="number"
+                          step="0.01"
+                          value={editForm.precioCompra}
+                          onChange={e => setEditForm(prev => ({ ...prev, precioCompra: parseFloat(e.target.value) || 0 }))}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="edit-porcentajeGanancia">% de Ganancia</Label>
+                        <Input
+                          id="edit-porcentajeGanancia"
+                          type="number"
+                          value={editForm.porcentajeGanancia}
+                          onChange={e => setEditForm(prev => ({ ...prev, porcentajeGanancia: parseInt(e.target.value) || 0 }))}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Código de Barras</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          value={editForm.codigo_barras}
+                          onChange={e => setEditForm(prev => ({ ...prev, codigo_barras: e.target.value }))}
+                          placeholder="Código de barras"
+                          className={`flex-1 ${barcodeExisteEdit ? 'border-red-500 ring-red-500' : ''}`}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => {
+                            const random = Math.floor(Math.random() * 900000000000) + 100000000000;
+                            setEditForm(prev => ({ ...prev, codigo_barras: random.toString() }));
+                          }}
+                        >
+                          Aleatorio
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={() => {
+                            setScannerFor('editar');
+                            setShowScanner(true);
+                          }}
+                          className="bg-orange-50 border border-orange-100 text-orange-950"
+                        >
+                          <Scan className="w-4 h-4 mr-2" /> Escanear
+                        </Button>
+                      </div>
+                      {verificandoBarcodeEdit && <p className="text-xs text-gray-500 mt-1">Verificando código...</p>}
+                      {barcodeExisteEdit && <p className="text-xs text-red-500 font-medium mt-1">Este código de barras ya existe.</p>}
+                    </div>
+
+                    <div className="flex items-center space-x-2 pt-2">
+                      <Checkbox
+                        id="edit-tieneParametros"
+                        checked={editForm.tieneParametros}
+                        onCheckedChange={checked => setEditForm(prev => ({ ...prev, tieneParametros: checked as boolean }))}
+                      />
+                      <Label htmlFor="edit-tieneParametros" className="font-semibold text-gray-700 cursor-pointer">
+                        El producto tiene parámetros (Sabores, tallas, etc.)
+                      </Label>
+                    </div>
+
+                    {editForm.tieneParametros ? (
+                      <div className="p-4 bg-orange-50/50 rounded-lg border border-orange-100 space-y-4">
+                        <Label className="font-bold text-orange-950">Parámetros</Label>
+                        <div className="space-y-2">
+                          {editForm.parametros.map((p, idx) => (
+                            <div key={idx} className="flex gap-2 items-center">
+                              <Input
+                                value={p.nombre}
+                                onChange={e => {
+                                  const newParams = [...editForm.parametros];
+                                  newParams[idx] = { ...newParams[idx], nombre: e.target.value };
+                                  setEditForm(prev => ({ ...prev, parametros: newParams }));
+                                }}
+                                placeholder="Nombre del parámetro"
+                                className="flex-1"
+                              />
+                              <Input
+                                type="number"
+                                value={p.cantidad}
+                                onChange={e => {
+                                  const newParams = [...editForm.parametros];
+                                  newParams[idx] = { ...newParams[idx], cantidad: parseInt(e.target.value) || 0 };
+                                  setEditForm(prev => ({ ...prev, parametros: newParams }));
+                                }}
+                                placeholder="Cantidad"
+                                className="w-24"
+                              />
+                              <Button
+                                type="button"
+                                variant="destructive"
+                                size="icon"
+                                onClick={() => {
+                                  const newParams = editForm.parametros.filter((_, i) => i !== idx);
+                                  setEditForm(prev => ({ ...prev, parametros: newParams }));
+                                }}
+                              >
+                                <Minus className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex gap-2 items-end">
+                          <div className="flex-1 space-y-1">
+                            <Label className="text-xs">Nuevo parámetro</Label>
+                            <Input
+                              value={newParamNameEdit}
+                              onChange={e => setNewParamNameEdit(e.target.value)}
+                              placeholder="Ej. Fresa, Chocolate"
+                            />
+                          </div>
+                          <div className="w-24 space-y-1">
+                            <Label className="text-xs">Cantidad</Label>
+                            <Input
+                              type="number"
+                              value={newParamQtyEdit}
+                              onChange={e => setNewParamQtyEdit(parseInt(e.target.value) || 0)}
+                            />
+                          </div>
+                          <Button type="button" onClick={addParamToEditForm} variant="outline" className="border-orange-200">
+                            <Plus className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5">
+                        <Label htmlFor="edit-cantidad">Cantidad en Almacén</Label>
+                        <Input
+                          id="edit-cantidad"
+                          type="number"
+                          value={editForm.cantidad}
+                          onChange={e => setEditForm(prev => ({ ...prev, cantidad: parseInt(e.target.value) || 0 }))}
+                        />
+                      </div>
+                    )}
+
+                    <div className="space-y-1.5">
+                      <Label>Imagen del Producto</Label>
+                      <ImageUpload
+                        value={editForm.foto}
+                        onChange={url => setEditForm(prev => ({ ...prev, foto: url }))}
+                        disabled={imageUploadingEdit}
+                      />
+                    </div>
+
+                    {/* Resumen de cambios */}
+                    {originalProduct && detectarCambios().length > 0 && (
+                      <div className="p-3 bg-yellow-50 rounded-lg border border-yellow-200 space-y-2">
+                        <Label className="font-bold text-yellow-800 text-sm">Cambios detectados:</Label>
+                        <ul className="text-xs text-yellow-700 space-y-1">
+                          {detectarCambios().map((cambio, idx) => (
+                            <li key={idx} className="flex items-start gap-1">
+                              <span className="text-yellow-500 mt-0.5">•</span>
+                              <span>{cambio}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    <div className="pt-4 border-t flex justify-end gap-3">
+                      <Button type="button" variant="outline" onClick={handleCancelEdit}>
+                        Cancelar
+                      </Button>
+                      <Button
+                        type="submit"
+                        className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-6"
+                        disabled={nombreExisteEdit || verificandoNombreEdit || barcodeExisteEdit || verificandoBarcodeEdit}
+                      >
+                        Guardar Cambios
+                      </Button>
+                    </div>
+                  </form>
                 )}
               </CardContent>
             </Card>

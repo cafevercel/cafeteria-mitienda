@@ -195,6 +195,7 @@ export default function ModeradoresSection() {
   const getActionBadgeColor = (action: string) => {
     switch (action) {
       case 'crear_producto': return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+      case 'editar_producto': return 'bg-cyan-100 text-cyan-800 border-cyan-200';
       case 'entregar_producto': return 'bg-blue-100 text-blue-800 border-blue-200';
       case 'mover_vendedores': return 'bg-amber-100 text-amber-800 border-amber-200';
       case 'ver_transacciones': return 'bg-purple-100 text-purple-800 border-purple-200';
