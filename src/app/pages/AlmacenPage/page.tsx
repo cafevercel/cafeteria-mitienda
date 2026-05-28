@@ -15,6 +15,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import ContabilidadProducto from '@/components/ContabilidadProducto'
 import ContabilidadVendedoresPage from '@/components/ContabilidadVendedoresPage'
+import ModeradoresSection from '@/components/ModeradoresSection'
 import { Checkbox } from "@/components/ui/checkbox"
 import { Menu, ArrowUpDown, Plus, Truck, UserPlus, FileSpreadsheet, Trash2, X, Minus, Loader2, MoreVertical, Eye, Edit, DollarSign, Search, TrendingUp, Calendar, Box, ArrowLeftRight, User, Scan } from "lucide-react"
 import {
@@ -282,7 +283,7 @@ export default function AlmacenPage() {
   const [selectedProduct, setSelectedProduct] = useState<Producto | null>(null)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   // En AlmacenPage.tsx, actualizar el estado:
-  const [activeSection, setActiveSection] = useState<'productos' | 'puntos-venta' | 'ventas' | 'menu' | 'contabilidad' | 'contabilidad-vendedores' | 'exportacion-comparacion'>('productos')
+  const [activeSection, setActiveSection] = useState<'productos' | 'puntos-venta' | 'moderadores' | 'ventas' | 'menu' | 'contabilidad' | 'contabilidad-vendedores' | 'exportacion-comparacion'>('productos')
   const [showMassDeliveryDialog, setShowMassDeliveryDialog] = useState(false)
   const [selectedVendorForMassDelivery, setSelectedVendorForMassDelivery] = useState<number | null>(null)
   const [selectedProducts, setSelectedProducts] = useState<{
@@ -1538,6 +1539,16 @@ export default function AlmacenPage() {
               </Button>
               <Button
                 variant="ghost"
+                className={activeSection === 'moderadores' ? 'bg-orange-100 text-orange-800' : 'text-orange-700 hover:bg-orange-50 hover:text-orange-800'}
+                onClick={() => {
+                  setActiveSection('moderadores')
+                  setIsMenuOpen(false)
+                }}
+              >
+                Moderadores
+              </Button>
+              <Button
+                variant="ghost"
                 className={activeSection === 'ventas' ? 'bg-orange-100 text-orange-800' : 'text-orange-700 hover:bg-orange-50 hover:text-orange-800'}
                 onClick={() => {
                   setActiveSection('ventas')
@@ -1962,6 +1973,10 @@ export default function AlmacenPage() {
             </CardContent>
           </Card>
         </div>
+      )}
+
+      {activeSection === 'moderadores' && (
+        <ModeradoresSection />
       )}
 
       {activeSection === 'ventas' && (

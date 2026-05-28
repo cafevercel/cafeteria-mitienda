@@ -6,13 +6,13 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { login } from "../../services/auth"
-import { loginEmpleado, loginAdmin } from "../../services/api"
+import { loginEmpleado, loginAdmin, loginModerador } from "../../services/api"
 import Image from 'next/image'
 
 export default function LoginPage() {
   const [nombre, setNombre] = useState('')
   const [password, setPassword] = useState('')
-  const [tipoUsuario, setTipoUsuario] = useState<'empleado' | 'admin'>('empleado')
+  const [tipoUsuario, setTipoUsuario] = useState<'empleado' | 'admin' | 'moderador'>('empleado')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
@@ -33,6 +33,16 @@ export default function LoginPage() {
         if (adminData.user && adminData.user.id) {
           console.log('Redirigiendo a la página de almacén');
           router.push('/pages/AlmacenPage');
+          return;
+        }
+      } else if (tipoUsuario === 'moderador') {
+        // Login de moderador
+        const moderadorData = await loginModerador(nombre, password);
+        console.log('Login de moderador exitoso:', moderadorData);
+        
+        if (moderadorData.user && moderadorData.user.id) {
+          console.log('Redirigiendo a la página de moderador');
+          router.push('/pages/ModeradorPage');
           return;
         }
       } else {
@@ -86,18 +96,19 @@ export default function LoginPage() {
               <select
                 id="tipo"
                 value={tipoUsuario}
-                onChange={(e) => setTipoUsuario(e.target.value as 'empleado' | 'admin')}
+                onChange={(e) => setTipoUsuario(e.target.value as 'empleado' | 'admin' | 'moderador')}
                 disabled={isLoading}
                 className="w-full border border-orange-200 rounded-md px-3 py-2 focus:border-orange-400 focus:ring-orange-400"
               >
                 <option value="empleado">Empleado</option>
                 <option value="admin">Administrador</option>
+                <option value="moderador">Moderador</option>
               </select>
             </div>
 
             <div className="space-y-2">
               <label htmlFor="nombre" className="text-sm font-medium leading-none text-orange-700 peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                {tipoUsuario === 'admin' ? 'Nombre de Administrador' : 'Nombre de Empleado'}
+                {tipoUsuario === 'admin' ? 'Nombre de Administrador' : tipoUsuario === 'moderador' ? 'Nombre de Moderador' : 'Nombre de Empleado'}
               </label>
               <Input
                 id="nombre"
@@ -105,7 +116,7 @@ export default function LoginPage() {
                 value={nombre}
                 onChange={(e) => setNombre(e.target.value)}
                 required
-                placeholder={tipoUsuario === 'admin' ? 'Ingresa tu nombre de administrador' : 'Ingresa tu nombre de empleado'}
+                placeholder={tipoUsuario === 'admin' ? 'Ingresa tu nombre de administrador' : tipoUsuario === 'moderador' ? 'Ingresa tu nombre de moderador' : 'Ingresa tu nombre de empleado'}
                 disabled={isLoading}
                 className="border-orange-200 focus:border-orange-400 focus:ring-orange-400"
               />
@@ -132,7 +143,9 @@ export default function LoginPage() {
             <div className="text-xs text-gray-500 text-center mt-2">
               {tipoUsuario === 'admin'
                 ? 'Acceso para administradores del sistema'
-                : 'Acceso para empleados de puntos de venta'}
+                : tipoUsuario === 'moderador'
+                  ? 'Acceso para moderadores del sistema'
+                  : 'Acceso para empleados de puntos de venta'}
             </div>
           </form>
         </CardContent>
