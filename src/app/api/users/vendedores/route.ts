@@ -75,6 +75,7 @@ export async function PUT(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const id = searchParams.get('id');
+  const purge = searchParams.get('purge') === 'true';
 
   if (!id) {
     return NextResponse.json({ error: 'ID no proporcionado' }, { status: 400 });
@@ -109,10 +110,32 @@ export async function DELETE(request: NextRequest) {
         WHERE desde = $1 OR hacia = $1
       `, [id]);
 
+      if (purge) {
+        // 5. Eliminar gastos del vendedor
+        await query('DELETE FROM gastos WHERE vendedor_id = $1', [id]);
+
+        // 6. Eliminar salarios del vendedor
+        await query('DELETE FROM salarios WHERE usuario_id = $1', [id]);
+
+        // 7. Eliminar empleados del vendedor
+        await query('DELETE FROM empleados WHERE usuario_id = $1', [id]);
+
+        // 8. Eliminar parámetros de productos del vendedor
+        await query('DELETE FROM usuario_producto_parametros WHERE usuario_id = $1', [id]);
+
+        // 9. Eliminar productos del vendedor
+        await query('DELETE FROM usuario_productos WHERE usuario_id = $1', [id]);
+
+        // 10. Eliminar el usuario (vendedor)
+        await query('DELETE FROM usuarios WHERE id = $1 AND rol = $2', [id, 'Vendedor']);
+      }
+
       await query('COMMIT');
 
       return NextResponse.json({
-        message: 'Ventas y transacciones eliminadas correctamente',
+        message: purge 
+          ? 'Punto de venta y todos sus datos eliminados correctamente' 
+          : 'Ventas y transacciones eliminadas correctamente',
         vendedorId: id
       });
 
@@ -122,9 +145,9 @@ export async function DELETE(request: NextRequest) {
     }
 
   } catch (error) {
-    console.error('Error al eliminar ventas y transacciones:', error);
+    console.error('Error al eliminar vendedor/datos:', error);
     return NextResponse.json(
-      { error: 'Error al eliminar ventas y transacciones' },
+      { error: 'Error al eliminar vendedor/datos' },
       { status: 500 }
     );
   }

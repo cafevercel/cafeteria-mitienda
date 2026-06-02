@@ -47,7 +47,7 @@ interface VendorDialogProps {
     cantidad: number,
     parametros?: Array<{ nombre: string; cantidad: number }>
   ) => Promise<void>;
-  onDeleteVendorData: (vendorId: string) => Promise<void>;
+  onDeleteVendorData: (vendorId: string, purge?: boolean) => Promise<void>;
   onUpdateProductQuantity?: (
     vendorId: string,
     productId: string,
@@ -407,6 +407,7 @@ export default function VendorDialog({
   const [expandedTransactions, setExpandedTransactions] = useState<Record<string, boolean>>({});
   const [deleteConfirmDialogOpen, setDeleteConfirmDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [purgeMode, setPurgeMode] = useState(false);
   const [showComparativeTable, setShowComparativeTable] = useState(false)
   const [filterType, setFilterType] = useState<'all' | 'lessThan5' | 'outOfStock' | 'notInVendor'>('all');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc' | null>(null);
@@ -547,18 +548,22 @@ export default function VendorDialog({
   const handleDeleteVendorData = async () => {
     try {
       setIsDeleting(true);
-      await onDeleteVendorData(vendor.id);
+      await onDeleteVendorData(vendor.id, purgeMode);
       toast({
         title: "Éxito",
-        description: "Los datos del vendedor han sido eliminados correctamente.",
+        description: purgeMode
+          ? "El punto de venta y todos sus datos han sido eliminados correctamente."
+          : "Los datos del vendedor han sido eliminados correctamente.",
       });
       setDeleteConfirmDialogOpen(false);
       onClose(); // Cerrar el diálogo principal
     } catch (error) {
-      console.error('Error al eliminar los datos:', error);
+      console.error('Error al eliminar:', error);
       toast({
         title: "Error",
-        description: "No se pudieron eliminar los datos del vendedor. Por favor, inténtelo de nuevo.",
+        description: purgeMode
+          ? "No se pudo eliminar el punto de venta. Por favor, inténtelo de nuevo."
+          : "No se pudieron eliminar los datos del vendedor. Por favor, inténtelo de nuevo.",
         variant: "destructive",
       });
     } finally {
@@ -1757,14 +1762,27 @@ export default function VendorDialog({
                 )}
               </Button>
 
-              {/* Nuevo botón para eliminar datos */}
-              <div className="pt-4 border-t mt-4">
+              {/* Nuevo botón para eliminar datos y punto de venta */}
+              <div className="pt-4 border-t mt-4 space-y-2">
+                <Button
+                  variant="outline"
+                  className="w-full text-red-600 hover:text-red-700 border-red-200 hover:bg-red-50"
+                  onClick={() => {
+                    setPurgeMode(false);
+                    setDeleteConfirmDialogOpen(true);
+                  }}
+                >
+                  Eliminar datos del vendedor
+                </Button>
                 <Button
                   variant="destructive"
                   className="w-full"
-                  onClick={() => setDeleteConfirmDialogOpen(true)}
+                  onClick={() => {
+                    setPurgeMode(true);
+                    setDeleteConfirmDialogOpen(true);
+                  }}
                 >
-                  Eliminar datos del vendedor
+                  Eliminar Punto de Venta
                 </Button>
               </div>
             </div>
@@ -1872,13 +1890,19 @@ export default function VendorDialog({
       </DialogContent>
 
       {/* Diálogo para confirmar eliminación de datos */}
-      <AlertDialog open={deleteConfirmDialogOpen} onOpenChange={setDeleteConfirmDialogOpen}>
+      <AlertDialog open={deleteConfirmDialogOpen} onOpenChange={(open) => {
+        setDeleteConfirmDialogOpen(open);
+        if (!open) setPurgeMode(false);
+      }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {purgeMode ? '¿Eliminar punto de venta?' : '¿Estás seguro?'}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              Esta acción eliminará todas las ventas y transacciones asociadas a este vendedor.
-              Esta acción no se puede deshacer.
+              {purgeMode
+                ? `Esta acción eliminará permanentemente el punto de venta "${vendor.nombre}" junto con todas sus ventas, transacciones, productos, empleados, salarios y gastos. Esta acción no se puede deshacer.`
+                : 'Esta acción eliminará todas las ventas y transacciones asociadas a este vendedor. Esta acción no se puede deshacer.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1893,8 +1917,10 @@ export default function VendorDialog({
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Eliminando...
                 </>
+              ) : purgeMode ? (
+                'Eliminar Punto de Venta'
               ) : (
-                'Eliminar'
+                'Eliminar datos'
               )}
             </AlertDialogAction>
           </AlertDialogFooter>

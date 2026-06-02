@@ -448,15 +448,20 @@ export default function AlmacenPage() {
   };
 
 
-  const handleDeleteVendorData = async (vendorId: string) => {
+  const handleDeleteVendorData = async (vendorId: string, purge?: boolean) => {
     try {
-      const response = await fetch(`/api/users/vendedores?id=${vendorId}`, {
+      const url = `/api/users/vendedores?id=${vendorId}${purge ? '&purge=true' : ''}`;
+      const response = await fetch(url, {
         method: 'DELETE',
       });
 
       if (!response.ok) {
         const data = await response.json();
         throw new Error(data.error || 'Error al eliminar datos');
+      }
+
+      if (purge) {
+        await fetchVendedores();
       }
 
       return await response.json();
