@@ -89,18 +89,22 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onScan, onClose, open, 
         };
 
         const config = {
-          fps: 20,
+          fps: 10,
           qrbox: (width: number, height: number) => {
             // Un área óptima para códigos de barra (ancho y corto)
-            const qrboxWidth = Math.min(width * 0.85, 360);
-            const qrboxHeight = Math.min(height * 0.45, 140);
+            const qrboxWidth = Math.min(width * 0.9, 380);
+            const qrboxHeight = Math.min(height * 0.4, 150);
             return { width: qrboxWidth, height: qrboxHeight };
           },
-          aspectRatio: 1.333333
+          aspectRatio: 1.777778
         };
 
         await html5QrCode.start(
-          { facingMode: "environment" },
+          { 
+            facingMode: "environment",
+            width: { min: 640, ideal: 1280, max: 1920 },
+            height: { min: 480, ideal: 720, max: 1080 }
+          },
           config,
           qrCodeSuccessCallback,
           () => {} // Ignorar advertencias silenciosas
