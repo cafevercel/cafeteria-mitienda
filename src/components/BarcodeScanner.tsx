@@ -64,12 +64,6 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onScan, onClose, open, 
     setCameraError(null);
     setScanError(null);
 
-    // Verificar si el navegador admite el acceso a la cámara (requiere HTTPS en móviles)
-    if (typeof window !== 'undefined' && (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia)) {
-      setCameraError("Su navegador no permite el acceso a la cámara. Si está en desarrollo local, acceda mediante HTTPS o use localhost.");
-      return;
-    }
-
     // Esperar a que el elemento DOM con id "barcode-live-scanner" esté montado
     setTimeout(async () => {
       const element = document.getElementById("barcode-live-scanner");
@@ -95,61 +89,28 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onScan, onClose, open, 
         };
 
         const config = {
-          fps: 10,
+          fps: 20,
           qrbox: (width: number, height: number) => {
             // Un área óptima para códigos de barra (ancho y corto)
-            const qrboxWidth = Math.min(width * 0.9, 380);
-            const qrboxHeight = Math.min(height * 0.4, 150);
+            const qrboxWidth = Math.min(width * 0.85, 360);
+            const qrboxHeight = Math.min(height * 0.45, 140);
             return { width: qrboxWidth, height: qrboxHeight };
           },
-          aspectRatio: 1.777778
+          aspectRatio: 1.333333
         };
 
-        // Intentar primero con restricciones avanzadas de resolución
-        try {
-          await html5QrCode.start(
-            { 
-              facingMode: "environment",
-              width: { min: 640, ideal: 1280, max: 1920 },
-              height: { min: 480, ideal: 720, max: 1080 }
-            },
-            config,
-            qrCodeSuccessCallback,
-            () => {} // Ignorar advertencias silenciosas
-          );
-        } catch (innerErr) {
-          console.warn("Fallo con restricciones avanzadas, reintentando con básicas:", innerErr);
-          // Reintentar con parámetros básicos (OverconstrainedError / NotReadableError)
-          await html5QrCode.start(
-            { facingMode: "environment" },
-            config,
-            qrCodeSuccessCallback,
-            () => {} // Ignorar advertencias silenciosas
-          );
-        }
+        await html5QrCode.start(
+          { facingMode: "environment" },
+          config,
+          qrCodeSuccessCallback,
+          () => {} // Ignorar advertencias silenciosas
+        );
       } catch (err: any) {
         console.error("Camera access error:", err);
         setCameraError("No se pudo acceder a la cámara trasera. Asegúrese de otorgar permisos o use la opción de subir imagen.");
       }
     }, 150);
   }, [onScan, stopLiveScanning]);
-
-  // Solicitar explícitamente los permisos de la cámara
-  const requestCameraPermission = async () => {
-    setCameraError(null);
-    try {
-      if (typeof window !== 'undefined' && (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia)) {
-        setCameraError("Su navegador no soporta el acceso a la cámara. Asegúrese de usar HTTPS.");
-        return;
-      }
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-      stream.getTracks().forEach(track => track.stop()); // Detener track inmediatamente
-      startLiveScanning(); // Reintentar iniciar el escáner
-    } catch (err: any) {
-      console.error("Permission request failed:", err);
-      setCameraError("Acceso denegado. Por favor, habilite los permisos de cámara en la configuración de su navegador para esta web.");
-    }
-  };
 
   // Handle file upload
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -309,18 +270,9 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onScan, onClose, open, 
         {step === 'camera' && (
           <div className="space-y-4">
             {cameraError ? (
-              <div className="space-y-3">
-                <Alert variant="destructive">
-                  <AlertDescription className="text-center font-medium">{cameraError}</AlertDescription>
-                </Alert>
-                <Button 
-                  onClick={requestCameraPermission}
-                  className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold"
-                >
-                  <Camera className="mr-2 h-4 w-4" />
-                  Solicitar / Activar Cámara
-                </Button>
-              </div>
+              <Alert variant="destructive">
+                <AlertDescription className="text-center font-medium">{cameraError}</AlertDescription>
+              </Alert>
             ) : (
               <div className="relative bg-black rounded-lg overflow-hidden border border-gray-800" style={{ aspectRatio: '4/3' }}>
                 {/* HTML5 QR Code Mount point */}
