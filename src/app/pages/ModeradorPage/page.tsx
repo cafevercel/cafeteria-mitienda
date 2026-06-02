@@ -1100,34 +1100,37 @@ export default function ModeradorPage() {
 
                   <div className="space-y-2">
                     <Label>Código de Barras</Label>
-                    <div className="flex gap-2">
+                    <div className="flex flex-col gap-2">
                       <Input
                         value={newProduct.codigo_barras}
                         onChange={e => setNewProduct(prev => ({ ...prev, codigo_barras: e.target.value }))}
                         placeholder="Código de barras"
-                        className={`flex-1 ${barcodeExiste ? 'border-red-500 ring-red-500' : ''}`}
+                        className={`w-full ${barcodeExiste ? 'border-red-500 ring-red-500' : ''}`}
                       />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => {
-                          const random = Math.floor(Math.random() * 900000000000) + 100000000000;
-                          setNewProduct(prev => ({ ...prev, codigo_barras: random.toString() }));
-                        }}
-                      >
-                        Aleatorio
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        onClick={() => {
-                          setScannerFor('crear');
-                          setShowScanner(true);
-                        }}
-                        className="bg-orange-50 border border-orange-100 text-orange-950"
-                      >
-                        <Scan className="w-4 h-4 mr-2" /> Escanear
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => {
+                            const random = Math.floor(Math.random() * 900000000000) + 100000000000;
+                            setNewProduct(prev => ({ ...prev, codigo_barras: random.toString() }));
+                          }}
+                          className="flex-1"
+                        >
+                          Aleatorio
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={() => {
+                            setScannerFor('crear');
+                            setShowScanner(true);
+                          }}
+                          className="bg-orange-50 border border-orange-100 text-orange-950 flex-1"
+                        >
+                          <Scan className="w-4 h-4 mr-2" /> Escanear
+                        </Button>
+                      </div>
                     </div>
                     {verificandoBarcode && <p className="text-xs text-gray-500 mt-1">Verificando código...</p>}
                     {barcodeExiste && <p className="text-xs text-red-500 font-medium mt-1">Este código de barras ya existe.</p>}
@@ -1903,34 +1906,37 @@ export default function ModeradorPage() {
 
                     <div className="space-y-2">
                       <Label>Código de Barras</Label>
-                      <div className="flex gap-2">
+                      <div className="flex flex-col gap-2">
                         <Input
                           value={editForm.codigo_barras}
                           onChange={e => setEditForm(prev => ({ ...prev, codigo_barras: e.target.value }))}
                           placeholder="Código de barras"
-                          className={`flex-1 ${barcodeExisteEdit ? 'border-red-500 ring-red-500' : ''}`}
+                          className={`w-full ${barcodeExisteEdit ? 'border-red-500 ring-red-500' : ''}`}
                         />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => {
-                            const random = Math.floor(Math.random() * 900000000000) + 100000000000;
-                            setEditForm(prev => ({ ...prev, codigo_barras: random.toString() }));
-                          }}
-                        >
-                          Aleatorio
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          onClick={() => {
-                            setScannerFor('editar');
-                            setShowScanner(true);
-                          }}
-                          className="bg-orange-50 border border-orange-100 text-orange-950"
-                        >
-                          <Scan className="w-4 h-4 mr-2" /> Escanear
-                        </Button>
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => {
+                              const random = Math.floor(Math.random() * 900000000000) + 100000000000;
+                              setEditForm(prev => ({ ...prev, codigo_barras: random.toString() }));
+                            }}
+                            className="flex-1"
+                          >
+                            Aleatorio
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            onClick={() => {
+                              setScannerFor('editar');
+                              setShowScanner(true);
+                            }}
+                            className="bg-orange-50 border border-orange-100 text-orange-950 flex-1"
+                          >
+                            <Scan className="w-4 h-4 mr-2" /> Escanear
+                          </Button>
+                        </div>
                       </div>
                       {verificandoBarcodeEdit && <p className="text-xs text-gray-500 mt-1">Verificando código...</p>}
                       {barcodeExisteEdit && <p className="text-xs text-red-500 font-medium mt-1">Este código de barras ya existe.</p>}
