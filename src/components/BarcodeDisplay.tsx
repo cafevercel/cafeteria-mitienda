@@ -38,16 +38,41 @@ const BarcodeDisplay: React.FC<BarcodeDisplayProps> = ({ value, name }) => {
     const ctx = canvas.getContext("2d")!;
     const img = document.createElement('img');
     
-    // Configurar canvas con padding
-    const padding = 40;
+    const paddingX = 40;
     const svgRect = barcodeRef.current.getBBox();
-    canvas.width = svgRect.width + padding * 2;
-    canvas.height = svgRect.height + padding * 2;
+    const titleSpace = 40; // Space allocated for product name
+    const footerSpace = 45; // Space allocated for footer text
+    const paddingY = 20;   // Top/bottom margins
+    
+    canvas.width = Math.max(svgRect.width + paddingX * 2, 350); // Ensure a minimum width for long titles
+    const barcodeWidth = svgRect.width;
+    const barcodeHeight = svgRect.height;
+    
+    canvas.height = barcodeHeight + titleSpace + footerSpace + paddingY * 2;
 
     img.onload = () => {
+      // Draw background
       ctx.fillStyle = "white";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, padding, padding);
+      
+      // Draw product name (centered, above barcode)
+      ctx.fillStyle = "#000000";
+      ctx.font = "bold 16px Arial, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(name, canvas.width / 2, paddingY + titleSpace / 2);
+      
+      // Draw Barcode image in the middle (centered horizontally)
+      const barcodeX = (canvas.width - barcodeWidth) / 2;
+      const barcodeY = paddingY + titleSpace;
+      ctx.drawImage(img, barcodeX, barcodeY);
+      
+      // Draw "Multimarcas S.U.R.L" (centered, below barcode)
+      ctx.fillStyle = "#555555"; // slightly muted gray
+      ctx.font = "14px Arial, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("Multimarcas S.U.R.L", canvas.width / 2, barcodeY + barcodeHeight + footerSpace / 2);
       
       const pngUrl = canvas.toDataURL("image/png");
       const downloadLink = document.createElement("a");
@@ -74,7 +99,8 @@ const BarcodeDisplay: React.FC<BarcodeDisplayProps> = ({ value, name }) => {
           <style>
             body { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; font-family: sans-serif; }
             .container { text-align: center; border: 1px solid #eee; padding: 20px; border-radius: 8px; }
-            h2 { margin-bottom: 20px; color: #333; }
+            h2 { margin: 0 0 20px 0; color: #333; font-size: 22px; }
+            .footer { margin-top: 20px; font-weight: bold; color: #555; font-size: 16px; }
             svg { max-width: 100%; height: auto; }
             @media print {
               .no-print { display: none; }
@@ -86,6 +112,7 @@ const BarcodeDisplay: React.FC<BarcodeDisplayProps> = ({ value, name }) => {
           <div class="container">
             <h2>${name}</h2>
             ${svgData}
+            <div class="footer">Multimarcas S.U.R.L</div>
             <div class="no-print" style="margin-top: 20px;">
               <button onclick="window.print()">Imprimir</button>
               <button onclick="window.close()">Cerrar</button>
