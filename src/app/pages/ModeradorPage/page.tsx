@@ -1074,7 +1074,7 @@ export default function ModeradorPage() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <Label htmlFor="precio">Precio de Venta ($)</Label>
                       <Input
@@ -1094,15 +1094,6 @@ export default function ModeradorPage() {
                         step="0.01"
                         value={newProduct.precioCompra}
                         onChange={e => setNewProduct(prev => ({ ...prev, precioCompra: parseFloat(e.target.value) || 0 }))}
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="porcentajeGanancia">% de Ganancia</Label>
-                      <Input
-                        id="porcentajeGanancia"
-                        type="number"
-                        value={newProduct.porcentajeGanancia}
-                        onChange={e => setNewProduct(prev => ({ ...prev, porcentajeGanancia: parseInt(e.target.value) || 0 }))}
                       />
                     </div>
                   </div>
@@ -1886,7 +1877,7 @@ export default function ModeradorPage() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-1.5">
                         <Label htmlFor="edit-precio">Precio de Venta ($)</Label>
                         <Input
@@ -1906,15 +1897,6 @@ export default function ModeradorPage() {
                           step="0.01"
                           value={editForm.precioCompra}
                           onChange={e => setEditForm(prev => ({ ...prev, precioCompra: parseFloat(e.target.value) || 0 }))}
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label htmlFor="edit-porcentajeGanancia">% de Ganancia</Label>
-                        <Input
-                          id="edit-porcentajeGanancia"
-                          type="number"
-                          value={editForm.porcentajeGanancia}
-                          onChange={e => setEditForm(prev => ({ ...prev, porcentajeGanancia: parseInt(e.target.value) || 0 }))}
                         />
                       </div>
                     </div>
