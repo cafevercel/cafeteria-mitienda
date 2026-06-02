@@ -44,7 +44,7 @@ import ProductDialog from '@/components/ProductDialog';
 import BarcodeScanner from '@/components/BarcodeScanner';
 import { ImageUpload } from '@/components/ImageUpload';
 
-type ModeradorSection = 'crear' | 'entregar' | 'mover' | 'transacciones' | 'editar';
+type ModeradorSection = 'gestionar' | 'entregar' | 'mover' | 'transacciones';
 
 // Componente de autocompletado para secciones
 const SeccionAutocomplete = React.memo(({
@@ -132,7 +132,7 @@ export default function ModeradorPage() {
   const router = useRouter();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [moderadorInfo, setModeradorInfo] = useState<{ id: string; nombre: string } | null>(null);
-  const [activeTab, setActiveTab] = useState<ModeradorSection>('crear');
+  const [activeTab, setActiveTab] = useState<ModeradorSection>('gestionar');
   const [loading, setLoading] = useState(true);
 
   // Shared Data
@@ -216,7 +216,10 @@ export default function ModeradorPage() {
 
   // Scanner
   const [showScanner, setShowScanner] = useState(false);
-  const [scannerFor, setScannerFor] = useState<'crear' | 'entregar' | 'mover' | 'editar'>('crear');
+  const [scannerFor, setScannerFor] = useState<'crear' | 'entregar' | 'mover' | 'editar' | 'gestionar'>('gestionar');
+  const [scannerInitialStep, setScannerInitialStep] = useState<'camera' | 'upload'>('camera');
+  const [gestionarStep, setGestionarStep] = useState<'scan' | 'create' | 'edit'>('scan');
+  const [manualBarcode, setManualBarcode] = useState('');
 
   useEffect(() => {
     const timer = setTimeout(async () => {
@@ -508,6 +511,7 @@ export default function ModeradorPage() {
         codigo_barras: ''
       });
       await refreshData();
+      setGestionarStep('scan');
     } catch (error: any) {
       toast({ title: "Error", description: error.message || "No se pudo actualizar el producto", variant: "destructive" });
     } finally {
@@ -532,6 +536,7 @@ export default function ModeradorPage() {
     });
     setNombreExisteEdit(false);
     setBarcodeExisteEdit(false);
+    setGestionarStep('scan');
   };
 
   const handleCreateProduct = async (e: React.FormEvent) => {
@@ -588,6 +593,7 @@ export default function ModeradorPage() {
         codigo_barras: ''
       });
       await refreshData();
+      setGestionarStep('scan');
     } catch (error: any) {
       toast({ title: "Error", description: error.message || "No se pudo crear el producto", variant: "destructive" });
     } finally {
@@ -820,6 +826,35 @@ export default function ModeradorPage() {
           toast({ title: "No encontrado", description: `Código "${barcode}" no registrado en el inventario`, variant: "destructive" });
         }
       }
+    } else if (scannerFor === 'gestionar') {
+      handleProcessBarcode(barcode);
+    }
+  };
+
+  const handleProcessBarcode = (barcode: string) => {
+    const cleanBarcode = barcode.trim();
+    if (!cleanBarcode) return;
+
+    const found = inventario.find(p => p.codigo_barras === cleanBarcode);
+    if (found) {
+      selectProductForEdit(found);
+      setGestionarStep('edit');
+      toast({ title: "Producto Encontrado", description: `Editando: ${found.nombre}` });
+    } else {
+      setNewProduct({
+        nombre: '',
+        precio: 0,
+        precioCompra: 0,
+        cantidad: 0,
+        foto: '',
+        tieneParametros: false,
+        porcentajeGanancia: 0,
+        seccion: '',
+        parametros: [],
+        codigo_barras: cleanBarcode
+      });
+      setGestionarStep('create');
+      toast({ title: "Producto No Encontrado", description: `Creando nuevo producto con código: ${cleanBarcode}` });
     }
   };
 
@@ -874,18 +909,14 @@ export default function ModeradorPage() {
         {/* Navigation Sidebar */}
         <div className="lg:col-span-1 space-y-3">
           <Button
-            onClick={() => setActiveTab('crear')}
-            variant={activeTab === 'crear' ? 'default' : 'outline'}
-            className={`w-full justify-start gap-3 h-12 text-left ${activeTab === 'crear' ? 'bg-orange-600 text-white hover:bg-orange-700' : 'bg-white border-orange-100 hover:bg-orange-50 text-orange-950'}`}
+            onClick={() => {
+              setActiveTab('gestionar');
+              setGestionarStep('scan');
+            }}
+            variant={activeTab === 'gestionar' ? 'default' : 'outline'}
+            className={`w-full justify-start gap-3 h-12 text-left ${activeTab === 'gestionar' ? 'bg-orange-600 text-white hover:bg-orange-700' : 'bg-white border-orange-100 hover:bg-orange-50 text-orange-950'}`}
           >
-            <Plus className="w-5 h-5" /> Crear Producto
-          </Button>
-          <Button
-            onClick={() => setActiveTab('editar')}
-            variant={activeTab === 'editar' ? 'default' : 'outline'}
-            className={`w-full justify-start gap-3 h-12 text-left ${activeTab === 'editar' ? 'bg-orange-600 text-white hover:bg-orange-700' : 'bg-white border-orange-100 hover:bg-orange-50 text-orange-950'}`}
-          >
-            <Edit className="w-5 h-5" /> Editar Producto
+            <Scan className="w-5 h-5" /> Gestionar Producto
           </Button>
           <Button
             onClick={() => setActiveTab('entregar')}
@@ -914,8 +945,99 @@ export default function ModeradorPage() {
         {/* Content Section */}
         <div className="lg:col-span-3">
 
+          {/* SCANNER / INPUT DASHBOARD */}
+          {activeTab === 'gestionar' && gestionarStep === 'scan' && (
+            <Card className="border-orange-100 shadow-lg bg-white overflow-hidden">
+              <CardHeader className="bg-gradient-to-r from-orange-50 to-orange-100/50 border-b border-orange-100 text-center py-8">
+                <div className="w-16 h-16 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
+                  <Scan className="w-8 h-8" />
+                </div>
+                <CardTitle className="text-2xl font-black text-orange-950">
+                  Gestión de Productos
+                </CardTitle>
+                <CardDescription className="text-orange-800/80 font-medium">
+                  Escanea o ingresa un código de barras para comenzar. Si el producto ya existe en inventario podrás editarlo, de lo contrario podrás registrarlo.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-8 space-y-8">
+                {/* Botón Principal: Escanear */}
+                <div className="flex justify-center">
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      setScannerFor('gestionar');
+                      setScannerInitialStep('camera');
+                      setShowScanner(true);
+                    }}
+                    className="w-full max-w-md h-24 text-lg font-bold bg-orange-600 hover:bg-orange-700 text-white shadow-md hover:shadow-lg transition-all flex flex-col items-center justify-center gap-1 rounded-2xl border-none"
+                  >
+                    <Scan className="w-8 h-8 animate-pulse" />
+                    <span>Escanear Producto</span>
+                  </Button>
+                </div>
+
+                <div className="relative flex py-2 items-center">
+                  <div className="flex-grow border-t border-orange-100"></div>
+                  <span className="flex-shrink mx-4 text-orange-500 font-semibold text-sm">Otras opciones</span>
+                  <div className="flex-grow border-t border-orange-100"></div>
+                </div>
+
+                {/* Botones de abajo */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+                  {/* Abajo izquierda: Escribir código */}
+                  <div className="p-6 bg-orange-50/50 border border-orange-100/80 rounded-2xl flex flex-col justify-between space-y-4">
+                    <div>
+                      <h3 className="font-bold text-orange-950 text-base mb-1">Escribir Código Manual</h3>
+                      <p className="text-xs text-orange-800/70">Si el escáner de cámara no está disponible o no funciona.</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="Escribe el código de barras..."
+                        value={manualBarcode}
+                        onChange={(e) => setManualBarcode(e.target.value)}
+                        className="bg-white border-orange-200 focus:border-orange-500"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            handleProcessBarcode(manualBarcode);
+                          }
+                        }}
+                      />
+                      <Button
+                        onClick={() => handleProcessBarcode(manualBarcode)}
+                        className="bg-orange-600 hover:bg-orange-700 text-white font-bold"
+                        disabled={!manualBarcode.trim()}
+                      >
+                        Ingresar
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Abajo derecha: Subir código */}
+                  <div className="p-6 bg-orange-50/50 border border-orange-100/80 rounded-2xl flex flex-col justify-between space-y-4">
+                    <div>
+                      <h3 className="font-bold text-orange-950 text-base mb-1">Subir Imagen</h3>
+                      <p className="text-xs text-orange-800/70">Sube una foto o captura de un código para recortar y escanear.</p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setScannerFor('gestionar');
+                        setScannerInitialStep('upload');
+                        setShowScanner(true);
+                      }}
+                      className="w-full bg-white border-orange-200 hover:bg-orange-100/50 text-orange-950 font-bold h-10"
+                    >
+                      Subir Imagen de Código
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* TAB 1: CREAR PRODUCTO */}
-          {activeTab === 'crear' && (
+          {activeTab === 'gestionar' && gestionarStep === 'create' && (
             <Card className="border-orange-100 shadow-sm">
               <CardHeader className="bg-white border-b border-orange-50">
                 <CardTitle className="text-xl font-bold text-orange-950 flex items-center gap-2">
@@ -1091,7 +1213,28 @@ export default function ModeradorPage() {
                     />
                   </div>
 
-                  <div className="pt-4 border-t flex justify-end">
+                  <div className="pt-4 border-t flex justify-end gap-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setNewProduct({
+                          nombre: '',
+                          precio: 0,
+                          precioCompra: 0,
+                          cantidad: 0,
+                          foto: '',
+                          tieneParametros: false,
+                          porcentajeGanancia: 0,
+                          seccion: '',
+                          parametros: [],
+                          codigo_barras: ''
+                        });
+                        setGestionarStep('scan');
+                      }}
+                    >
+                      Cancelar
+                    </Button>
                     <Button type="submit" className="bg-orange-600 hover:bg-orange-700 text-white font-bold px-6" disabled={nombreExiste || verificandoNombre || barcodeExiste || verificandoBarcode}>
                       Crear Producto
                     </Button>
@@ -1587,7 +1730,7 @@ export default function ModeradorPage() {
           )}
 
           {/* TAB 5: EDITAR PRODUCTO */}
-          {activeTab === 'editar' && (
+          {activeTab === 'gestionar' && gestionarStep === 'edit' && (
             <Card className="border-orange-100 shadow-sm">
               <CardHeader className="bg-white border-b border-orange-50">
                 <CardTitle className="text-xl font-bold text-orange-950 flex items-center gap-2">
@@ -1945,6 +2088,7 @@ export default function ModeradorPage() {
       {/* SCANNER DIALOG */}
       <BarcodeScanner
         open={showScanner}
+        initialStep={scannerInitialStep}
         onScan={handleBarcodeScanned}
         onClose={() => setShowScanner(false)}
       />
