@@ -18,6 +18,7 @@ type Step = 'camera' | 'crop' | 'scanning' | 'upload';
 
 const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onScan, onClose, open, initialStep }) => {
   const [step, setStep] = useState<Step>('camera');
+  const [isPortrait, setIsPortrait] = useState(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [crop, setCrop] = useState<Crop>();
   const [isScanning, setIsScanning] = useState(false);
@@ -27,6 +28,17 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onScan, onClose, open, 
 
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
   const imgRef = useRef<HTMLImageElement>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const checkOrientation = () => {
+        setIsPortrait(window.innerHeight > window.innerWidth);
+      };
+      checkOrientation();
+      window.addEventListener('resize', checkOrientation);
+      return () => window.removeEventListener('resize', checkOrientation);
+    }
+  }, []);
 
   const formats = [
     Html5QrcodeSupportedFormats.EAN_13,
@@ -96,7 +108,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onScan, onClose, open, 
             const qrboxHeight = Math.min(height * 0.45, 140);
             return { width: qrboxWidth, height: qrboxHeight };
           },
-          aspectRatio: 1.333333
+          aspectRatio: isPortrait ? 0.75 : 1.333333
         };
 
         await html5QrCode.start(
@@ -110,7 +122,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onScan, onClose, open, 
         setCameraError("No se pudo acceder a la cámara trasera. Asegúrese de otorgar permisos o use la opción de subir imagen.");
       }
     }, 150);
-  }, [onScan, stopLiveScanning]);
+  }, [onScan, stopLiveScanning, isPortrait]);
 
   // Handle file upload
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -274,7 +286,10 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onScan, onClose, open, 
                 <AlertDescription className="text-center font-medium">{cameraError}</AlertDescription>
               </Alert>
             ) : (
-              <div className="relative bg-black rounded-lg overflow-hidden border border-gray-800" style={{ aspectRatio: '4/3' }}>
+              <div 
+                className="relative bg-black rounded-lg overflow-hidden border border-gray-800 w-full" 
+                style={{ aspectRatio: isPortrait ? '3/4' : '4/3' }}
+              >
                 {/* HTML5 QR Code Mount point */}
                 <div id="barcode-live-scanner" className="w-full h-full object-cover"></div>
                 
@@ -284,6 +299,18 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onScan, onClose, open, 
                     <div className="w-full h-[2px] bg-red-500 animate-bounce"></div>
                   </div>
                 </div>
+
+                <style>{`
+                  #barcode-live-scanner {
+                    width: 100% !important;
+                    height: 100% !important;
+                  }
+                  #barcode-live-scanner video {
+                    width: 100% !important;
+                    height: 100% !important;
+                    object-fit: cover !important;
+                  }
+                `}</style>
               </div>
             )}
 
