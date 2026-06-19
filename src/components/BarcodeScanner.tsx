@@ -102,12 +102,6 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onScan, onClose, open, 
 
         const config = {
           fps: 20,
-          qrbox: (width: number, height: number) => {
-            // Un área óptima para códigos de barra (ancho y corto)
-            const qrboxWidth = Math.min(width * 0.85, 360);
-            const qrboxHeight = Math.min(height * 0.45, 140);
-            return { width: qrboxWidth, height: qrboxHeight };
-          },
           aspectRatio: isPortrait ? 0.75 : 1.333333
         };
 
