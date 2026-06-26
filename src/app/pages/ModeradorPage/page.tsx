@@ -2076,7 +2076,6 @@ export default function ModeradorPage() {
       {/* SCANNER DIALOG */}
       <BarcodeScanner
         open={showScanner}
-        initialStep={scannerInitialStep}
         onScan={handleBarcodeScanned}
         onClose={() => setShowScanner(false)}
       />
