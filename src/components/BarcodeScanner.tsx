@@ -79,11 +79,44 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onScan, onClose, open }
         }
       } as any);
 
-      addLog("Solicitando cámara trasera...");
+      addLog("Solicitando cámaras...");
 
-      // 2. Dejamos el start() solo con fps y qrbox
+      // 1. Configuramos un "fallback" por si falla la detección de cámaras
+      let cameraConfig: string | { facingMode: string } = { facingMode: "environment" };
+
+      // 2. Obtenemos las cámaras disponibles en el dispositivo
+      try {
+        const cameras = await Html5Qrcode.getCameras();
+        if (cameras && cameras.length > 0) {
+          cameras.forEach(c => addLog(`Cam detectada: ${c.label}`));
+
+          // Buscamos cámaras traseras
+          const backCameras = cameras.filter(c => /back|trasera/i.test(c.label));
+          let selectedCam;
+
+          if (backCameras.length > 0) {
+            // Filtramos para EVITAR la ultra gran angular (0.5x)
+            selectedCam = backCameras.find(c => !/ultra/i.test(c.label) && !/0\.5/i.test(c.label)) || backCameras[0];
+          } else if (cameras.length > 1) {
+            // Si las cámaras no tienen "back" en el nombre, evitamos la que diga ultra 
+            // y solemos tomar la última (suele ser la principal trasera en Android).
+            selectedCam = cameras.find(c => !/ultra/i.test(c.label)) || cameras[cameras.length - 1];
+          } else {
+            selectedCam = cameras[0];
+          }
+
+          if (selectedCam) {
+            addLog(`Seleccionada: ${selectedCam.label}`);
+            cameraConfig = selectedCam.id; // Pasamos el ID exacto del dispositivo
+          }
+        }
+      } catch (camErr) {
+        addLog("Aviso: No se pudieron listar cámaras, usando fallback...");
+      }
+
+      // 3. Iniciamos el escaneo con el ID de cámara o el fallback
       await scannerRef.current.start(
-        { facingMode: "environment" },
+        cameraConfig,
         {
           fps: 10,
           qrbox: { width: 250, height: 120 },
@@ -94,14 +127,9 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onScan, onClose, open }
           onScan(decodedText);
         },
         (errorMessage) => {
-          // Este callback se dispara por cada frame que falla (10 veces por segundo).
-          // No imprimimos el error real porque saturaría la pantalla, pero contamos los frames.
           framesAnalyzed.current++;
-
           if (framesAnalyzed.current === 1) {
             addLog("Video en vivo: Análisis iniciado correctamente.");
-
-            // Intentar detectar si hay linterna
             try {
               const capabilities = scannerRef.current?.getRunningTrackCameraCapabilities();
               if (capabilities && (capabilities as any).torchFeature()) {
@@ -110,7 +138,6 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onScan, onClose, open }
               }
             } catch (e) { }
           }
-
           if (framesAnalyzed.current % 50 === 0) {
             addLog(`Buscando... (${framesAnalyzed.current} frames analizados)`);
           }
