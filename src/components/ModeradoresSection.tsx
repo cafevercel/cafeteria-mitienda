@@ -445,9 +445,85 @@ export default function ModeradoresSection() {
                               </span>
                               <span className="text-xs text-gray-400 font-medium">{logTime}</span>
                             </div>
-                            <p className="text-sm text-gray-700 leading-relaxed font-normal">
-                              {log.detalles}
-                            </p>
+                            <div className="text-sm text-gray-700 leading-relaxed font-normal">
+                              {(() => {
+                                const detalles = log.detalles;
+                                // 1. Check for entregar_producto with multiple products
+                                const entregarRegex = /^(Entregó \d+ unidades totales )\((.+?)\)( al punto de venta ".+")$/;
+                                const entregarMatch = detalles.match(entregarRegex);
+                                if (entregarMatch) {
+                                  const [_, prefix, productsList, suffix] = entregarMatch;
+                                  const products = productsList.split(/,\s*/);
+                                  return (
+                                    <div className="space-y-1">
+                                      <span className="font-medium text-gray-800">{prefix}{suffix}:</span>
+                                      <ul className="list-disc pl-5 mt-1 space-y-1 text-gray-700">
+                                        {products.map((p, idx) => (
+                                          <li key={idx} className="text-sm font-normal text-gray-600">
+                                            {p}
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  );
+                                }
+
+                                // 2. Check for pipe-separated details (like crear_producto/editar_producto)
+                                if (detalles.includes(' | ')) {
+                                  const parts = detalles.split(' | ');
+                                  return (
+                                    <div className="space-y-1 text-gray-700">
+                                      {parts.map((part, idx) => {
+                                        // If a part is "Parámetros: ...", format the list of parameters
+                                        if (part.includes('Parámetros: ')) {
+                                          const paramMatch = part.match(/^(Parámetros:\s*)(.+)$/);
+                                          if (paramMatch) {
+                                            const [_, paramPrefix, paramsList] = paramMatch;
+                                            const params = paramsList.split(/,\s*/);
+                                            return (
+                                              <div key={idx} className="mt-1">
+                                                <span className="font-semibold text-gray-800">{paramPrefix}</span>
+                                                <ul className="list-disc pl-5 mt-1 space-y-0.5">
+                                                  {params.map((p, pIdx) => (
+                                                    <li key={pIdx} className="text-sm font-normal text-gray-600">{p}</li>
+                                                  ))}
+                                                </ul>
+                                              </div>
+                                            );
+                                          }
+                                        }
+                                        return (
+                                          <div key={idx} className="text-sm text-gray-600">
+                                            • {part}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  );
+                                }
+
+                                // 3. Fallback: check if we have "Parámetros: " or similar in a single-line string
+                                if (detalles.includes('Parámetros: ')) {
+                                  const paramMatch = detalles.match(/^(.*Parámetros:\s*)(.+)$/);
+                                  if (paramMatch) {
+                                    const [_, prefix, paramsList] = paramMatch;
+                                    const params = paramsList.split(/,\s*/);
+                                    return (
+                                      <div className="space-y-1 text-gray-700">
+                                        <span className="font-medium">{prefix}</span>
+                                        <ul className="list-disc pl-5 mt-1 space-y-1 text-gray-600">
+                                          {params.map((p, idx) => (
+                                            <li key={idx} className="text-sm font-normal">{p}</li>
+                                          ))}
+                                        </ul>
+                                      </div>
+                                    );
+                                  }
+                                }
+
+                                return <p className="text-sm text-gray-700 leading-relaxed font-normal">{detalles}</p>;
+                              })()}
+                            </div>
                           </div>
                         </div>
                       );
