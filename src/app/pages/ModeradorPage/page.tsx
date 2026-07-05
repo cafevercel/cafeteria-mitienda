@@ -475,10 +475,10 @@ export default function ModeradorPage() {
       const formData = new FormData();
       formData.append('nombre', editForm.nombre);
       formData.append('precio', String(editForm.precio));
-      formData.append('precioCompra', String(editForm.precioCompra));
+      formData.append('precio_compra', String(editForm.precioCompra));
       formData.append('cantidad', String(editForm.tieneParametros ? 0 : editForm.cantidad));
       formData.append('foto', editForm.foto || '');
-      formData.append('tieneParametros', String(editForm.tieneParametros));
+      formData.append('tiene_parametros', String(editForm.tieneParametros));
       formData.append('seccion', editForm.seccion);
       formData.append('codigo_barras', editForm.codigo_barras);
       formData.append('porcentajeGanancia', String(editForm.porcentajeGanancia));
