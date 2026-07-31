@@ -128,6 +128,8 @@ export async function GET(request: NextRequest) {
   const ventaId = searchParams.get('id');
   const getAllVentas = searchParams.get('all') === 'true';
 
+  const startDate = searchParams.get('startDate') || searchParams.get('fechaInicio');
+
   try {
     let result;
 
@@ -188,13 +190,23 @@ export async function GET(request: NextRequest) {
         params
       );
     } else if (vendedorId) {
-      result = await query(
-        `${baseQuery}
-         WHERE v.vendedor = $1
-         GROUP BY v.id, p.nombre, p.foto, u.nombre
-         ORDER BY v.fecha DESC`,
-        [vendedorId]
-      );
+      if (startDate) {
+        result = await query(
+          `${baseQuery}
+           WHERE v.vendedor = $1 AND v.fecha >= $2
+           GROUP BY v.id, p.nombre, p.foto, u.nombre
+           ORDER BY v.fecha DESC`,
+          [vendedorId, startDate]
+        );
+      } else {
+        result = await query(
+          `${baseQuery}
+           WHERE v.vendedor = $1
+           GROUP BY v.id, p.nombre, p.foto, u.nombre
+           ORDER BY v.fecha DESC`,
+          [vendedorId]
+        );
+      }
     } else if (getAllVentas) {
       // Si se solicitan todas las ventas
       result = await query(
