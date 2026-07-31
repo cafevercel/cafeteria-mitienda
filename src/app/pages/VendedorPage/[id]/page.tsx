@@ -391,6 +391,7 @@ const useVendedorData = (vendedorId: string) => {
         precio: producto.precio,
         cantidad: producto.cantidad,
         foto: producto.foto,
+        codigo_barras: producto.codigo_barras || producto.codigoBarras || producto.barcode || '',
         // 🔥 Convertir tieneParametros → tiene_parametros
         tiene_parametros: producto.tieneParametros || producto.tiene_parametros || false,
         parametros: producto.parametros || [],
@@ -609,11 +610,16 @@ const useVendedorData = (vendedorId: string) => {
   }, [pendingSales, vendedorId, fetchVentasRegistro, fetchProductos]);
 
   const handleScan = useCallback((barcode: string) => {
-    // Normalizar código escaneado limpiando espacios
-    const cleanBarcode = barcode.trim();
-    
-    // Buscar en inventario disponible
-    const producto = productosDisponibles.find(p => p.codigo_barras && p.codigo_barras.trim() === cleanBarcode);
+    if (!barcode) return;
+    const cleanBarcode = String(barcode).trim();
+    if (!cleanBarcode) return;
+
+    // Buscar en la lista completa de productos del vendedor (disponibles y agotados)
+    const todosLosProductos = [...productosDisponibles, ...productosAgotados];
+    const producto = todosLosProductos.find(p => {
+      if (!p.codigo_barras) return false;
+      return String(p.codigo_barras).trim() === cleanBarcode;
+    });
 
     if (producto) {
       // Si el producto requiere seleccionar variaciones/parámetros
@@ -631,8 +637,8 @@ const useVendedorData = (vendedorId: string) => {
       // Si no tiene stock disponible
       if (producto.cantidad <= 0) {
         toast({
-          title: "Sin stock disponible",
-          description: `El producto ${producto.nombre} no tiene unidades disponibles.`,
+          title: "Producto agotado",
+          description: `${producto.nombre} no tiene stock disponible actualmente.`,
           variant: "destructive",
         });
         setShowBarcodeScanner(false);
@@ -669,12 +675,12 @@ const useVendedorData = (vendedorId: string) => {
       // Si el código de barras no existe en el registro
       toast({
         title: "Código no registrado",
-        description: `El código "${cleanBarcode}" no corresponde a ningún producto del inventario.`,
+        description: `El código "${cleanBarcode}" no corresponde a ningún producto registrado.`,
         variant: "destructive",
       });
       setShowBarcodeScanner(false);
     }
-  }, [productosDisponibles, setProductosSeleccionados]);
+  }, [productosDisponibles, productosAgotados, setProductosSeleccionados]);
 
   return {
     isLoading,
