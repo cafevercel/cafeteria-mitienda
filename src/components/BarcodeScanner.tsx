@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Loader2, Camera, Upload, Scan, Image as ImageIcon, Lightbulb, LightbulbOff, Terminal } from "lucide-react";
+import { Loader2, Camera, Upload, Scan, Image as ImageIcon, Lightbulb, LightbulbOff } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface BarcodeScannerProps {
@@ -17,39 +17,20 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onScan, onClose, open }
   const [step, setStep] = useState<Step>('camera');
   const [error, setError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-
-  // --- Estados de Debug ---
-  const [debugLogs, setDebugLogs] = useState<string[]>([]);
-  const [showDebug, setShowDebug] = useState(true);
   const [torchOn, setTorchOn] = useState(false);
   const [hasTorch, setHasTorch] = useState(false);
 
   const scannerRef = useRef<Html5Qrcode | null>(null);
-  const framesAnalyzed = useRef(0);
-
-  const addLog = useCallback((msg: string) => {
-    const time = new Date().toLocaleTimeString().split(' ')[0];
-    setDebugLogs(prev => [`[${time}] ${msg}`, ...prev].slice(0, 15)); // Guarda los últimos 15 mensajes
-  }, []);
-
-  const formats = [
-    Html5QrcodeSupportedFormats.EAN_13,
-    Html5QrcodeSupportedFormats.EAN_8,
-    Html5QrcodeSupportedFormats.UPC_A,
-    Html5QrcodeSupportedFormats.CODE_128,
-    Html5QrcodeSupportedFormats.CODE_39,
-  ];
 
   const stopScanner = useCallback(async () => {
     if (scannerRef.current && scannerRef.current.isScanning) {
       try {
         await scannerRef.current.stop();
-        addLog("Cámara detenida.");
       } catch (e: any) {
-        addLog(`Error deteniendo: ${e.message}`);
+        // Silencioso
       }
     }
-  }, [addLog]);
+  }, []);
 
   const toggleTorch = async () => {
     if (scannerRef.current && scannerRef.current.getState() === 2) { // 2 = SCANNING
@@ -58,20 +39,17 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onScan, onClose, open }
           advanced: [{ torch: !torchOn }]
         } as any);
         setTorchOn(!torchOn);
-        addLog(`Linterna ${!torchOn ? 'ENCENDIDA' : 'APAGADA'}`);
       } catch (e: any) {
-        addLog(`Fallo linterna: ${e.message || 'No soportada'}`);
+        // Linterna no disponible
       }
     }
   };
 
   const startScanner = useCallback(async () => {
     setError(null);
-    framesAnalyzed.current = 0;
     await stopScanner();
 
     try {
-      addLog("Iniciando instancia Html5Qrcode...");
       scannerRef.current = new Html5Qrcode("barcode-live-scanner", {
         verbose: false,
         experimentalFeatures: {
@@ -79,79 +57,72 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onScan, onClose, open }
         }
       } as any);
 
-      addLog("Solicitando cámaras...");
-
-      // 1. Configuramos un "fallback" por si falla la detección de cámaras
+      // Priorizar cámara trasera principal de móvil
       let cameraConfig: string | { facingMode: string } = { facingMode: "environment" };
 
-      // 2. Obtenemos las cámaras disponibles en el dispositivo
       try {
         const cameras = await Html5Qrcode.getCameras();
         if (cameras && cameras.length > 0) {
-          cameras.forEach(c => addLog(`Cam detectada: ${c.label}`));
-
-          // Buscamos cámaras traseras
-          const backCameras = cameras.filter(c => /back|trasera/i.test(c.label));
+          const backCameras = cameras.filter(c => /back|trasera|rear/i.test(c.label));
           let selectedCam;
 
           if (backCameras.length > 0) {
-            // Filtramos para EVITAR la ultra gran angular (0.5x)
+            // Evitar ultra gran angular (0.5x) para facilitar enfoque de códigos de barras
             selectedCam = backCameras.find(c => !/ultra/i.test(c.label) && !/0\.5/i.test(c.label)) || backCameras[0];
           } else if (cameras.length > 1) {
-            // Si las cámaras no tienen "back" en el nombre, evitamos la que diga ultra 
-            // y solemos tomar la última (suele ser la principal trasera en Android).
             selectedCam = cameras.find(c => !/ultra/i.test(c.label)) || cameras[cameras.length - 1];
           } else {
             selectedCam = cameras[0];
           }
 
           if (selectedCam) {
-            addLog(`Seleccionada: ${selectedCam.label}`);
-            cameraConfig = selectedCam.id; // Pasamos el ID exacto del dispositivo
+            cameraConfig = selectedCam.id;
           }
         }
       } catch (camErr) {
-        addLog("Aviso: No se pudieron listar cámaras, usando fallback...");
+        // Fallback a facingMode environment si falla listado
       }
 
-      // 3. Iniciamos el escaneo con el ID de cámara o el fallback
       await scannerRef.current.start(
         cameraConfig,
         {
-          fps: 10,
-          qrbox: { width: 250, height: 120 },
+          fps: 15,
+          qrbox: { width: 260, height: 140 },
+          formatsToSupport: [
+            Html5QrcodeSupportedFormats.EAN_13,
+            Html5QrcodeSupportedFormats.EAN_8,
+            Html5QrcodeSupportedFormats.UPC_A,
+            Html5QrcodeSupportedFormats.UPC_E,
+            Html5QrcodeSupportedFormats.CODE_128,
+            Html5QrcodeSupportedFormats.CODE_39,
+            Html5QrcodeSupportedFormats.QR_CODE,
+          ]
         },
         (decodedText) => {
-          addLog(`¡CÓDIGO DETECTADO!: ${decodedText}`);
           stopScanner();
           onScan(decodedText);
         },
-        (errorMessage) => {
-          framesAnalyzed.current++;
-          if (framesAnalyzed.current === 1) {
-            addLog("Video en vivo: Análisis iniciado correctamente.");
-            try {
-              const capabilities = scannerRef.current?.getRunningTrackCameraCapabilities();
-              if (capabilities && (capabilities as any).torchFeature()) {
-                setHasTorch(true);
-                addLog("Característica de linterna detectada.");
-              }
-            } catch (e) { }
-          }
-          if (framesAnalyzed.current % 50 === 0) {
-            addLog(`Buscando... (${framesAnalyzed.current} frames analizados)`);
-          }
+        () => {
+          // Callback por frame no detectado (mantener limpio)
         }
       );
+
+      // Comprobar linterna
+      try {
+        const capabilities = scannerRef.current?.getRunningTrackCameraCapabilities();
+        if (capabilities && (capabilities as any).torchFeature()) {
+          setHasTorch(true);
+        }
+      } catch (e) { }
+
     } catch (err: any) {
-      addLog(`ERROR CRÍTICO: ${err.message || err}`);
-      setError("No se pudo iniciar la cámara.");
+      setError("No se pudo acceder a la cámara. Por favor permite los permisos de cámara.");
     }
-  }, [onScan, stopScanner, addLog]);
+  }, [onScan, stopScanner]);
 
   useEffect(() => {
     if (open && step === 'camera') {
-      const timer = setTimeout(() => startScanner(), 500);
+      const timer = setTimeout(() => startScanner(), 300);
       return () => clearTimeout(timer);
     } else {
       stopScanner();
@@ -165,16 +136,13 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onScan, onClose, open }
 
     setIsProcessing(true);
     setError(null);
-    addLog(`Analizando archivo subido: ${file.name}`);
 
     try {
       const scanner = new Html5Qrcode("barcode-live-scanner");
       const decodedText = await scanner.scanFile(file, true);
-      addLog(`¡CÓDIGO DETECTADO en imagen!: ${decodedText}`);
       onScan(decodedText);
     } catch (err) {
-      addLog("Fallo al detectar código en la imagen.");
-      setError("No se detectó ningún código. Asegúrate de que la imagen sea nítida.");
+      setError("No se detectó ningún código de barras en la imagen. Asegúrate de que sea clara y bien enfocada.");
     } finally {
       setIsProcessing(false);
       if (e.target) e.target.value = '';
@@ -190,14 +158,9 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onScan, onClose, open }
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Scan className="w-5 h-5 text-orange-600" />
-              Escanear Código
-            </div>
-            <Button variant="ghost" size="sm" onClick={() => setShowDebug(!showDebug)} className="h-8">
-              <Terminal className="w-4 h-4 text-gray-500" />
-            </Button>
+          <DialogTitle className="flex items-center gap-2">
+            <Scan className="w-5 h-5 text-orange-600" />
+            Escanear Código de Barras
           </DialogTitle>
         </DialogHeader>
 
@@ -212,32 +175,20 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onScan, onClose, open }
           <div className={`${step !== 'camera' ? 'hidden' : 'block'} relative rounded-lg overflow-hidden bg-black`}>
             <div id="barcode-live-scanner" className="w-full min-h-[250px]"></div>
 
-            {/* Controles sobre la cámara */}
-            <div className="absolute bottom-2 right-2 z-10">
-              <Button
-                variant="secondary"
-                size="icon"
-                className="bg-white/80 hover:bg-white text-black rounded-full"
-                onClick={toggleTorch}
-              >
-                {torchOn ? <LightbulbOff className="w-5 h-5" /> : <Lightbulb className="w-5 h-5" />}
-              </Button>
-            </div>
-          </div>
-
-          {/* CONSOLA DE DEBUG (Visible en el móvil) */}
-          {showDebug && (
-            <div className="bg-slate-950 text-emerald-400 p-3 rounded-lg font-mono text-[10px] h-32 overflow-y-auto shadow-inner border border-slate-800">
-              <div className="text-slate-400 mb-1 border-b border-slate-800 pb-1 flex justify-between">
-                <span>--- SYSTEM LOGS ---</span>
-                <span>{step === 'camera' ? '🔴 EN VIVO' : '📂 ARCHIVO'}</span>
+            {/* Controles de linterna si está disponible */}
+            {hasTorch && (
+              <div className="absolute bottom-3 right-3 z-10">
+                <Button
+                  variant="secondary"
+                  size="icon"
+                  className="bg-white/80 hover:bg-white text-black rounded-full shadow"
+                  onClick={toggleTorch}
+                >
+                  {torchOn ? <LightbulbOff className="w-5 h-5" /> : <Lightbulb className="w-5 h-5 text-amber-500" />}
+                </Button>
               </div>
-              {debugLogs.map((log, i) => (
-                <div key={i} className="break-all whitespace-pre-wrap">{log}</div>
-              ))}
-              {debugLogs.length === 0 && <div className="text-slate-600">Esperando eventos...</div>}
-            </div>
-          )}
+            )}
+          </div>
 
           {/* Upload UI */}
           {step === 'upload' && (
@@ -250,7 +201,7 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onScan, onClose, open }
               ) : (
                 <>
                   <Upload className="w-12 h-12 text-orange-400 mx-auto mb-4" />
-                  <p className="text-sm text-orange-950 font-bold mb-4">Sube una foto clara del código</p>
+                  <p className="text-sm text-orange-950 font-bold mb-4">Sube una foto clara del código de barras</p>
                   <input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" id="barcode-upload" />
                   <Button onClick={() => document.getElementById('barcode-upload')?.click()} className="bg-orange-600">
                     <ImageIcon className="mr-2 h-4 w-4" /> Seleccionar Galería
@@ -260,15 +211,15 @@ const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onScan, onClose, open }
             </div>
           )}
 
-          {/* Navegación */}
+          {/* Navegación entre cámara y archivo */}
           <div className="flex gap-2">
             {step === 'camera' ? (
               <Button onClick={() => setStep('upload')} variant="outline" className="w-full">
-                <ImageIcon className="mr-2 h-4 w-4" /> Modo Galería
+                <ImageIcon className="mr-2 h-4 w-4" /> Escanear desde Imagen / Galería
               </Button>
             ) : (
               <Button onClick={() => setStep('camera')} variant="outline" className="w-full" disabled={isProcessing}>
-                <Camera className="mr-2 h-4 w-4" /> Modo Cámara
+                <Camera className="mr-2 h-4 w-4" /> Usar Cámara en Vivo
               </Button>
             )}
           </div>

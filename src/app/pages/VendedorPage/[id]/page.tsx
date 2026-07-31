@@ -2277,6 +2277,11 @@ export default function VendedorPage() {
         }}
         onSubmit={handleParametrosSubmit}
       />
+      <BarcodeScanner
+        open={showBarcodeScanner}
+        onClose={() => setShowBarcodeScanner(false)}
+        onScan={handleScan}
+      />
     </div>
   )
 }
