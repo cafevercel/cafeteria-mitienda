@@ -607,30 +607,72 @@ const useVendedorData = (vendedorId: string) => {
   }, [pendingSales, vendedorId, fetchVentasRegistro, fetchProductos]);
 
   const handleScan = useCallback((barcode: string) => {
-    const producto = productosDisponibles.find(p => p.codigo_barras === barcode);
+    // Normalizar código escaneado limpiando espacios
+    const cleanBarcode = barcode.trim();
+    
+    // Buscar en inventario disponible
+    const producto = productosDisponibles.find(p => p.codigo_barras && p.codigo_barras.trim() === cleanBarcode);
+
     if (producto) {
-      // Agregar al carrito
-      const itemExistente = productosSeleccionados.find(p => p.id === producto.id);
-      if (itemExistente) {
-        setProductosSeleccionados(prev => prev.map(p => 
-          p.id === producto.id ? { ...p, cantidadVendida: p.cantidadVendida + 1 } : p
-        ));
-      } else {
-        setProductosSeleccionados(prev => [...prev, { ...producto, cantidadVendida: 1 }]);
+      // Si el producto requiere seleccionar variaciones/parámetros
+      if (producto.tiene_parametros) {
+        setSelectedProduct(producto);
+        setParametrosDialogOpen(true);
+        setShowBarcodeScanner(false);
+        toast({
+          title: "Producto encontrado",
+          description: `${producto.nombre} requiere seleccionar opciones.`,
+        });
+        return;
       }
+
+      // Si no tiene stock disponible
+      if (producto.cantidad <= 0) {
+        toast({
+          title: "Sin stock disponible",
+          description: `El producto ${producto.nombre} no tiene unidades disponibles.`,
+          variant: "destructive",
+        });
+        setShowBarcodeScanner(false);
+        return;
+      }
+
+      // Agregar o incrementar en la lista de productos seleccionados
+      setProductosSeleccionados(prev => {
+        const itemExistente = prev.find(p => p.id === producto.id);
+        if (itemExistente) {
+          const nuevaCantidad = itemExistente.cantidadVendida + 1;
+          if (nuevaCantidad > producto.cantidad) {
+            toast({
+              title: "Límite de stock alcanzado",
+              description: `Solo hay ${producto.cantidad} unidades disponibles de ${producto.nombre}.`,
+              variant: "destructive",
+            });
+            return prev;
+          }
+          return prev.map(p =>
+            p.id === producto.id ? { ...p, cantidadVendida: nuevaCantidad } : p
+          );
+        } else {
+          return [...prev, { ...producto, cantidadVendida: 1 }];
+        }
+      });
+
       toast({
-        title: "Producto agregado",
-        description: `${producto.nombre} añadido al carrito`,
+        title: "¡Producto añadido!",
+        description: `Se agregó ${producto.nombre} a la lista de venta.`,
       });
       setShowBarcodeScanner(false);
     } else {
+      // Si el código de barras no existe en el registro
       toast({
-        title: "Código no encontrado",
-        description: `No hay productos con el código ${barcode}`,
+        title: "Código no registrado",
+        description: `El código "${cleanBarcode}" no corresponde a ningún producto del inventario.`,
         variant: "destructive",
       });
+      setShowBarcodeScanner(false);
     }
-  }, [productosDisponibles, productosSeleccionados, setProductosSeleccionados]);
+  }, [productosDisponibles, setProductosSeleccionados]);
 
   return {
     isLoading,
