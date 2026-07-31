@@ -2161,7 +2161,7 @@ export default function VendedorPage() {
                   <h3 className="font-bold mb-2">Productos Seleccionados:</h3>
                   {productosSeleccionados.map((producto) => (
                     <div key={producto.id} className="flex justify-between items-center mb-2 p-2 bg-gray-100 rounded">
-                      <div className="flex items-center">
+                      <div className="flex items-center flex-1 mr-2">
                         <OptimizedImage
                           src={producto.foto || '/placeholder.svg'}
                           fallbackSrc="/placeholder.svg"
@@ -2181,20 +2181,61 @@ export default function VendedorPage() {
                               ))}
                             </div>
                           ) : (
-                            <div className="text-xs text-gray-600">
-                              Cantidad: {producto.cantidadVendida}
-                            </div>
+                            <p className="text-xs text-gray-500">
+                              Disp: {producto.cantidad}
+                            </p>
                           )}
                         </div>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                        onClick={() => handleAjustarCantidad(producto.id, -producto.cantidadVendida)}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
+
+                      <div className="flex items-center gap-2">
+                        {/* Controles de cantidad para productos sin parámetros */}
+                        {(!producto.parametrosVenta || producto.parametrosVenta.length === 0) && (
+                          <div className="flex items-center space-x-1 border rounded bg-white p-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-gray-600 hover:text-black"
+                              onClick={() => handleAjustarCantidad(producto.id, -1)}
+                            >
+                              <Minus className="h-3 w-3" />
+                            </Button>
+                            <Input
+                              type="number"
+                              min="1"
+                              max={producto.cantidad}
+                              value={producto.cantidadVendida}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value);
+                                if (!isNaN(val)) {
+                                  const targetQty = Math.max(1, Math.min(val, producto.cantidad));
+                                  const diff = targetQty - producto.cantidadVendida;
+                                  handleAjustarCantidad(producto.id, diff);
+                                }
+                              }}
+                              className="w-12 h-6 text-center text-xs p-0 border-none focus-visible:ring-0"
+                            />
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-gray-600 hover:text-black"
+                              onClick={() => handleAjustarCantidad(producto.id, 1)}
+                              disabled={producto.cantidadVendida >= producto.cantidad}
+                            >
+                              <Plus className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        )}
+
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-red-500 hover:text-red-700 hover:bg-red-50 h-8 w-8"
+                          onClick={() => handleAjustarCantidad(producto.id, -producto.cantidadVendida)}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                   ))}
 
