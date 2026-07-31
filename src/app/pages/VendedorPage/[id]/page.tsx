@@ -187,6 +187,8 @@ const useVendedorData = (vendedorId: string) => {
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false)
   const [pendingSales, setPendingSales] = useState<any[]>([])
   const [isSyncing, setIsSyncing] = useState(false)
+  const [parametrosDialogOpen, setParametrosDialogOpen] = useState(false)
+  const [selectedProduct, setSelectedProduct] = useState<Producto | null>(null)
 
   const fetchVendedorNombre = useCallback(async () => {
 
@@ -706,7 +708,11 @@ const useVendedorData = (vendedorId: string) => {
     setPendingSales,
     savePendingSale,
     syncSales,
-    isSyncing
+    isSyncing,
+    parametrosDialogOpen,
+    setParametrosDialogOpen,
+    selectedProduct,
+    setSelectedProduct
   }
 }
 
@@ -1677,7 +1683,11 @@ export default function VendedorPage() {
     pendingSales,
     savePendingSale,
     syncSales,
-    isSyncing
+    isSyncing,
+    parametrosDialogOpen,
+    setParametrosDialogOpen,
+    selectedProduct,
+    setSelectedProduct
   } = useVendedorData(vendedorId)
 
   const [busqueda, setBusqueda] = useState('')
@@ -1685,8 +1695,6 @@ export default function VendedorPage() {
   const [menuAbierto, setMenuAbierto] = useState(false)
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [parametrosDialogOpen, setParametrosDialogOpen] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState<Producto | null>(null);
   const [productosConParametrosEnEspera, setProductosConParametrosEnEspera] = useState<ProductoVenta[]>([]);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [productosEnDialogo, setProductosEnDialogo] = useState<{
