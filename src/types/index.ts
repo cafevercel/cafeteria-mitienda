@@ -77,6 +77,48 @@ export interface Producto {
   porcentajeGanancia?: number;
   seccion?: string;
   codigo_barras?: string; // ← NUEVO
+  tiene_vencimiento?: boolean;
+  fecha_vencimiento?: string | null;
+  stock_minimo?: number;
+}
+
+export interface NotificacionVendedor {
+  id: string;
+  vendedor_id: string;
+  vendedor_nombre?: string;
+  tipo: 'bajo_stock' | 'poca_rotacion' | 'manual';
+  mensaje: string;
+  fecha_envio: string;
+  leido?: boolean;
+  productos_afectados?: string[];
+}
+
+export interface AlertaVendedorStock {
+  vendedor_id: string;
+  vendedor_nombre: string;
+  vendedor_telefono?: string;
+  total_agotados: number;
+  total_bajo_stock: number;
+  productos_criticos: Array<{
+    id: string;
+    nombre: string;
+    cantidad: number;
+    stock_minimo: number;
+    estado: 'agotado' | 'bajo_stock';
+  }>;
+}
+
+export interface RendimientoProducto {
+  id: string;
+  nombre: string;
+  foto?: string | null;
+  total_vendido: number;
+  monto_total: number;
+  vendedor_id?: string;
+  vendedor_nombre?: string;
+  es_estrella?: boolean;
+  es_estancado?: boolean;
+  dias_sin_ventas?: number;
 }
 
 export interface VentaParametro {

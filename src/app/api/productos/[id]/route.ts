@@ -47,6 +47,9 @@ const obtenerProductoConParametros = async (productoId: string) => {
             p.porcentaje_ganancia as "porcentajeGanancia",
             p.seccion,
             p.codigo_barras as "codigo_barras",
+            COALESCE(p.tiene_vencimiento, false) as tiene_vencimiento,
+            TO_CHAR(p.fecha_vencimiento, 'YYYY-MM-DD') as fecha_vencimiento,
+            COALESCE(p.stock_minimo, 0) as stock_minimo,
             -- ✅ SUBCONSULTA SEPARADA para parámetros
             (
                 SELECT COALESCE(
@@ -115,6 +118,21 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
         const porcentajeGanancia = formData.get('porcentajeGanancia') as string;
         const seccion = formData.get('seccion') as string;
         const codigoBarras = formData.get('codigo_barras') as string || null;
+        const tieneVencimientoRaw = formData.get('tiene_vencimiento');
+        const tieneVencimiento = tieneVencimientoRaw === 'true' || tieneVencimientoRaw === '1';
+        const fechaVencimiento = formData.get('fecha_vencimiento') as string || null;
+        const stockMinimo = formData.get('stock_minimo') as string || '0';
+
+        console.log('🔴 PUT /api/productos/[id] recibidos:', {
+          id,
+          nombre,
+          tieneVencimiento,
+          fechaVencimiento,
+          stockMinimo,
+          raw_tiene_vencimiento: formData.get('tiene_vencimiento'),
+          raw_fecha_vencimiento: formData.get('fecha_vencimiento'),
+          raw_stock_minimo: formData.get('stock_minimo')
+        });
 
         // EXISTENTE: Manejar agregos
         const tieneAgrego = formData.get('tiene_agrego') === 'true';
@@ -138,27 +156,30 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
         await query('BEGIN');
 
         try {
-            // 1. Actualizar producto principal (AGREGAR tiene_costo)
+            // 1. Actualizar producto principal (AGREGAR tiene_costo, tiene_vencimiento, fecha_vencimiento, stock_minimo)
             let updateQuery: string;
             let updateParams: any[];
 
             if (tieneParametros) {
-                updateQuery = 'UPDATE productos SET nombre = $1, precio = $2, foto = $3, tiene_parametros = $4, tiene_agrego = $5, tiene_costo = $6, precio_compra = $7, porcentaje_ganancia = $8, seccion = $9, codigo_barras = $10 WHERE id = $11 RETURNING *';
+                updateQuery = 'UPDATE productos SET nombre = $1, precio = $2, foto = $3, tiene_parametros = $4, tiene_agrego = $5, tiene_costo = $6, precio_compra = $7, porcentaje_ganancia = $8, seccion = $9, codigo_barras = $10, tiene_vencimiento = $11, fecha_vencimiento = $12, stock_minimo = $13 WHERE id = $14 RETURNING *';
                 updateParams = [
                     nombre,
                     Number(precio),
                     nuevaFotoUrl,
                     tieneParametros,
                     tieneAgrego,
-                    tieneCosto, // NUEVO
+                    tieneCosto,
                     precioCompra ? Number(precioCompra) : currentProduct.rows[0].precio_compra || 0,
                     porcentajeGanancia ? Number(porcentajeGanancia) : currentProduct.rows[0].porcentaje_ganancia || 0,
                     seccion || '',
                     codigoBarras,
+                    tieneVencimiento,
+                    fechaVencimiento ? fechaVencimiento : null,
+                    Number(stockMinimo) || 0,
                     id
                 ];
             } else {
-                updateQuery = 'UPDATE productos SET nombre = $1, precio = $2, cantidad = $3, foto = $4, tiene_parametros = $5, tiene_agrego = $6, tiene_costo = $7, precio_compra = $8, porcentaje_ganancia = $9, seccion = $10, codigo_barras = $11 WHERE id = $12 RETURNING *';
+                updateQuery = 'UPDATE productos SET nombre = $1, precio = $2, cantidad = $3, foto = $4, tiene_parametros = $5, tiene_agrego = $6, tiene_costo = $7, precio_compra = $8, porcentaje_ganancia = $9, seccion = $10, codigo_barras = $11, tiene_vencimiento = $12, fecha_vencimiento = $13, stock_minimo = $14 WHERE id = $15 RETURNING *';
                 updateParams = [
                     nombre,
                     Number(precio),
@@ -166,16 +187,20 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
                     nuevaFotoUrl,
                     tieneParametros,
                     tieneAgrego,
-                    tieneCosto, // NUEVO
+                    tieneCosto,
                     precioCompra ? Number(precioCompra) : currentProduct.rows[0].precio_compra || 0,
                     porcentajeGanancia ? Number(porcentajeGanancia) : currentProduct.rows[0].porcentaje_ganancia || 0,
                     seccion || '',
                     codigoBarras,
+                    tieneVencimiento,
+                    fechaVencimiento ? fechaVencimiento : null,
+                    Number(stockMinimo) || 0,
                     id
                 ];
             }
 
             const result = await query(updateQuery, updateParams);
+            console.log('🟡 Result rows del UPDATE directo:', result.rows[0]);
 
             // 2-4. Manejar parámetros (código existente)...
             const parametrosAntiguosResult = await query(
@@ -282,6 +307,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
             await query('COMMIT');
 
             const productoActualizado = await obtenerProductoConParametros(id);
+            console.log('🟢 PUT /api/productos/[id] resultado DB final:', productoActualizado);
             return NextResponse.json(productoActualizado);
         } catch (error) {
             await query('ROLLBACK');

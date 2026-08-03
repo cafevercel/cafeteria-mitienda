@@ -150,7 +150,10 @@ export default function ModeradorPage() {
     porcentajeGanancia: 0,
     seccion: '',
     parametros: [] as Array<{ nombre: string; cantidad: number }>,
-    codigo_barras: ''
+    codigo_barras: '',
+    stock_minimo: 0,
+    tiene_vencimiento: false,
+    fecha_vencimiento: '' as string | null
   });
   const [newParamName, setNewParamName] = useState('');
   const [newParamQty, setNewParamQty] = useState(0);
@@ -192,7 +195,10 @@ export default function ModeradorPage() {
     porcentajeGanancia: 0,
     seccion: '',
     parametros: [] as Array<{ nombre: string; cantidad: number }>,
-    codigo_barras: ''
+    codigo_barras: '',
+    stock_minimo: 0,
+    tiene_vencimiento: false,
+    fecha_vencimiento: '' as string | null
   });
   const [originalProduct, setOriginalProduct] = useState<Producto | null>(null);
   const [imageUploadingEdit, setImageUploadingEdit] = useState(false);
@@ -380,7 +386,10 @@ export default function ModeradorPage() {
       porcentajeGanancia: producto.porcentajeGanancia || 0,
       seccion: producto.seccion || '',
       parametros: producto.parametros ? [...producto.parametros] : [],
-      codigo_barras: producto.codigo_barras || ''
+      codigo_barras: producto.codigo_barras || '',
+      stock_minimo: producto.stock_minimo || 0,
+      tiene_vencimiento: producto.tiene_vencimiento || false,
+      fecha_vencimiento: producto.fecha_vencimiento || null
     });
     setNombreExisteEdit(false);
     setBarcodeExisteEdit(false);
@@ -444,6 +453,19 @@ export default function ModeradorPage() {
       cambios.push(`Imagen: actualizada`);
     }
 
+    // Detectar cambios en stock mínimo
+    if (editForm.stock_minimo !== (originalProduct.stock_minimo || 0)) {
+      cambios.push(`Stock Mínimo: ${originalProduct.stock_minimo || 0} → ${editForm.stock_minimo}`);
+    }
+
+    // Detectar cambios en vencimiento
+    if (editForm.tiene_vencimiento !== (originalProduct.tiene_vencimiento || false)) {
+      cambios.push(`Tiene Vencimiento: ${originalProduct.tiene_vencimiento ? 'Sí' : 'No'} → ${editForm.tiene_vencimiento ? 'Sí' : 'No'}`);
+    }
+    if (editForm.fecha_vencimiento !== (originalProduct.fecha_vencimiento || null)) {
+      cambios.push(`Fecha Vencimiento: ${originalProduct.fecha_vencimiento || 'N/A'} → ${editForm.fecha_vencimiento || 'N/A'}`);
+    }
+
     return cambios;
   };
 
@@ -482,6 +504,9 @@ export default function ModeradorPage() {
       formData.append('seccion', editForm.seccion);
       formData.append('codigo_barras', editForm.codigo_barras);
       formData.append('porcentajeGanancia', String(editForm.porcentajeGanancia));
+      formData.append('stock_minimo', String(editForm.stock_minimo || 0));
+      formData.append('tiene_vencimiento', String(editForm.tiene_vencimiento || false));
+      formData.append('fecha_vencimiento', editForm.fecha_vencimiento || '');
 
       if (editForm.tieneParametros) {
         formData.append('parametros', JSON.stringify(editForm.parametros));
@@ -508,7 +533,10 @@ export default function ModeradorPage() {
         porcentajeGanancia: 0,
         seccion: '',
         parametros: [],
-        codigo_barras: ''
+        codigo_barras: '',
+        stock_minimo: 0,
+        tiene_vencimiento: false,
+        fecha_vencimiento: null
       });
       await refreshData();
       setGestionarStep('scan');
@@ -532,7 +560,10 @@ export default function ModeradorPage() {
       porcentajeGanancia: 0,
       seccion: '',
       parametros: [],
-      codigo_barras: ''
+      codigo_barras: '',
+      stock_minimo: 0,
+      tiene_vencimiento: false,
+      fecha_vencimiento: null
     });
     setNombreExisteEdit(false);
     setBarcodeExisteEdit(false);
@@ -555,6 +586,9 @@ export default function ModeradorPage() {
       formData.append('seccion', newProduct.seccion);
       formData.append('codigo_barras', newProduct.codigo_barras);
       formData.append('porcentajeGanancia', String(newProduct.porcentajeGanancia));
+      formData.append('stock_minimo', String(newProduct.stock_minimo || 0));
+      formData.append('tiene_vencimiento', String(newProduct.tiene_vencimiento || false));
+      formData.append('fecha_vencimiento', newProduct.fecha_vencimiento || '');
 
       if (newProduct.tieneParametros) {
         formData.append('parametros', JSON.stringify(newProduct.parametros));
@@ -590,7 +624,10 @@ export default function ModeradorPage() {
         porcentajeGanancia: 0,
         seccion: '',
         parametros: [],
-        codigo_barras: ''
+        codigo_barras: '',
+        stock_minimo: 0,
+        tiene_vencimiento: false,
+        fecha_vencimiento: null
       });
       await refreshData();
       setGestionarStep('scan');
@@ -851,7 +888,10 @@ export default function ModeradorPage() {
         porcentajeGanancia: 0,
         seccion: '',
         parametros: [],
-        codigo_barras: cleanBarcode
+        codigo_barras: cleanBarcode,
+        stock_minimo: 0,
+        tiene_vencimiento: false,
+        fecha_vencimiento: null
       });
       setGestionarStep('create');
       toast({ title: "Producto No Encontrado", description: `Creando nuevo producto con código: ${cleanBarcode}` });
@@ -1207,6 +1247,39 @@ export default function ModeradorPage() {
                     />
                   </div>
 
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="new-stock-minimo">Stock Mínimo Alerta</Label>
+                      <Input
+                        id="new-stock-minimo"
+                        type="number"
+                        min={0}
+                        value={newProduct.stock_minimo || 0}
+                        onChange={e => setNewProduct(prev => ({ ...prev, stock_minimo: parseInt(e.target.value) || 0 }))}
+                        placeholder="Ej. 5"
+                      />
+                      <p className="text-xs text-gray-500">Notificar cuando el stock baje de este número</p>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Fecha de Vencimiento</Label>
+                      <div className="flex items-center gap-2">
+                        <Checkbox
+                          id="new-tiene-vencimiento"
+                          checked={newProduct.tiene_vencimiento}
+                          onCheckedChange={checked => setNewProduct(prev => ({ ...prev, tiene_vencimiento: !!checked, fecha_vencimiento: !!checked ? prev.fecha_vencimiento : null }))}
+                        />
+                        <Label htmlFor="new-tiene-vencimiento" className="cursor-pointer text-sm">Tiene fecha de vencimiento</Label>
+                      </div>
+                      {newProduct.tiene_vencimiento && (
+                        <Input
+                          type="date"
+                          value={newProduct.fecha_vencimiento || ''}
+                          onChange={e => setNewProduct(prev => ({ ...prev, fecha_vencimiento: e.target.value || null }))}
+                        />
+                      )}
+                    </div>
+                  </div>
+
                   <div className="pt-4 border-t flex justify-end gap-3">
                     <Button
                       type="button"
@@ -1222,7 +1295,10 @@ export default function ModeradorPage() {
                           porcentajeGanancia: 0,
                           seccion: '',
                           parametros: [],
-                          codigo_barras: ''
+                          codigo_barras: '',
+                          stock_minimo: 0,
+                          tiene_vencimiento: false,
+                          fecha_vencimiento: null
                         });
                         setGestionarStep('scan');
                       }}
@@ -2035,6 +2111,39 @@ export default function ModeradorPage() {
                         onChange={url => setEditForm(prev => ({ ...prev, foto: url }))}
                         disabled={imageUploadingEdit}
                       />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="edit-stock-minimo">Stock Mínimo Alerta</Label>
+                        <Input
+                          id="edit-stock-minimo"
+                          type="number"
+                          min={0}
+                          value={editForm.stock_minimo || 0}
+                          onChange={e => setEditForm(prev => ({ ...prev, stock_minimo: parseInt(e.target.value) || 0 }))}
+                          placeholder="Ej. 5"
+                        />
+                        <p className="text-xs text-gray-500">Notificar cuando el stock baje de este número</p>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Fecha de Vencimiento</Label>
+                        <div className="flex items-center gap-2">
+                          <Checkbox
+                            id="edit-tiene-vencimiento"
+                            checked={editForm.tiene_vencimiento}
+                            onCheckedChange={checked => setEditForm(prev => ({ ...prev, tiene_vencimiento: !!checked, fecha_vencimiento: !!checked ? prev.fecha_vencimiento : null }))}
+                          />
+                          <Label htmlFor="edit-tiene-vencimiento" className="cursor-pointer text-sm">Tiene fecha de vencimiento</Label>
+                        </div>
+                        {editForm.tiene_vencimiento && (
+                          <Input
+                            type="date"
+                            value={editForm.fecha_vencimiento ? editForm.fecha_vencimiento.split('T')[0] : ''}
+                            onChange={e => setEditForm(prev => ({ ...prev, fecha_vencimiento: e.target.value || null }))}
+                          />
+                        )}
+                      </div>
                     </div>
 
                     {/* Resumen de cambios */}

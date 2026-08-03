@@ -16,6 +16,19 @@ export async function POST(request: NextRequest) {
         const porcentajeGanancia = formData.get('porcentajeGanancia') as string;
         const seccion = formData.get('seccion') as string;
         const codigoBarras = formData.get('codigo_barras') as string || formData.get('codigoBarras') as string || null;
+        const tieneVencimiento = formData.get('tiene_vencimiento') === 'true';
+        const fechaVencimiento = formData.get('fecha_vencimiento') as string || null;
+        const stockMinimo = formData.get('stock_minimo') as string || '0';
+
+        console.log('🔴 POST /api/productos recibidos:', {
+          nombre,
+          tieneVencimiento,
+          fechaVencimiento,
+          stockMinimo,
+          raw_tiene_vencimiento: formData.get('tiene_vencimiento'),
+          raw_fecha_vencimiento: formData.get('fecha_vencimiento'),
+          raw_stock_minimo: formData.get('stock_minimo')
+        });
 
         let fotoUrl = '';
 
@@ -26,11 +39,11 @@ export async function POST(request: NextRequest) {
         await query('BEGIN');
 
         try {
-            // ACTUALIZAR: Agregar tiene_costo con valor por defecto FALSE y codigo_barras
             const result = await query(
-                'INSERT INTO productos (nombre, precio, precio_compra, cantidad, foto, tiene_parametros, tiene_agrego, tiene_costo, porcentaje_ganancia, seccion, codigo_barras) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *',
-                [nombre, Number(precio), Number(precioCompra), Number(cantidad), fotoUrl, tieneParametros, false, false, Number(porcentajeGanancia) || 0, seccion || '', codigoBarras]
+                'INSERT INTO productos (nombre, precio, precio_compra, cantidad, foto, tiene_parametros, tiene_agrego, tiene_costo, porcentaje_ganancia, seccion, codigo_barras, tiene_vencimiento, fecha_vencimiento, stock_minimo) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING *',
+                [nombre, Number(precio), Number(precioCompra), Number(cantidad), fotoUrl, tieneParametros, false, false, Number(porcentajeGanancia) || 0, seccion || '', codigoBarras, tieneVencimiento, fechaVencimiento ? fechaVencimiento : null, Number(stockMinimo) || 0]
             );
+            console.log('🟢 POST /api/productos resultado DB:', result.rows[0]);
 
             const productoId = result.rows[0].id;
 
@@ -60,6 +73,9 @@ export async function POST(request: NextRequest) {
         p.porcentaje_ganancia as "porcentajeGanancia",
         p.seccion,
         p.codigo_barras as "codigo_barras",
+        COALESCE(p.tiene_vencimiento, false) as tiene_vencimiento,
+        TO_CHAR(p.fecha_vencimiento, 'YYYY-MM-DD') as fecha_vencimiento,
+        COALESCE(p.stock_minimo, 0) as stock_minimo,
         -- ✅ SUBCONSULTA SEPARADA para parámetros
         (
             SELECT COALESCE(
@@ -136,6 +152,9 @@ export async function GET(request: NextRequest) {
                 p.porcentaje_ganancia as "porcentajeGanancia",
                 p.seccion,
                 p.codigo_barras as "codigo_barras",
+                COALESCE(p.tiene_vencimiento, false) as tiene_vencimiento,
+                TO_CHAR(p.fecha_vencimiento, 'YYYY-MM-DD') as fecha_vencimiento,
+                COALESCE(p.stock_minimo, 0) as stock_minimo,
                 -- ✅ SUBCONSULTA SEPARADA para parámetros
                 (
                     SELECT COALESCE(

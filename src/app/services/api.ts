@@ -36,6 +36,9 @@ interface LocalProducto {
   tieneParametros?: boolean;
   porcentaje_ganancia?: number; // Usar el nombre con guion bajo
   seccion?: string;
+  tiene_vencimiento?: boolean;
+  fecha_vencimiento?: string | null;
+  stock_minimo?: number;
   parametros?: Array<{
     nombre: string;
     cantidad: number;
@@ -206,7 +209,10 @@ export const getInventario = async (): Promise<Producto[]> => {
     return response.data.map(p => ({
       ...p,
       foto: p.foto || null,
-      tiene_parametros: Boolean(p.tiene_parametros)
+      tiene_parametros: Boolean(p.tiene_parametros),
+      tiene_vencimiento: Boolean(p.tiene_vencimiento),
+      fecha_vencimiento: p.fecha_vencimiento || null,
+      stock_minimo: Number(p.stock_minimo) || 0
     })) as Producto[];
   } catch (error) {
     console.error('Error fetching inventory:', error);
@@ -245,12 +251,19 @@ export const agregarProducto = async (formData: FormData) => {
       }
     }
 
-    // No es necesario modificar esta parte, ya que formData ya incluirá el campo "porcentajeGanancia"
+    console.log('🌐 FRONTEND - Enviando agregarProducto (POST /api/productos):', {
+      nombre: formData.get('nombre'),
+      stock_minimo: formData.get('stock_minimo'),
+      tiene_vencimiento: formData.get('tiene_vencimiento'),
+      fecha_vencimiento: formData.get('fecha_vencimiento'),
+    });
+
     const response = await api.post('/productos', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
     });
+    console.log('🌐 FRONTEND - Respuesta servidor agregarProducto:', response.data);
     return response.data;
   } catch (error) {
     console.error('Error al agregar producto:', error);
@@ -320,11 +333,20 @@ export const editarProducto = async (id: string, formData: FormData) => {
       }
     }
 
+    console.log('🌐 FRONTEND - Enviando editarProducto (PUT /api/productos/' + id + '):', {
+      id,
+      nombre: formData.get('nombre'),
+      stock_minimo: formData.get('stock_minimo'),
+      tiene_vencimiento: formData.get('tiene_vencimiento'),
+      fecha_vencimiento: formData.get('fecha_vencimiento'),
+    });
+
     const response = await api.put(`/productos/${id}`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
     });
+    console.log('🌐 FRONTEND - Respuesta servidor editarProducto:', response.data);
     return response.data;
   } catch (error) {
     console.error('Error al editar producto:', error);

@@ -369,6 +369,42 @@ const EditMode = React.memo(({
     )}
 
     <div>
+      <Label>Stock Mínimo Alerta</Label>
+      <Input
+        name="stock_minimo"
+        type="number"
+        value={editedProduct.stock_minimo || 0}
+        onChange={onInputChange}
+        placeholder="Cantidad de stock mínimo"
+      />
+    </div>
+
+    <div className="flex items-center space-x-2">
+      <Checkbox
+        id="tiene_vencimiento"
+        checked={editedProduct.tiene_vencimiento || false}
+        onCheckedChange={(checked) => {
+          onInputChange({
+            target: { name: 'tiene_vencimiento', value: checked, type: 'checkbox', checked }
+          } as any);
+        }}
+      />
+      <Label htmlFor="tiene_vencimiento">Requiere Fecha de Vencimiento</Label>
+    </div>
+
+    {editedProduct.tiene_vencimiento && (
+      <div>
+        <Label>Fecha de Vencimiento</Label>
+        <Input
+          name="fecha_vencimiento"
+          type="date"
+          value={editedProduct.fecha_vencimiento ? editedProduct.fecha_vencimiento.split('T')[0] : ''}
+          onChange={onInputChange}
+        />
+      </div>
+    )}
+
+    <div>
       <Label>Imagen del producto</Label>
       <ImageUpload
         value={imageUrl}
@@ -540,6 +576,13 @@ const ViewMode = React.memo(({
         <p className="text-gray-700">Cantidad disponible: {product.cantidad}</p>
       )}
 
+      {product.stock_minimo !== undefined && product.stock_minimo > 0 && (
+        <p className="text-md text-gray-700">Stock Mínimo Alerta: {product.stock_minimo}</p>
+      )}
+      {product.tiene_vencimiento && product.fecha_vencimiento && (
+        <p className="text-md font-medium text-orange-700">Fecha de Vencimiento: {product.fecha_vencimiento}</p>
+      )}
+
       {product.codigo_barras && (
         <div className="mt-4 border-t pt-4">
           <Label className="text-xs text-gray-500 mb-2 block">Código de Barras</Label>
@@ -580,6 +623,9 @@ export default function ProductDialog({
     precio_compra: product.precio_compra || 0,
     porcentajeGanancia: product.porcentajeGanancia || 0,
     codigo_barras: product.codigo_barras || '',
+    tiene_vencimiento: product.tiene_vencimiento || false,
+    fecha_vencimiento: product.fecha_vencimiento || null,
+    stock_minimo: product.stock_minimo || 0,
   });
 
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
@@ -658,6 +704,9 @@ export default function ProductDialog({
       agregos: product.agregos || [],
       costos: product.costos || [],
       codigo_barras: product.codigo_barras || '',
+      tiene_vencimiento: product.tiene_vencimiento || false,
+      fecha_vencimiento: product.fecha_vencimiento || null,
+      stock_minimo: product.stock_minimo || 0,
     });
     setImageUrl(product.foto || '');
     setMostrarPorcentajeGanancia(tienePorcentajeGanancia);
@@ -765,12 +814,14 @@ export default function ProductDialog({
 
   // Manejo de cambios en los inputs del formulario
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
+    const { name, value, type, checked } = e.target;
     setEditedProduct((prev) => ({
       ...prev,
-      [name]: name === 'precio' || name === 'precio_compra' || name === 'cantidad' || name === 'porcentajeGanancia'
-        ? Number(value)
-        : value,
+      [name]: type === 'checkbox'
+        ? checked
+        : name === 'precio' || name === 'precio_compra' || name === 'cantidad' || name === 'porcentajeGanancia' || name === 'stock_minimo'
+          ? Number(value)
+          : value,
     }));
   }, []);
 
@@ -848,6 +899,9 @@ export default function ProductDialog({
         tiene_costo: editedProduct.tiene_costo || false,
         agregos: editedProduct.agregos || [],
         costos: editedProduct.costos || [],
+        tiene_vencimiento: editedProduct.tiene_vencimiento || false,
+        fecha_vencimiento: editedProduct.fecha_vencimiento || null,
+        stock_minimo: editedProduct.stock_minimo || 0,
       };
 
       console.log('Producto a guardar:', updatedProduct);

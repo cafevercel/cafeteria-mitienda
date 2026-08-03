@@ -54,6 +54,8 @@ import { toast } from "@/hooks/use-toast";
 import { useVendorProducts } from '@/hooks/use-vendor-products';
 import MenuSectionComponent from '@/components/MenuSection'
 import ExportacionComparacion from '@/components/ExportacionComparacion'
+import NotificacionesSystem from '@/components/NotificacionesSystem'
+import VencimientoBell from '@/components/VencimientoBell'
 import React from 'react'
 
 
@@ -93,6 +95,9 @@ interface NewProduct {
     cantidad: number;
   }>;
   codigo_barras: string;
+  stock_minimo: number;
+  tiene_vencimiento: boolean;
+  fecha_vencimiento: string;
 }
 
 const parseLocalDate = (dateString: string): Date => {
@@ -276,7 +281,10 @@ export default function AlmacenPage() {
     porcentajeGanancia: 0,
     seccion: '',
     parametros: [],
-    codigo_barras: ''
+    codigo_barras: '',
+    stock_minimo: 0,
+    tiene_vencimiento: false,
+    fecha_vencimiento: ''
   });
 
   const [searchTerm, setSearchTerm] = useState("")
@@ -330,6 +338,7 @@ export default function AlmacenPage() {
   const [vendedorEmpleadosSeleccionado, setVendedorEmpleadosSeleccionado] = useState<Vendedor | null>(null)
   const [showSalariosModal, setShowSalariosModal] = useState(false)
   const [vendedorSalariosSeleccionado, setVendedorSalariosSeleccionado] = useState<Vendedor | null>(null)
+  const [showNotificacionesModal, setShowNotificacionesModal] = useState(false)
 
 
   const obtenerSeccionesUnicas = useCallback(() => {
@@ -1281,6 +1290,9 @@ export default function AlmacenPage() {
       formData.append('porcentajeGanancia', newProduct.porcentajeGanancia.toString());
       formData.append('seccion', newProduct.seccion); // Agregar esta línea
       formData.append('codigo_barras', newProduct.codigo_barras);
+      formData.append('stock_minimo', (newProduct.stock_minimo || 0).toString());
+      formData.append('tiene_vencimiento', newProduct.tiene_vencimiento.toString());
+      formData.append('fecha_vencimiento', newProduct.fecha_vencimiento || '');
 
       if (newProduct.tieneParametros) {
         formData.append('tieneParametros', 'true');
@@ -1309,7 +1321,10 @@ export default function AlmacenPage() {
         tieneParametros: false,
         seccion: '', // Agregar esta línea
         parametros: [],
-        codigo_barras: ''
+        codigo_barras: '',
+        stock_minimo: 0,
+        tiene_vencimiento: false,
+        fecha_vencimiento: ''
       });
 
       toast({
@@ -1419,6 +1434,9 @@ export default function AlmacenPage() {
       formData.append('tiene_agrego', (editedProduct.tiene_agrego || false).toString());
       formData.append('tiene_costo', (editedProduct.tiene_costo || false).toString());
       formData.append('codigo_barras', editedProduct.codigo_barras || '');
+      formData.append('stock_minimo', (editedProduct.stock_minimo || 0).toString());
+      formData.append('tiene_vencimiento', (editedProduct.tiene_vencimiento || false).toString());
+      formData.append('fecha_vencimiento', editedProduct.fecha_vencimiento || '');
 
       if (editedProduct.agregos) {
         formData.append('agregos', JSON.stringify(editedProduct.agregos));
@@ -1511,7 +1529,14 @@ export default function AlmacenPage() {
   return (
     <div className="container mx-auto p-4 relative bg-orange-50">
       <div className="flex justify-between items-center mb-4">
-        <h1 className="text-2xl font-bold text-orange-800">Panel de Almacén</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold text-orange-800">Panel de Almacén</h1>
+          <VencimientoBell 
+            vencidosCount={0} 
+            venceProntoCount={0} 
+            onClick={() => setShowNotificacionesModal(true)} 
+          />
+        </div>
         <Sheet open={isMenuOpen} onOpenChange={setIsMenuOpen}>
           <SheetTrigger asChild>
             <Button variant="outline" size="icon" className="fixed top-4 right-4 z-50 border-orange-300 hover:bg-orange-100">
@@ -2407,6 +2432,42 @@ export default function AlmacenPage() {
             )}
 
             <div>
+              <label htmlFor="stock_minimo" className="block text-sm font-medium text-gray-700">Stock Mínimo Alerta</label>
+              <Input
+                id="stock_minimo"
+                name="stock_minimo"
+                type="number"
+                value={newProduct.stock_minimo || 0}
+                onChange={(e) => setNewProduct(prev => ({ ...prev, stock_minimo: Number(e.target.value) || 0 }))}
+                placeholder="Stock mínimo"
+              />
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="tiene_vencimiento_new"
+                checked={newProduct.tiene_vencimiento}
+                onCheckedChange={(checked) => {
+                  setNewProduct(prev => ({ ...prev, tiene_vencimiento: !!checked }));
+                }}
+              />
+              <label htmlFor="tiene_vencimiento_new" className="text-sm font-medium text-gray-700">Requiere Fecha de Vencimiento</label>
+            </div>
+
+            {newProduct.tiene_vencimiento && (
+              <div>
+                <label htmlFor="fecha_vencimiento_new" className="block text-sm font-medium text-gray-700">Fecha de Vencimiento</label>
+                <Input
+                  id="fecha_vencimiento_new"
+                  name="fecha_vencimiento"
+                  type="date"
+                  value={newProduct.fecha_vencimiento || ''}
+                  onChange={(e) => setNewProduct(prev => ({ ...prev, fecha_vencimiento: e.target.value }))}
+                />
+              </div>
+            )}
+
+            <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Foto del producto
               </label>
@@ -2925,6 +2986,12 @@ export default function AlmacenPage() {
           onClose={() => setShowSalariosModal(false)}
         />
       )}
+
+      <NotificacionesSystem
+        isOpen={showNotificacionesModal}
+        onClose={() => setShowNotificacionesModal(false)}
+        vendedores={vendedores}
+      />
 
     </div>
   )
