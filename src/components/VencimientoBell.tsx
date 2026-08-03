@@ -26,13 +26,16 @@ export const VencimientoBell: React.FC<VencimientoBellProps> = ({
   const [hasUrgent, setHasUrgent] = useState<boolean>(false);
 
   const calculateUnread = useCallback(async () => {
+    // Si la pestaña no está visible, no gastar ancho de banda
+    if (typeof document !== 'undefined' && document.hidden) return;
+
     try {
-      const res = await fetch('/api/notificaciones');
+      const res = await fetch('/api/notificaciones/count');
       if (!res.ok) return;
       const data = await res.json();
 
-      const vencimientos = (data.vencimientos || []).filter((v: any) => v.estado !== 'vigente');
-      const almacen = (data.almacen || []).filter((a: any) => a.estado !== 'normal');
+      const vencimientos = data.vencimientos || [];
+      const almacen = data.almacen || [];
 
       let readKeysSet = new Set<string>();
       try {
@@ -77,8 +80,8 @@ export const VencimientoBell: React.FC<VencimientoBellProps> = ({
     window.addEventListener('notificaciones_updated', handleUpdate);
     window.addEventListener('focus', handleUpdate);
 
-    // Refresh count every 60 seconds
-    const interval = setInterval(calculateUnread, 60000);
+    // Refresh count every 5 minutes (300,000 ms) instead of 60 seconds
+    const interval = setInterval(calculateUnread, 300000);
 
     return () => {
       window.removeEventListener('notificaciones_updated', handleUpdate);
