@@ -1532,8 +1532,6 @@ export default function AlmacenPage() {
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold text-orange-800">Panel de Almacén</h1>
           <VencimientoBell 
-            vencidosCount={0} 
-            venceProntoCount={0} 
             onClick={() => setShowNotificacionesModal(true)} 
           />
         </div>

@@ -24,6 +24,7 @@ import {
   Search
 } from 'lucide-react';
 import { Producto, Vendedor, AlertaVendedorStock } from '@/types';
+import { getNotificationKey } from './VencimientoBell';
 
 interface NotificacionesSystemProps {
   isOpen: boolean;
@@ -80,11 +81,44 @@ export const NotificacionesSystem: React.FC<NotificacionesSystemProps> = ({
     }
   }, []);
 
+  const markTabAsRead = useCallback((tab: 'vencimientos' | 'almacen' | 'vendedores' | 'all') => {
+    try {
+      let readKeysSet = new Set<string>();
+      const stored = localStorage.getItem('read_notif_keys');
+      if (stored) {
+        readKeysSet = new Set(JSON.parse(stored));
+      }
+
+      if (tab === 'vencimientos' || tab === 'all') {
+        vencimientos.filter(v => v.estado !== 'vigente').forEach(v => {
+          readKeysSet.add(getNotificationKey('vencimiento', v));
+        });
+      }
+
+      if (tab === 'almacen' || tab === 'all') {
+        alertasAlmacen.filter(a => a.estado !== 'normal').forEach(a => {
+          readKeysSet.add(getNotificationKey('almacen', a));
+        });
+      }
+
+      localStorage.setItem('read_notif_keys', JSON.stringify(Array.from(readKeysSet)));
+      window.dispatchEvent(new Event('notificaciones_updated'));
+    } catch (e) {
+      console.error('Error marking notifications as read:', e);
+    }
+  }, [vencimientos, alertasAlmacen]);
+
   useEffect(() => {
     if (isOpen) {
       fetchNotificaciones();
     }
   }, [isOpen, fetchNotificaciones]);
+
+  useEffect(() => {
+    if (isOpen) {
+      markTabAsRead(activeTab);
+    }
+  }, [isOpen, activeTab, markTabAsRead]);
 
   // QuickNotify Handler
   const handleQuickNotify = (vendedor: AlertaVendedorStock) => {
