@@ -54,12 +54,29 @@ export async function GET(request: NextRequest) {
           p.foto,
           u.id as usuario_id,
           u.nombre as usuario_nombre,
-          COALESCE(up.cantidad, 0) as cantidad,
-          COALESCE(up.stock_minimo, p.stock_minimo, 0) as stock_minimo
-        FROM usuario_productos up
-        JOIN productos p ON p.id = up.producto_id
-        JOIN usuarios u ON u.id = up.usuario_id
+          COALESCE(
+            CASE 
+              WHEN p.tiene_parametros = true THEN (
+                SELECT SUM(upp.cantidad) 
+                FROM usuario_producto_parametros upp 
+                WHERE upp.producto_id = p.id AND upp.usuario_id = u.id
+              )
+              ELSE up.cantidad
+            END, 
+            0
+          ) as cantidad,
+          COALESCE(p.stock_minimo, 0) as stock_minimo
+        FROM usuarios u
+        JOIN productos p ON true
+        LEFT JOIN usuario_productos up ON up.producto_id = p.id AND up.usuario_id = u.id
         WHERE u.rol = 'Vendedor' AND u.activo = true
+          AND (
+            up.id IS NOT NULL 
+            OR EXISTS (
+              SELECT 1 FROM usuario_producto_parametros upp 
+              WHERE upp.producto_id = p.id AND upp.usuario_id = u.id
+            )
+          )
       `);
 
       alertasAlmacen = resAlmacen.rows.map((row) => {
