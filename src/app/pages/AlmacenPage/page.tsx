@@ -291,7 +291,8 @@ export default function AlmacenPage() {
   const [selectedProduct, setSelectedProduct] = useState<Producto | null>(null)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   // En AlmacenPage.tsx, actualizar el estado:
-  const [activeSection, setActiveSection] = useState<'productos' | 'puntos-venta' | 'moderadores' | 'ventas' | 'menu' | 'contabilidad' | 'contabilidad-vendedores' | 'exportacion-comparacion'>('productos')
+  const [activeSection, setActiveSection] = useState<'productos' | 'puntos-venta' | 'moderadores' | 'ventas' | 'menu' | 'contabilidad' | 'contabilidad-vendedores' | 'exportacion-comparacion' | 'notificaciones'>('productos')
+  const [initialNotifTab, setInitialNotifTab] = useState<'vencimientos' | 'almacen' | 'vendedores'>('vencimientos')
   const [showMassDeliveryDialog, setShowMassDeliveryDialog] = useState(false)
   const [selectedVendorForMassDelivery, setSelectedVendorForMassDelivery] = useState<number | null>(null)
   const [selectedProducts, setSelectedProducts] = useState<{
@@ -1532,7 +1533,10 @@ export default function AlmacenPage() {
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold text-orange-800">Panel de Almacén</h1>
           <VencimientoBell 
-            onClick={() => setShowNotificacionesModal(true)} 
+            onNavigateToNotificaciones={(tab) => {
+              if (tab) setInitialNotifTab(tab);
+              setActiveSection('notificaciones');
+            }} 
           />
         </div>
         <Sheet open={isMenuOpen} onOpenChange={setIsMenuOpen}>
@@ -1553,6 +1557,17 @@ export default function AlmacenPage() {
                 }}
               >
                 Almacén
+              </Button>
+
+              <Button
+                variant="ghost"
+                className={activeSection === 'notificaciones' ? 'bg-orange-100 text-orange-800' : 'text-orange-700 hover:bg-orange-50 hover:text-orange-800'}
+                onClick={() => {
+                  setActiveSection('notificaciones')
+                  setIsMenuOpen(false)
+                }}
+              >
+                Notificaciones y Alertas
               </Button>
 
               <Button
@@ -2025,6 +2040,14 @@ export default function AlmacenPage() {
 
       {activeSection === 'exportacion-comparacion' && (
         <ExportacionComparacion vendedores={vendedores} almacen={inventario} />
+      )}
+
+      {activeSection === 'notificaciones' && (
+        <NotificacionesSystem 
+          isFullPage={true} 
+          vendedores={vendedores} 
+          initialTab={initialNotifTab} 
+        />
       )}
 
       <Dialog open={showMassDeliveryDialog} onOpenChange={setShowMassDeliveryDialog}>
