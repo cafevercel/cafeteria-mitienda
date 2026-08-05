@@ -179,14 +179,15 @@ export const NotificacionesSystem: React.FC<NotificacionesSystemProps> = ({
 
   const mainContent = (
     <div className="w-full space-y-4">
-      <div className="flex flex-row items-center justify-between pb-2 border-b">
+      {/* CABECERA RESPONSIVE */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b">
         <div>
-          <h2 className="text-2xl font-bold flex items-center gap-2 text-slate-800 dark:text-slate-100">
-            <Bell className="h-6 w-6 text-amber-500" />
-            Panel de Notificaciones y Alertas del Sistema
+          <h2 className="text-xl sm:text-2xl font-bold flex items-center gap-2 text-slate-800 dark:text-slate-100">
+            <Bell className="h-5 w-5 sm:h-6 sm:w-6 text-amber-500 shrink-0" />
+            Panel de Notificaciones y Alertas
           </h2>
-          <p className="text-sm text-slate-500">
-            Monitoreo en tiempo real de caducidades, existencias críticas en puntos de venta e inteligencia de rotación.
+          <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
+            Monitoreo en tiempo real de caducidades, existencias críticas e índice de rotación.
           </p>
         </div>
         <Button 
@@ -194,66 +195,71 @@ export const NotificacionesSystem: React.FC<NotificacionesSystemProps> = ({
           size="sm" 
           onClick={fetchNotificaciones} 
           disabled={isLoading}
-          className="flex items-center gap-1 text-slate-600 border-orange-200 hover:bg-orange-50"
+          className="flex items-center justify-center gap-1.5 text-slate-600 border-orange-200 hover:bg-orange-50 w-full sm:w-auto h-9 text-xs sm:text-sm"
         >
-          <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin' : ''}`} />
           Actualizar
         </Button>
       </div>
 
-      {/* BUSCADOR RÁPIDO */}
-      <div className="relative my-3">
+      {/* BUSCADOR RÁPIDO RESPONSIVE */}
+      <div className="relative my-2 sm:my-3">
         <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
         <Input
           placeholder="Buscar por producto o vendedor..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-9 bg-slate-50 dark:bg-slate-900 border-slate-200"
+          className="pl-9 h-9 sm:h-10 text-xs sm:text-sm bg-slate-50 dark:bg-slate-900 border-slate-200 rounded-lg"
         />
       </div>
 
-      {/* PESTAÑAS PRINCIPALES */}
+      {/* PESTAÑAS PRINCIPALES RESPONSIVE */}
       <Tabs value={activeTab} onValueChange={(val: any) => setActiveTab(val)} className="w-full">
-        <TabsList className="grid grid-cols-3 w-full bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
-          <TabsTrigger value="vencimientos" className="flex items-center gap-2 py-2">
-            <Calendar className="h-4 w-4 text-red-500" />
-            Vencimientos ({vencimientos.filter(v => v.estado !== 'vigente').length})
+        <TabsList className="grid grid-cols-3 w-full bg-slate-100 dark:bg-slate-800 p-1 rounded-xl h-auto">
+          <TabsTrigger value="vencimientos" className="flex items-center justify-center gap-1 sm:gap-2 py-2 text-[11px] sm:text-sm font-medium">
+            <Calendar className="h-3.5 w-3.5 text-red-500 shrink-0" />
+            <span className="truncate">Vencidos</span>
+            <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full font-bold">
+              {vencimientos.filter(v => v.estado !== 'vigente').length}
+            </span>
           </TabsTrigger>
-          <TabsTrigger value="almacen" className="flex items-center gap-2 py-2">
-            <Package className="h-4 w-4 text-orange-500" />
-            Almacén ({alertasAlmacen.length})
+          <TabsTrigger value="almacen" className="flex items-center justify-center gap-1 sm:gap-2 py-2 text-[11px] sm:text-sm font-medium">
+            <Package className="h-3.5 w-3.5 text-orange-500 shrink-0" />
+            <span className="truncate">Almacén</span>
+            <span className="text-[10px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full font-bold">
+              {alertasAlmacen.length}
+            </span>
           </TabsTrigger>
-          <TabsTrigger value="vendedores" className="flex items-center gap-2 py-2">
-            <Users className="h-4 w-4 text-blue-500" />
-            Vendedores
+          <TabsTrigger value="vendedores" className="flex items-center justify-center gap-1 sm:gap-2 py-2 text-[11px] sm:text-sm font-medium">
+            <Users className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+            <span className="truncate">Vendedores</span>
           </TabsTrigger>
         </TabsList>
 
         {/* 1. PESTAÑA VENCIMIENTOS */}
-        <TabsContent value="vencimientos" className="mt-4 space-y-4">
-          <div className="flex items-center justify-between bg-orange-50 dark:bg-orange-950/40 p-3 rounded-lg border border-orange-200 dark:border-orange-800">
-            <span className="text-sm font-medium text-orange-800 dark:text-orange-300 flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4" />
+        <TabsContent value="vencimientos" className="mt-3 sm:mt-4 space-y-3 sm:space-y-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 bg-orange-50 dark:bg-orange-950/40 p-3 rounded-xl border border-orange-200 dark:border-orange-800">
+            <span className="text-xs sm:text-sm font-medium text-orange-800 dark:text-orange-300 flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 shrink-0 text-orange-600" />
               Seguimiento global de fechas de expiración en inventario.
             </span>
-            <div className="flex gap-2">
-              <Badge variant="destructive" className="bg-red-600">🔴 Vencido</Badge>
-              <Badge className="bg-amber-500 text-white">🟡 Vence pronto (≤ 7 días)</Badge>
-              <Badge className="bg-emerald-600 text-white">🟢 Vigente</Badge>
+            <div className="flex flex-wrap gap-1.5 sm:gap-2 w-full sm:w-auto">
+              <Badge variant="destructive" className="bg-red-600 text-[10px] sm:text-xs">🔴 Vencido</Badge>
+              <Badge className="bg-amber-500 text-white text-[10px] sm:text-xs">🟡 Vence pronto (≤ 7 días)</Badge>
+              <Badge className="bg-emerald-600 text-white text-[10px] sm:text-xs">🟢 Vigente</Badge>
             </div>
           </div>
 
           {isLoading ? (
-            <div className="text-center py-16 border rounded-lg bg-slate-50 dark:bg-slate-900 flex flex-col items-center justify-center gap-3">
-              <Loader2 className="h-10 w-10 animate-spin text-orange-500 mx-auto" />
-              <p className="font-semibold text-slate-700 dark:text-slate-300">Cargando notificaciones y vencimientos...</p>
-              <p className="text-xs text-slate-400">Consultando datos del servidor...</p>
+            <div className="text-center py-12 sm:py-16 border rounded-xl bg-slate-50 dark:bg-slate-900 flex flex-col items-center justify-center gap-3">
+              <Loader2 className="h-8 w-8 sm:h-10 sm:w-10 animate-spin text-orange-500 mx-auto" />
+              <p className="font-semibold text-xs sm:text-sm text-slate-700 dark:text-slate-300">Cargando notificaciones y vencimientos...</p>
             </div>
           ) : vencimientosFiltrados.length === 0 ? (
-            <div className="text-center py-10 border rounded-lg bg-slate-50 dark:bg-slate-900">
-              <CheckCircle2 className="h-12 w-12 text-emerald-500 mx-auto mb-2" />
-              <p className="font-semibold text-slate-700 dark:text-slate-300">No hay productos con alertas de vencimiento</p>
-              <p className="text-sm text-slate-500">Todos los artículos marcados están al día.</p>
+            <div className="text-center py-8 sm:py-10 border rounded-xl bg-slate-50 dark:bg-slate-900">
+              <CheckCircle2 className="h-10 w-10 sm:h-12 sm:w-12 text-emerald-500 mx-auto mb-2" />
+              <p className="font-semibold text-xs sm:text-sm text-slate-700 dark:text-slate-300">No hay productos con alertas de vencimiento</p>
+              <p className="text-xs text-slate-500">Todos los artículos marcados están al día.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -268,27 +274,27 @@ export const NotificacionesSystem: React.FC<NotificacionesSystemProps> = ({
                         : 'border-l-emerald-500'
                   }`}
                 >
-                  <CardContent className="p-4 flex items-center justify-between">
+                  <CardContent className="p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                     <div>
-                      <h4 className="font-bold text-slate-800 dark:text-slate-100">{item.nombre}</h4>
-                      <p className="text-xs text-slate-500">Sección: {item.seccion || 'General'} | Stock Global: {item.cantidad}</p>
-                      <p className="text-sm font-medium mt-1">
+                      <h4 className="font-bold text-sm sm:text-base text-slate-800 dark:text-slate-100">{item.nombre}</h4>
+                      <p className="text-xs text-slate-500">Sección: {item.seccion || 'General'} | Stock: {item.cantidad}</p>
+                      <p className="text-xs sm:text-sm font-medium mt-1">
                         Vencimiento: <span className="underline">{item.fecha_vencimiento}</span>
                       </p>
                     </div>
-                    <div className="text-right">
+                    <div className="self-start sm:self-auto sm:text-right">
                       {item.estado === 'vencido' && (
-                        <Badge variant="destructive" className="bg-red-600">
+                        <Badge variant="destructive" className="bg-red-600 text-[10px] sm:text-xs">
                           Hace {item.dias_diferencia} día(s)
                         </Badge>
                       )}
                       {item.estado === 'vence_pronto' && (
-                        <Badge className="bg-amber-500 text-white">
+                        <Badge className="bg-amber-500 text-white text-[10px] sm:text-xs">
                           Faltan {item.dias_diferencia} día(s)
                         </Badge>
                       )}
                       {item.estado === 'vigente' && (
-                        <Badge className="bg-emerald-600 text-white">
+                        <Badge className="bg-emerald-600 text-white text-[10px] sm:text-xs">
                           Vigente ({item.dias_diferencia} días)
                         </Badge>
                       )}
@@ -301,16 +307,17 @@ export const NotificacionesSystem: React.FC<NotificacionesSystemProps> = ({
         </TabsContent>
 
         {/* 2. PESTAÑA ALMACÉN */}
-        <TabsContent value="almacen" className="mt-4 space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 dark:bg-slate-900 p-3 rounded-lg border">
-            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
-              Filtros de estado en Puntos de Venta:
+        <TabsContent value="almacen" className="mt-3 sm:mt-4 space-y-3 sm:space-y-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-50 dark:bg-slate-900 p-3 rounded-xl border">
+            <span className="text-xs sm:text-sm font-medium text-slate-700 dark:text-slate-300">
+              Filtros en Puntos de Venta:
             </span>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 w-full sm:w-auto">
               <Button
                 size="sm"
                 variant={filtroAlmacen === 'todos' ? 'default' : 'outline'}
                 onClick={() => setFiltroAlmacen('todos')}
+                className="h-8 text-xs flex-1 sm:flex-none"
               >
                 Todos ({alertasAlmacen.length})
               </Button>
@@ -318,7 +325,7 @@ export const NotificacionesSystem: React.FC<NotificacionesSystemProps> = ({
                 size="sm"
                 variant={filtroAlmacen === 'agotados' ? 'destructive' : 'outline'}
                 onClick={() => setFiltroAlmacen('agotados')}
-                className={filtroAlmacen === 'agotados' ? 'bg-red-600' : ''}
+                className={`h-8 text-xs flex-1 sm:flex-none ${filtroAlmacen === 'agotados' ? 'bg-red-600' : ''}`}
               >
                 🔴 Agotados ({alertasAlmacen.filter(a => a.estado === 'agotado').length})
               </Button>
@@ -326,7 +333,7 @@ export const NotificacionesSystem: React.FC<NotificacionesSystemProps> = ({
                 size="sm"
                 variant={filtroAlmacen === 'bajo_stock' ? 'default' : 'outline'}
                 onClick={() => setFiltroAlmacen('bajo_stock')}
-                className={filtroAlmacen === 'bajo_stock' ? 'bg-orange-600 text-white' : ''}
+                className={`h-8 text-xs flex-1 sm:flex-none ${filtroAlmacen === 'bajo_stock' ? 'bg-orange-600 text-white' : ''}`}
               >
                 🟠 Bajo Stock ({alertasAlmacen.filter(a => a.estado === 'bajo_stock').length})
               </Button>
@@ -334,34 +341,33 @@ export const NotificacionesSystem: React.FC<NotificacionesSystemProps> = ({
           </div>
 
           {isLoading ? (
-            <div className="text-center py-16 border rounded-lg bg-slate-50 dark:bg-slate-900 flex flex-col items-center justify-center gap-3">
-              <Loader2 className="h-10 w-10 animate-spin text-orange-500 mx-auto" />
-              <p className="font-semibold text-slate-700 dark:text-slate-300">Cargando alertas de puntos de venta y almacén...</p>
-              <p className="text-xs text-slate-400">Consultando inventarios...</p>
+            <div className="text-center py-12 sm:py-16 border rounded-xl bg-slate-50 dark:bg-slate-900 flex flex-col items-center justify-center gap-3">
+              <Loader2 className="h-8 w-8 sm:h-10 sm:w-10 animate-spin text-orange-500 mx-auto" />
+              <p className="font-semibold text-xs sm:text-sm text-slate-700 dark:text-slate-300">Cargando alertas de inventario...</p>
             </div>
           ) : almacenFiltrado.length === 0 ? (
-            <div className="text-center py-10 border rounded-lg bg-slate-50 dark:bg-slate-900">
-              <CheckCircle2 className="h-12 w-12 text-emerald-500 mx-auto mb-2" />
-              <p className="font-semibold text-slate-700 dark:text-slate-300">Sin alertas de stock en Puntos de Venta</p>
-              <p className="text-sm text-slate-500">Todos los puntos de venta cuentan con existencias adecuadas.</p>
+            <div className="text-center py-8 sm:py-10 border rounded-xl bg-slate-50 dark:bg-slate-900">
+              <CheckCircle2 className="h-10 w-10 sm:h-12 sm:w-12 text-emerald-500 mx-auto mb-2" />
+              <p className="font-semibold text-xs sm:text-sm text-slate-700 dark:text-slate-300">Sin alertas de stock en Puntos de Venta</p>
+              <p className="text-xs text-slate-500">Todos los puntos de venta cuentan con existencias adecuadas.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {almacenFiltrado.map((item, idx) => (
                 <Card key={idx} className="border-l-4 border-l-orange-500">
-                  <CardContent className="p-4 flex items-center justify-between">
+                  <CardContent className="p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                     <div>
-                      <h4 className="font-bold text-slate-800 dark:text-slate-100">{item.nombre}</h4>
+                      <h4 className="font-bold text-sm sm:text-base text-slate-800 dark:text-slate-100">{item.nombre}</h4>
                       <p className="text-xs text-blue-600 font-semibold">Punto de Venta: {item.usuario_nombre}</p>
                       <p className="text-xs text-slate-500 mt-1">
                         Cantidad Actual: <span className="font-bold text-slate-900 dark:text-slate-100">{item.cantidad}</span> | Stock Mínimo: {item.stock_minimo}
                       </p>
                     </div>
-                    <div>
+                    <div className="self-start sm:self-auto">
                       {item.estado === 'agotado' ? (
-                        <Badge variant="destructive" className="bg-red-600">🔴 Agotado</Badge>
+                        <Badge variant="destructive" className="bg-red-600 text-[10px] sm:text-xs">🔴 Agotado</Badge>
                       ) : (
-                        <Badge className="bg-orange-500 text-white">🟠 Bajo Stock</Badge>
+                        <Badge className="bg-orange-500 text-white text-[10px] sm:text-xs">🟠 Bajo Stock</Badge>
                       )}
                     </div>
                   </CardContent>
@@ -372,30 +378,32 @@ export const NotificacionesSystem: React.FC<NotificacionesSystemProps> = ({
         </TabsContent>
 
         {/* 3. PESTAÑA VENDEDORES */}
-        <TabsContent value="vendedores" className="mt-4 space-y-4">
-          <div className="flex items-center justify-between border-b pb-3">
-            <div className="flex gap-2">
+        <TabsContent value="vendedores" className="mt-3 sm:mt-4 space-y-3 sm:space-y-4">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between border-b pb-3 gap-3">
+            <div className="grid grid-cols-2 sm:flex gap-1.5 sm:gap-2">
               <Button
                 size="sm"
-                variant={subTabVendedores === 'cantidades' ? 'default' : 'ghost'}
+                variant={subTabVendedores === 'cantidades' ? 'default' : 'outline'}
                 onClick={() => setSubTabVendedores('cantidades')}
+                className="h-8 text-xs justify-center"
               >
-                <AlertOctagon className="h-4 w-4 mr-1 text-red-500" />
-                A) Stock Crítico Vendedores
+                <AlertOctagon className="h-3.5 w-3.5 mr-1 text-red-500 shrink-0" />
+                Stock Crítico
               </Button>
               <Button
                 size="sm"
-                variant={subTabVendedores === 'rendimiento' ? 'default' : 'ghost'}
+                variant={subTabVendedores === 'rendimiento' ? 'default' : 'outline'}
                 onClick={() => setSubTabVendedores('rendimiento')}
+                className="h-8 text-xs justify-center"
               >
-                <TrendingUp className="h-4 w-4 mr-1 text-emerald-500" />
-                B) Rendimiento y Rotación
+                <TrendingUp className="h-3.5 w-3.5 mr-1 text-emerald-500 shrink-0" />
+                Rotación
               </Button>
             </div>
 
             {subTabVendedores === 'cantidades' && (
               <Select value={vendedorSeleccionado} onValueChange={setVendedorSeleccionado}>
-                <SelectTrigger className="w-[200px]">
+                <SelectTrigger className="w-full sm:w-[220px] h-9 text-xs">
                   <SelectValue placeholder="Filtrar por Vendedor" />
                 </SelectTrigger>
                 <SelectContent>
@@ -410,46 +418,46 @@ export const NotificacionesSystem: React.FC<NotificacionesSystemProps> = ({
 
           {/* SUB-TAB A: CANTIDADES / STOCK CRÍTICO */}
           {subTabVendedores === 'cantidades' && (
-            <div className="space-y-4">
+            <div className="space-y-3 sm:space-y-4">
               {isLoading ? (
-                <div className="text-center py-16 border rounded-lg bg-slate-50 dark:bg-slate-900 flex flex-col items-center justify-center gap-3">
-                  <Loader2 className="h-10 w-10 animate-spin text-blue-500 mx-auto" />
-                  <p className="font-semibold text-slate-700 dark:text-slate-300">Cargando datos de vendedores...</p>
+                <div className="text-center py-12 sm:py-16 border rounded-xl bg-slate-50 dark:bg-slate-900 flex flex-col items-center justify-center gap-3">
+                  <Loader2 className="h-8 w-8 sm:h-10 sm:w-10 animate-spin text-blue-500 mx-auto" />
+                  <p className="font-semibold text-xs sm:text-sm text-slate-700 dark:text-slate-300">Cargando datos de vendedores...</p>
                 </div>
               ) : vendedoresAlertasFiltradas.length === 0 ? (
-                <div className="text-center py-10 border rounded-lg bg-slate-50 dark:bg-slate-900">
-                  <CheckCircle2 className="h-12 w-12 text-emerald-500 mx-auto mb-2" />
-                  <p className="font-semibold text-slate-700 dark:text-slate-300">No hay vendedores con productos en nivel crítico</p>
+                <div className="text-center py-8 sm:py-10 border rounded-xl bg-slate-50 dark:bg-slate-900">
+                  <CheckCircle2 className="h-10 w-10 sm:h-12 sm:w-12 text-emerald-500 mx-auto mb-2" />
+                  <p className="font-semibold text-xs sm:text-sm text-slate-700 dark:text-slate-300">No hay vendedores con productos en nivel crítico</p>
                 </div>
               ) : (
                 vendedoresAlertasFiltradas.map((vend) => (
                   <Card key={vend.vendedor_id} className="border-l-4 border-l-blue-600 shadow-sm">
-                    <CardHeader className="p-4 pb-2 flex flex-row items-center justify-between">
+                    <CardHeader className="p-3 sm:p-4 pb-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                       <div>
-                        <CardTitle className="text-lg font-bold flex items-center gap-2">
-                          <Users className="h-5 w-5 text-blue-600" />
+                        <CardTitle className="text-base sm:text-lg font-bold flex items-center gap-2">
+                          <Users className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 shrink-0" />
                           {vend.vendedor_nombre}
                         </CardTitle>
-                        <CardDescription className="text-xs text-slate-500">
+                        <CardDescription className="text-xs text-slate-500 mt-0.5">
                           Agotados: <span className="font-semibold text-red-600">{vend.total_agotados}</span> | Bajo Stock: <span className="font-semibold text-orange-600">{vend.total_bajo_stock}</span>
                         </CardDescription>
                       </div>
                       <Button 
                         size="sm"
                         onClick={() => handleQuickNotify(vend)}
-                        className="bg-amber-600 hover:bg-amber-700 text-white flex items-center gap-1 shadow"
+                        className="bg-amber-600 hover:bg-amber-700 text-white flex items-center justify-center gap-1.5 shadow h-8 text-xs w-full sm:w-auto"
                         title="Enviar aviso preconfigurado por WhatsApp / Notificación rápida"
                       >
-                        <Bell className="h-4 w-4" />
+                        <Bell className="h-3.5 w-3.5" />
                         QuickNotify 🔔
                       </Button>
                     </CardHeader>
-                    <CardContent className="p-4 pt-0">
+                    <CardContent className="p-3 sm:p-4 pt-0">
                       <div className="mt-2 space-y-2">
                         {vend.productos_criticos.map((prod) => (
-                          <div key={prod.id} className="flex items-center justify-between p-2 bg-slate-50 dark:bg-slate-900 rounded text-sm">
+                          <div key={prod.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 bg-slate-50 dark:bg-slate-900 rounded-lg text-xs sm:text-sm gap-2">
                             <span className="font-medium text-slate-800 dark:text-slate-200">{prod.nombre}</span>
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
                               <span className="text-xs text-slate-500">Stock: <strong className="text-slate-900 dark:text-slate-100">{prod.cantidad}</strong> / Mín: {prod.stock_minimo}</span>
                               {prod.estado === 'agotado' ? (
                                 <Badge variant="destructive" className="bg-red-600 text-[10px]">🔴 AGOTADO</Badge>
@@ -469,23 +477,23 @@ export const NotificacionesSystem: React.FC<NotificacionesSystemProps> = ({
 
           {/* SUB-TAB B: RENDIMIENTO VENTAS Y ROTACIÓN */}
           {subTabVendedores === 'rendimiento' && (
-            <div className="space-y-6">
+            <div className="space-y-4 sm:space-y-6">
               {/* ÍNDICE DE ROTACIÓN DE PRODUCTOS */}
               <div>
-                <div className="flex items-center justify-between mb-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-3">
                   <div>
-                    <h4 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                      <TrendingUp className="h-5 w-5 text-blue-600" />
+                    <h4 className="font-bold text-sm sm:text-base text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                      <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 shrink-0" />
                       Sistema de Valoración por Índice de Rotación
                     </h4>
                     <p className="text-xs text-slate-500">
-                      Calculado por: Promedio de ventas ÷ Días de vigencia (cerrada al agotar stock o activa en curso). Exclusivo para Puntos de Venta.
+                      Promedio de ventas ÷ Días de vigencia (cerrada al agotar o activa en curso). Exclusivo Puntos de Venta.
                     </p>
                   </div>
                 </div>
 
                 {rotacionProductos.length === 0 ? (
-                  <p className="text-sm text-slate-500 italic p-4 bg-slate-50 rounded-lg text-center">
+                  <p className="text-xs sm:text-sm text-slate-500 italic p-4 bg-slate-50 rounded-xl text-center">
                     No hay suficientes datos de rotación o entregas registradas aún.
                   </p>
                 ) : (
@@ -501,31 +509,31 @@ export const NotificacionesSystem: React.FC<NotificacionesSystemProps> = ({
                               : 'border-l-red-500 bg-red-50/20 dark:bg-red-950/20'
                         }`}
                       >
-                        <div className="flex items-start justify-between">
-                          <div>
-                            <h5 className="font-bold text-sm text-slate-800 dark:text-slate-100">{item.producto_nombre}</h5>
-                            <p className="text-xs font-semibold text-blue-600">Punto de Venta: {item.vendedor_nombre}</p>
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <h5 className="font-bold text-xs sm:text-sm text-slate-800 dark:text-slate-100 truncate">{item.producto_nombre}</h5>
+                            <p className="text-[11px] font-semibold text-blue-600 truncate">Punto de Venta: {item.vendedor_nombre}</p>
                           </div>
                           {item.evaluacion === 'Alta Rotación' ? (
-                            <Badge className="bg-emerald-600 text-white text-[10px]">🚀 Alta Rotación</Badge>
+                            <Badge className="bg-emerald-600 text-white text-[9px] sm:text-[10px] shrink-0">🚀 Alta Rotación</Badge>
                           ) : item.evaluacion === 'Rotación Media' ? (
-                            <Badge className="bg-blue-600 text-white text-[10px]">⚡ Rotación Media</Badge>
+                            <Badge className="bg-blue-600 text-white text-[9px] sm:text-[10px] shrink-0">⚡ Rotación Media</Badge>
                           ) : (
-                            <Badge variant="destructive" className="bg-red-600 text-[10px]">🐢 Mala Rotación</Badge>
+                            <Badge variant="destructive" className="bg-red-600 text-[9px] sm:text-[10px] shrink-0">🐢 Mala Rotación</Badge>
                           )}
                         </div>
 
-                        <div className="grid grid-cols-3 gap-2 mt-3 pt-2 border-t text-center">
+                        <div className="grid grid-cols-3 gap-1.5 mt-3 pt-2 border-t text-center">
                           <div>
-                            <p className="text-[10px] text-slate-400 uppercase font-semibold">Ventas / Entregadas</p>
+                            <p className="text-[9px] sm:text-[10px] text-slate-400 uppercase font-semibold">Vendido/Entregado</p>
                             <p className="text-xs font-bold text-slate-700 dark:text-slate-200">
-                              {item.unidades_vendidas} / {item.unidades_entregadas} u.
+                              {item.unidades_vendidas}/{item.unidades_entregadas}u
                             </p>
                           </div>
                           <div>
-                            <p className="text-[10px] text-slate-400 uppercase font-semibold">Vigencia</p>
-                            <p className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center justify-center gap-1">
-                              {item.dias_vigencia} días
+                            <p className="text-[9px] sm:text-[10px] text-slate-400 uppercase font-semibold">Vigencia</p>
+                            <p className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center justify-center gap-0.5">
+                              {item.dias_vigencia}d
                               {item.estado_vigencia === 'activa' ? (
                                 <span title="Vigencia activa (en curso)">&nbsp;🟢</span>
                               ) : (
@@ -534,11 +542,11 @@ export const NotificacionesSystem: React.FC<NotificacionesSystemProps> = ({
                             </p>
                           </div>
                           <div>
-                            <p className="text-[10px] text-slate-400 uppercase font-semibold">Rotación / día</p>
+                            <p className="text-[9px] sm:text-[10px] text-slate-400 uppercase font-semibold">Rotación/día</p>
                             <p className={`text-xs font-extrabold ${
                               item.evaluacion === 'Alta Rotación' ? 'text-emerald-600' : item.evaluacion === 'Rotación Media' ? 'text-blue-600' : 'text-red-600'
                             }`}>
-                              {item.indice_rotacion_diaria} u/día
+                              {item.indice_rotacion_diaria} u/d
                             </p>
                           </div>
                         </div>
@@ -550,20 +558,20 @@ export const NotificacionesSystem: React.FC<NotificacionesSystemProps> = ({
 
               {/* MEJORES VENDEDORES */}
               <div>
-                <h4 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2 mb-3">
-                  <Users className="h-5 w-5 text-blue-600" />
+                <h4 className="font-bold text-sm sm:text-base text-slate-800 dark:text-slate-100 flex items-center gap-2 mb-3">
+                  <Users className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 shrink-0" />
                   Ranking de Vendedores por Volumen y Ventas
                 </h4>
                 <div className="space-y-2">
                   {rankingVendedores.map((v) => (
-                    <div key={v.vendedor_id} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-900 rounded-lg border">
-                      <div className="flex items-center gap-3">
-                        <Badge className="bg-blue-600 text-white font-bold">Rank #{v.rank}</Badge>
-                        <span className="font-bold text-slate-800 dark:text-slate-100">{v.vendedor_nombre}</span>
+                    <div key={v.vendedor_id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-slate-50 dark:bg-slate-900 rounded-xl border gap-2">
+                      <div className="flex items-center gap-2.5">
+                        <Badge className="bg-blue-600 text-white font-bold text-xs">Rank #{v.rank}</Badge>
+                        <span className="font-bold text-xs sm:text-sm text-slate-800 dark:text-slate-100">{v.vendedor_nombre}</span>
                       </div>
-                      <div className="text-right">
-                        <span className="text-sm font-semibold text-slate-700 dark:text-slate-300 mr-4">Unidades: {v.unidades_vendidas}</span>
-                        <span className="text-sm font-bold text-emerald-600">${Number(v.monto_total).toFixed(2)}</span>
+                      <div className="flex items-center justify-between sm:justify-end gap-4 text-xs sm:text-sm">
+                        <span className="font-semibold text-slate-600 dark:text-slate-400">Unidades: {v.unidades_vendidas}</span>
+                        <span className="font-bold text-emerald-600">${Number(v.monto_total).toFixed(2)}</span>
                       </div>
                     </div>
                   ))}
@@ -578,7 +586,7 @@ export const NotificacionesSystem: React.FC<NotificacionesSystemProps> = ({
 
   if (isFullPage) {
     return (
-      <Card className="border-orange-200 shadow-md p-6 bg-white dark:bg-slate-900">
+      <Card className="border-orange-200 shadow-md p-3 sm:p-6 bg-white dark:bg-slate-900 rounded-2xl overflow-hidden">
         {mainContent}
       </Card>
     );
@@ -586,7 +594,7 @@ export const NotificacionesSystem: React.FC<NotificacionesSystemProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose && onClose()}>
-      <DialogContent className="max-w-4xl w-full max-h-[90vh] overflow-y-auto p-6">
+      <DialogContent className="w-[95vw] sm:w-full max-w-4xl max-h-[92vh] sm:max-h-[85vh] overflow-y-auto p-3 sm:p-6 rounded-2xl">
         {mainContent}
       </DialogContent>
     </Dialog>

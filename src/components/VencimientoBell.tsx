@@ -203,7 +203,7 @@ export const VencimientoBell: React.FC<VencimientoBellProps> = ({
           </Button>
         </div>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-80 sm:w-96 p-0 shadow-xl border-orange-200 bg-white dark:bg-slate-900">
+      <PopoverContent align="end" className="w-[calc(100vw-1.5rem)] max-w-sm sm:w-96 p-0 shadow-xl border-orange-200 bg-white dark:bg-slate-900 rounded-xl">
         <div className="p-3 border-b flex items-center justify-between bg-orange-50/50 dark:bg-slate-800/50">
           <div className="flex items-center gap-2">
             <Bell className="h-4 w-4 text-orange-600" />
