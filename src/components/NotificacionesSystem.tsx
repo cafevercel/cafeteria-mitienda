@@ -58,6 +58,7 @@ export const NotificacionesSystem: React.FC<NotificacionesSystemProps> = ({
   
   const [vendedoresAlertas, setVendedoresAlertas] = useState<AlertaVendedorStock[]>([]);
   const [vendedorSeleccionado, setVendedorSeleccionado] = useState<string>('todos');
+  const [rotacionProductos, setRotacionProductos] = useState<any[]>([]);
   const [productosEstrella, setProductosEstrella] = useState<any[]>([]);
   const [productosEstancados, setProductosEstancados] = useState<any[]>([]);
   const [rankingVendedores, setRankingVendedores] = useState<any[]>([]);
@@ -75,6 +76,7 @@ export const NotificacionesSystem: React.FC<NotificacionesSystemProps> = ({
         setAlertasAlmacen(data.almacen || []);
         if (data.vendedores) {
           setVendedoresAlertas(data.vendedores.alertas || []);
+          setRotacionProductos(data.vendedores.rotacionProductos || []);
           setProductosEstrella(data.vendedores.productosEstrella || []);
           setProductosEstancados(data.vendedores.productosEstancados || []);
           setRankingVendedores(data.vendedores.rankingVendedores || []);
@@ -468,53 +470,78 @@ export const NotificacionesSystem: React.FC<NotificacionesSystemProps> = ({
           {/* SUB-TAB B: RENDIMIENTO VENTAS Y ROTACIÓN */}
           {subTabVendedores === 'rendimiento' && (
             <div className="space-y-6">
-              {/* PRODUCTOS ESTRELLA (TOP #1) */}
+              {/* ÍNDICE DE ROTACIÓN DE PRODUCTOS */}
               <div>
-                <h4 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2 mb-3">
-                  <Sparkles className="h-5 w-5 text-amber-500" />
-                  Productos Estrella (Top Ventas)
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {productosEstrella.map((prod) => (
-                    <Card key={prod.id} className={`p-3 flex items-center justify-between ${prod.top_rank === 1 ? 'bg-amber-50 border-amber-300 dark:bg-amber-950/30' : ''}`}>
-                      <div className="flex items-center gap-3">
-                        {prod.top_rank === 1 ? (
-                          <Badge className="bg-amber-500 text-white font-extrabold text-xs px-2 py-1 flex items-center gap-1">
-                            <Flame className="h-3 w-3" /> TOP #1
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="text-slate-600">#{prod.top_rank}</Badge>
-                        )}
-                        <div>
-                          <h5 className="font-bold text-sm text-slate-800 dark:text-slate-100">{prod.nombre}</h5>
-                          <p className="text-xs text-slate-500">Unidades vendidas: <strong className="text-slate-900 dark:text-slate-100">{prod.total_vendido}</strong></p>
-                        </div>
-                      </div>
-                      <span className="font-bold text-sm text-emerald-600">${Number(prod.monto_total).toFixed(2)}</span>
-                    </Card>
-                  ))}
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h4 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                      <TrendingUp className="h-5 w-5 text-blue-600" />
+                      Sistema de Valoración por Índice de Rotación
+                    </h4>
+                    <p className="text-xs text-slate-500">
+                      Calculado por: Promedio de ventas ÷ Días de vigencia (cerrada al agotar stock o activa en curso). Exclusivo para Puntos de Venta.
+                    </p>
+                  </div>
                 </div>
-              </div>
 
-              {/* POCA ROTACIÓN / ESTANCADOS */}
-              <div>
-                <h4 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2 mb-3">
-                  <Clock className="h-5 w-5 text-red-500" />
-                  Poca Rotación / Productos Estancados (&lt; 5 Ventas)
-                </h4>
-                {productosEstancados.length === 0 ? (
-                  <p className="text-sm text-slate-500 italic">No hay productos marcados de poca rotación.</p>
+                {rotacionProductos.length === 0 ? (
+                  <p className="text-sm text-slate-500 italic p-4 bg-slate-50 rounded-lg text-center">
+                    No hay suficientes datos de rotación o entregas registradas aún.
+                  </p>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    {productosEstancados.map((prod) => (
-                      <Card key={prod.id} className="p-3 border-l-4 border-l-red-500 bg-red-50/20 dark:bg-red-950/20">
-                        <div className="flex items-center justify-between">
-                          <h5 className="font-semibold text-sm">{prod.nombre}</h5>
-                          <Badge variant="destructive" className="bg-red-600 text-[10px]">
-                            🔴 Poca Rotación
-                          </Badge>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {rotacionProductos.map((item, idx) => (
+                      <Card 
+                        key={idx} 
+                        className={`p-3 border-l-4 ${
+                          item.evaluacion === 'Alta Rotación' 
+                            ? 'border-l-emerald-500 bg-emerald-50/20 dark:bg-emerald-950/20' 
+                            : item.evaluacion === 'Rotación Media' 
+                              ? 'border-l-blue-500 bg-blue-50/20 dark:bg-blue-950/20' 
+                              : 'border-l-red-500 bg-red-50/20 dark:bg-red-950/20'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <h5 className="font-bold text-sm text-slate-800 dark:text-slate-100">{item.producto_nombre}</h5>
+                            <p className="text-xs font-semibold text-blue-600">Punto de Venta: {item.vendedor_nombre}</p>
+                          </div>
+                          {item.evaluacion === 'Alta Rotación' ? (
+                            <Badge className="bg-emerald-600 text-white text-[10px]">🚀 Alta Rotación</Badge>
+                          ) : item.evaluacion === 'Rotación Media' ? (
+                            <Badge className="bg-blue-600 text-white text-[10px]">⚡ Rotación Media</Badge>
+                          ) : (
+                            <Badge variant="destructive" className="bg-red-600 text-[10px]">🐢 Mala Rotación</Badge>
+                          )}
                         </div>
-                        <p className="text-xs text-slate-500 mt-2">Ventas último mes: <strong>{prod.total_vendido}</strong></p>
+
+                        <div className="grid grid-cols-3 gap-2 mt-3 pt-2 border-t text-center">
+                          <div>
+                            <p className="text-[10px] text-slate-400 uppercase font-semibold">Ventas / Entregadas</p>
+                            <p className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                              {item.unidades_vendidas} / {item.unidades_entregadas} u.
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-slate-400 uppercase font-semibold">Vigencia</p>
+                            <p className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center justify-center gap-1">
+                              {item.dias_vigencia} días
+                              {item.estado_vigencia === 'activa' ? (
+                                <span title="Vigencia activa (en curso)">&nbsp;🟢</span>
+                              ) : (
+                                <span title="Vigencia cerrada (agotado)">&nbsp;🔴</span>
+                              )}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] text-slate-400 uppercase font-semibold">Rotación / día</p>
+                            <p className={`text-xs font-extrabold ${
+                              item.evaluacion === 'Alta Rotación' ? 'text-emerald-600' : item.evaluacion === 'Rotación Media' ? 'text-blue-600' : 'text-red-600'
+                            }`}>
+                              {item.indice_rotacion_diaria} u/día
+                            </p>
+                          </div>
+                        </div>
                       </Card>
                     ))}
                   </div>

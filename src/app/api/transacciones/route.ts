@@ -110,6 +110,17 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      // Si el destino es un Vendedor (excluyendo Almacén), registrar/iniciar vigencia
+      const esVendedorRes = await query(`SELECT rol FROM usuarios WHERE id = $1`, [userId]);
+      if (esVendedorRes.rows.length > 0 && esVendedorRes.rows[0].rol === 'Vendedor') {
+        // Iniciar nuevo período de vigencia para esta entrega
+        await query(
+          `INSERT INTO vigencias_productos (usuario_id, producto_id, cantidad_inicial, fecha_inicio, estado)
+           VALUES ($1, $2, $3, NOW(), 'activa')`,
+          [userId, productoId, cantidad]
+        );
+      }
+
       await query('COMMIT');
 
       return NextResponse.json({

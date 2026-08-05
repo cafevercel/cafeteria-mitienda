@@ -93,6 +93,21 @@ export async function POST(request: NextRequest) {
           );
         }
 
+        // Verificar si el stock del vendedor llegó a 0 para cerrar vigencia
+        const checkStockFinalBulk = await query(
+          'SELECT cantidad FROM usuario_productos WHERE producto_id = $1 AND usuario_id = $2',
+          [productoId, vendedorId]
+        );
+
+        if (checkStockFinalBulk.rows.length === 0 || Number(checkStockFinalBulk.rows[0].cantidad) <= 0) {
+          await query(
+            `UPDATE vigencias_productos 
+             SET fecha_fin = NOW(), estado = 'agotada' 
+             WHERE usuario_id = $1 AND producto_id = $2 AND estado = 'activa'`,
+            [vendedorId, productoId]
+          );
+        }
+
         await query('COMMIT');
         results.push({ id_local, server_id: newVentaId, status: 'synced' });
       } catch (err: any) {

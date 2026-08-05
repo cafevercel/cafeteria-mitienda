@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     const logs: string[] = [];
@@ -65,6 +67,38 @@ export async function GET() {
       )
     `);
     logs.push('✅ Tabla notificaciones_vendedores creada o verificada');
+
+    // 6. vigencias_productos (Sistema de Índice de Rotación)
+    await query(`
+      CREATE TABLE IF NOT EXISTS vigencias_productos (
+        id SERIAL PRIMARY KEY,
+        usuario_id INT NOT NULL,
+        producto_id INT NOT NULL,
+        cantidad_inicial INT NOT NULL,
+        fecha_inicio TIMESTAMP DEFAULT NOW(),
+        fecha_fin TIMESTAMP NULL,
+        estado VARCHAR(20) DEFAULT 'activa',
+        created_at TIMESTAMP DEFAULT NOW(),
+        CONSTRAINT fk_vigencia_usuario FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+        CONSTRAINT fk_vigencia_producto FOREIGN KEY (producto_id) REFERENCES productos(id) ON DELETE CASCADE
+      )
+    `);
+    await query(`CREATE INDEX IF NOT EXISTS idx_vigencias_busqueda ON vigencias_productos (usuario_id, producto_id, estado)`);
+    await query(`CREATE INDEX IF NOT EXISTS idx_vigencias_fechas ON vigencias_productos (fecha_inicio, fecha_fin)`);
+    
+    // Auto-inicializar vigencias activas para productos que ya están en inventarios de vendedores con cantidad > 0
+    await query(`
+      INSERT INTO vigencias_productos (usuario_id, producto_id, cantidad_inicial, fecha_inicio, estado)
+      SELECT up.usuario_id, up.producto_id, up.cantidad, NOW(), 'activa'
+      FROM usuario_productos up
+      JOIN usuarios u ON u.id = up.usuario_id AND u.rol = 'Vendedor'
+      WHERE up.cantidad > 0
+        AND NOT EXISTS (
+          SELECT 1 FROM vigencias_productos vp 
+          WHERE vp.usuario_id = up.usuario_id AND vp.producto_id = up.producto_id AND vp.estado = 'activa'
+        )
+    `);
+    logs.push('✅ Tabla vigencias_productos e índice de rotación creados e inicializados');
 
     return NextResponse.json({ success: true, logs });
   } catch (error: any) {
