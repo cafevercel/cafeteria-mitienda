@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Bell, AlertTriangle, AlertCircle, ArrowRight, ExternalLink, CheckCheck, Loader2 } from 'lucide-react';
+import { Bell, AlertTriangle, AlertCircle, ArrowRight, ExternalLink, CheckCheck, Loader2, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
@@ -8,25 +8,28 @@ interface VencimientoBellProps {
   vencidosCount?: number;
   venceProntoCount?: number;
   unreadCountOverride?: number;
-  onNavigateToNotificaciones?: (tab?: 'vencimientos' | 'almacen' | 'vendedores') => void;
+  onNavigateToNotificaciones?: (tab?: 'vencimientos' | 'almacen' | 'vendedores' | 'recordatorios') => void;
 }
 
-export const getNotificationKey = (type: 'vencimiento' | 'almacen', item: any): string => {
+export const getNotificationKey = (type: 'vencimiento' | 'almacen' | 'recordatorio', item: any): string => {
   if (type === 'vencimiento') {
     return `v_${item.id}_${item.estado}_${item.fecha_vencimiento || ''}`;
+  }
+  if (type === 'recordatorio') {
+    return `rec_${item.id}_${item.fecha}`;
   }
   return `s_${item.usuario_id}_${item.producto_id}_${item.estado}_${item.cantidad}`;
 };
 
 export interface NotificationItemText {
   id: string;
-  type: 'vencimiento' | 'almacen';
+  type: 'vencimiento' | 'almacen' | 'recordatorio';
   text: string;
   subtext?: string;
   estado: string;
   read: boolean;
   dateStr?: string;
-  tabTarget: 'vencimientos' | 'almacen' | 'vendedores';
+  tabTarget: 'vencimientos' | 'almacen' | 'vendedores' | 'recordatorios';
 }
 
 export const VencimientoBell: React.FC<VencimientoBellProps> = ({
@@ -52,6 +55,7 @@ export const VencimientoBell: React.FC<VencimientoBellProps> = ({
 
       const vencimientos = data.vencimientos || [];
       const almacen = data.almacen || [];
+      const recordatorios = data.recordatorios || [];
 
       let readKeysSet = new Set<string>();
       try {
@@ -121,6 +125,26 @@ export const VencimientoBell: React.FC<VencimientoBellProps> = ({
           estado: a.estado,
           read: isRead,
           tabTarget: 'almacen'
+        });
+      });
+
+      // 3. Recordatorios
+      recordatorios.forEach((r: any) => {
+        const key = getNotificationKey('recordatorio', r);
+        const isRead = readKeysSet.has(key);
+        if (!isRead) {
+          count++;
+        }
+
+        list.push({
+          id: key,
+          type: 'recordatorio',
+          text: `Recordatorio: ${r.texto}`,
+          subtext: `Fecha programada: ${r.fecha}`,
+          estado: 'recordatorio',
+          read: isRead,
+          dateStr: r.fecha,
+          tabTarget: 'recordatorios'
         });
       });
 
@@ -247,7 +271,9 @@ export const VencimientoBell: React.FC<VencimientoBellProps> = ({
                 }`}
               >
                 <div className="mt-0.5 shrink-0">
-                  {item.estado === 'agotado' || item.estado === 'vencido' ? (
+                  {item.type === 'recordatorio' ? (
+                    <Clock className="h-4 w-4 text-blue-500" />
+                  ) : item.estado === 'agotado' || item.estado === 'vencido' ? (
                     <AlertTriangle className="h-4 w-4 text-red-500" />
                   ) : (
                     <AlertCircle className="h-4 w-4 text-amber-500" />

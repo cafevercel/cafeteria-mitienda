@@ -225,9 +225,29 @@ export async function GET(request: NextRequest) {
       console.warn('DB notification query warning (vendedores):', err);
     }
 
+    // 4. RECORDATORIOS
+    let recordatoriosNotif: any[] = [];
+    try {
+      const resRecordatorios = await query(`
+        SELECT 
+          id, 
+          texto, 
+          TO_CHAR(fecha, 'YYYY-MM-DD') as fecha,
+          completado,
+          fecha_creacion
+        FROM recordatorios
+        WHERE completado = false AND fecha <= CURRENT_DATE
+        ORDER BY fecha ASC
+      `);
+      recordatoriosNotif = resRecordatorios.rows;
+    } catch (err) {
+      console.warn('DB notification query warning (recordatorios):', err);
+    }
+
     return NextResponse.json({
       vencimientos,
       almacen: alertasAlmacen,
+      recordatorios: recordatoriosNotif,
       vendedores: {
         alertas: vendedoresAlertas,
         rotacionProductos,

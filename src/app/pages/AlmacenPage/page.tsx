@@ -56,6 +56,7 @@ import MenuSectionComponent from '@/components/MenuSection'
 import ExportacionComparacion from '@/components/ExportacionComparacion'
 import NotificacionesSystem from '@/components/NotificacionesSystem'
 import VencimientoBell from '@/components/VencimientoBell'
+import RecordatoriosSection from '@/components/RecordatoriosSection'
 import React from 'react'
 
 
@@ -291,7 +292,7 @@ export default function AlmacenPage() {
   const [selectedProduct, setSelectedProduct] = useState<Producto | null>(null)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   // En AlmacenPage.tsx, actualizar el estado:
-  const [activeSection, setActiveSection] = useState<'productos' | 'puntos-venta' | 'moderadores' | 'ventas' | 'menu' | 'contabilidad' | 'contabilidad-vendedores' | 'exportacion-comparacion' | 'notificaciones'>('productos')
+  const [activeSection, setActiveSection] = useState<'productos' | 'puntos-venta' | 'moderadores' | 'ventas' | 'menu' | 'contabilidad' | 'contabilidad-vendedores' | 'exportacion-comparacion' | 'notificaciones' | 'recordatorios'>('productos')
   const [initialNotifTab, setInitialNotifTab] = useState<'vencimientos' | 'almacen' | 'vendedores'>('vencimientos')
   const [showMassDeliveryDialog, setShowMassDeliveryDialog] = useState(false)
   const [selectedVendorForMassDelivery, setSelectedVendorForMassDelivery] = useState<number | null>(null)
@@ -1534,8 +1535,14 @@ export default function AlmacenPage() {
           <h1 className="text-2xl font-bold text-orange-800">Panel de Almacén</h1>
           <VencimientoBell 
             onNavigateToNotificaciones={(tab) => {
-              if (tab) setInitialNotifTab(tab);
-              setActiveSection('notificaciones');
+              if (tab === 'recordatorios') {
+                setActiveSection('recordatorios');
+              } else {
+                if (tab === 'vencimientos' || tab === 'almacen' || tab === 'vendedores') {
+                  setInitialNotifTab(tab);
+                }
+                setActiveSection('notificaciones');
+              }
             }} 
           />
         </div>
@@ -1557,6 +1564,17 @@ export default function AlmacenPage() {
                 }}
               >
                 Almacén
+              </Button>
+
+              <Button
+                variant="ghost"
+                className={activeSection === 'recordatorios' ? 'bg-orange-100 text-orange-800 font-semibold' : 'text-orange-700 hover:bg-orange-50 hover:text-orange-800'}
+                onClick={() => {
+                  setActiveSection('recordatorios')
+                  setIsMenuOpen(false)
+                }}
+              >
+                Recordatorios
               </Button>
 
               <Button
@@ -2040,6 +2058,10 @@ export default function AlmacenPage() {
 
       {activeSection === 'exportacion-comparacion' && (
         <ExportacionComparacion vendedores={vendedores} almacen={inventario} />
+      )}
+
+      {activeSection === 'recordatorios' && (
+        <RecordatoriosSection />
       )}
 
       {activeSection === 'notificaciones' && (
