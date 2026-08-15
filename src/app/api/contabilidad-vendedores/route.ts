@@ -37,44 +37,76 @@ export async function GET(request: NextRequest) {
           ), 0) as factor
         FROM date_range
       ),
+      ventas_procesadas AS (
+        SELECT
+          v.id,
+          v.vendedor::text as vendedor,
+          v.total as venta_total,
+          v.fecha,
+          p.nombre as producto_nombre,
+          v.cantidad,
+          v.precio_unitario,
+          COALESCE(v.precio_compra, 0) as precio_compra,
+          (v.total - (COALESCE(v.precio_compra, 0) * v.cantidad)) as ganancia_producto,
+          v.metodo_pago,
+          CASE
+            WHEN v.metodo_pago = 'transferencia' THEN
+              CASE WHEN COALESCE(v.monto_efectivo, 0) > 0 THEN v.monto_efectivo ELSE 0 END
+            WHEN v.metodo_pago = 'mixto' THEN
+              CASE WHEN (COALESCE(v.monto_efectivo, 0) + COALESCE(v.monto_transferencia, 0)) > 0 THEN COALESCE(v.monto_efectivo, 0)
+                   ELSE v.total END
+            ELSE
+              CASE WHEN (COALESCE(v.monto_efectivo, 0) + COALESCE(v.monto_transferencia, 0)) > 0 THEN COALESCE(v.monto_efectivo, 0)
+                   ELSE v.total END
+          END as venta_efectivo,
+          CASE
+            WHEN v.metodo_pago = 'transferencia' THEN
+              CASE WHEN COALESCE(v.monto_transferencia, 0) > 0 THEN v.monto_transferencia ELSE v.total END
+            WHEN v.metodo_pago = 'mixto' THEN
+              CASE WHEN (COALESCE(v.monto_efectivo, 0) + COALESCE(v.monto_transferencia, 0)) > 0 THEN COALESCE(v.monto_transferencia, 0)
+                   ELSE 0 END
+            ELSE
+              CASE WHEN (COALESCE(v.monto_efectivo, 0) + COALESCE(v.monto_transferencia, 0)) > 0 THEN COALESCE(v.monto_transferencia, 0)
+                   ELSE 0 END
+          END as venta_transferencia
+        FROM ventas v
+        JOIN productos p ON v.producto = p.id
+        WHERE v.fecha::date >= ${fechaInicio}::date AND v.fecha::date <= ${fechaFin}::date
+      ),
       ventas_vendedor AS (
         SELECT
-          v.vendedor::text as vendedor,
-          SUM(v.total) as venta_total,
-          SUM(COALESCE(v.monto_efectivo, CASE WHEN v.metodo_pago = 'transferencia' THEN 0 ELSE v.total END)) as venta_efectivo,
-          SUM(COALESCE(v.monto_transferencia, CASE WHEN v.metodo_pago = 'transferencia' THEN v.total ELSE 0 END)) as venta_transferencia,
-          SUM(v.total - (COALESCE(v.precio_compra, 0) * v.cantidad)) as ganancia_bruta,
+          vp.vendedor,
+          SUM(vp.venta_total) as venta_total,
+          SUM(vp.venta_efectivo) as venta_efectivo,
+          SUM(vp.venta_transferencia) as venta_transferencia,
+          SUM(vp.ganancia_producto) as ganancia_bruta,
           SUM(
             CASE 
-              WHEN v.total > 0 THEN 
-                (COALESCE(v.monto_efectivo, CASE WHEN v.metodo_pago = 'transferencia' THEN 0 ELSE v.total END) / v.total) * (v.total - (COALESCE(v.precio_compra, 0) * v.cantidad))
+              WHEN vp.venta_total > 0 THEN (vp.venta_efectivo / vp.venta_total) * vp.ganancia_producto
               ELSE 0 
             END
           ) as ganancia_efectivo,
           SUM(
             CASE 
-              WHEN v.total > 0 THEN 
-                (COALESCE(v.monto_transferencia, CASE WHEN v.metodo_pago = 'transferencia' THEN v.total ELSE 0 END) / v.total) * (v.total - (COALESCE(v.precio_compra, 0) * v.cantidad))
+              WHEN vp.venta_total > 0 THEN (vp.venta_transferencia / vp.venta_total) * vp.ganancia_producto
               ELSE 0 
             END
           ) as ganancia_transferencia,
           json_agg(
             json_build_object(
-              'producto', p.nombre,
-              'cantidad', v.cantidad,
-              'precioVenta', v.precio_unitario,
-              'precioCompra', COALESCE(v.precio_compra, 0), 
-              'total', v.total,
-              'gananciaProducto', v.total - (COALESCE(v.precio_compra, 0) * v.cantidad),
-              'metodo_pago', v.metodo_pago,
-              'monto_efectivo', v.monto_efectivo,
-              'monto_transferencia', v.monto_transferencia
-            ) ORDER BY v.fecha DESC
-          ) FILTER (WHERE v.id IS NOT NULL) as detalles_ventas
-        FROM ventas v
-        JOIN productos p ON v.producto = p.id
-        WHERE v.fecha::date >= ${fechaInicio}::date AND v.fecha::date <= ${fechaFin}::date
-        GROUP BY v.vendedor::text
+              'producto', vp.producto_nombre,
+              'cantidad', vp.cantidad,
+              'precioVenta', vp.precio_unitario,
+              'precioCompra', vp.precio_compra, 
+              'total', vp.venta_total,
+              'gananciaProducto', vp.ganancia_producto,
+              'metodo_pago', COALESCE(vp.metodo_pago, 'efectivo'),
+              'monto_efectivo', vp.venta_efectivo,
+              'monto_transferencia', vp.venta_transferencia
+            ) ORDER BY vp.fecha DESC
+          ) FILTER (WHERE vp.id IS NOT NULL) as detalles_ventas
+        FROM ventas_procesadas vp
+        GROUP BY vp.vendedor
       ),
       gastos_vendedor AS (
         SELECT
