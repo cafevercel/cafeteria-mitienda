@@ -19,6 +19,11 @@ export async function GET(request: NextRequest) {
 
     console.log(`📊 Calculando contabilidad del ${fechaInicio} al ${fechaFin}`);
 
+    // Extraer mes y año para consulta de salarios mensuales
+    const inicioDate = new Date(fechaInicio);
+    const mesInicio = inicioDate.getMonth() + 1;
+    const anioInicio = inicioDate.getFullYear();
+
     // ✅ UNA SOLA QUERY OPTIMIZADA con CTEs y conversión de tipos
     const startTime = Date.now();
     const result = await sql`
@@ -36,7 +41,23 @@ export async function GET(request: NextRequest) {
         SELECT
           v.vendedor::text as vendedor,
           SUM(v.total) as venta_total,
+          SUM(COALESCE(v.monto_efectivo, CASE WHEN v.metodo_pago = 'transferencia' THEN 0 ELSE v.total END)) as venta_efectivo,
+          SUM(COALESCE(v.monto_transferencia, CASE WHEN v.metodo_pago = 'transferencia' THEN v.total ELSE 0 END)) as venta_transferencia,
           SUM(v.total - (COALESCE(v.precio_compra, 0) * v.cantidad)) as ganancia_bruta,
+          SUM(
+            CASE 
+              WHEN v.total > 0 THEN 
+                (COALESCE(v.monto_efectivo, CASE WHEN v.metodo_pago = 'transferencia' THEN 0 ELSE v.total END) / v.total) * (v.total - (COALESCE(v.precio_compra, 0) * v.cantidad))
+              ELSE 0 
+            END
+          ) as ganancia_efectivo,
+          SUM(
+            CASE 
+              WHEN v.total > 0 THEN 
+                (COALESCE(v.monto_transferencia, CASE WHEN v.metodo_pago = 'transferencia' THEN v.total ELSE 0 END) / v.total) * (v.total - (COALESCE(v.precio_compra, 0) * v.cantidad))
+              ELSE 0 
+            END
+          ) as ganancia_transferencia,
           json_agg(
             json_build_object(
               'producto', p.nombre,
@@ -44,7 +65,10 @@ export async function GET(request: NextRequest) {
               'precioVenta', v.precio_unitario,
               'precioCompra', COALESCE(v.precio_compra, 0), 
               'total', v.total,
-              'gananciaProducto', v.total - (COALESCE(v.precio_compra, 0) * v.cantidad) 
+              'gananciaProducto', v.total - (COALESCE(v.precio_compra, 0) * v.cantidad),
+              'metodo_pago', v.metodo_pago,
+              'monto_efectivo', v.monto_efectivo,
+              'monto_transferencia', v.monto_transferencia
             ) ORDER BY v.fecha DESC
           ) FILTER (WHERE v.id IS NOT NULL) as detalles_ventas
         FROM ventas v
@@ -64,12 +88,23 @@ export async function GET(request: NextRequest) {
                 EXTRACT(DAY FROM (date_trunc('MONTH', g.fecha) + interval '1 month - 1 day'))
             )
           ) as total_gastos,
+          SUM(
+            CASE WHEN COALESCE(g.tipo_gasto, 'fijo') = 'fijo' THEN
+              g.cantidad * ((LEAST((date_trunc('MONTH', g.fecha) + interval '1 month - 1 day')::date, ${fechaFin}::date) - GREATEST(date_trunc('MONTH', g.fecha)::date, ${fechaInicio}::date) + 1)::float / EXTRACT(DAY FROM (date_trunc('MONTH', g.fecha) + interval '1 month - 1 day')))
+            ELSE 0 END
+          ) as gastos_fijos,
+          SUM(
+            CASE WHEN COALESCE(g.tipo_gasto, 'fijo') = 'variable' THEN
+              g.cantidad * ((LEAST((date_trunc('MONTH', g.fecha) + interval '1 month - 1 day')::date, ${fechaFin}::date) - GREATEST(date_trunc('MONTH', g.fecha)::date, ${fechaInicio}::date) + 1)::float / EXTRACT(DAY FROM (date_trunc('MONTH', g.fecha) + interval '1 month - 1 day')))
+            ELSE 0 END
+          ) as gastos_variables,
           json_agg(
             json_build_object(
               'nombre', g.nombre,
               'valorMensual', g.cantidad,
               'diasSeleccionados', (LEAST((date_trunc('MONTH', g.fecha) + interval '1 month - 1 day')::date, ${fechaFin}::date) - GREATEST(date_trunc('MONTH', g.fecha)::date, ${fechaInicio}::date) + 1),
               'valorProrrateado', (g.cantidad * ((LEAST((date_trunc('MONTH', g.fecha) + interval '1 month - 1 day')::date, ${fechaFin}::date) - GREATEST(date_trunc('MONTH', g.fecha)::date, ${fechaInicio}::date) + 1)::float / EXTRACT(DAY FROM (date_trunc('MONTH', g.fecha) + interval '1 month - 1 day')))),
+              'tipo_gasto', COALESCE(g.tipo_gasto, 'fijo'),
               'fecha', g.fecha
             ) ORDER BY g.fecha DESC
           ) FILTER (WHERE g.nombre IS NOT NULL) as detalles_gastos
@@ -79,11 +114,13 @@ export async function GET(request: NextRequest) {
       ),
       salarios_vendedor AS (
         SELECT
-          s.usuario_id::text as vendedor_id,
-          SUM(s.salario * (SELECT factor FROM period_factor)) as total_salario
-        FROM salarios s
-        WHERE s.activo = true
-        GROUP BY s.usuario_id::text
+          u.id::text as vendedor_id,
+          COALESCE(
+            (SELECT sm.salario * (SELECT factor FROM period_factor) FROM salarios_mensuales sm WHERE sm.usuario_id::text = u.id::text AND sm.mes = ${mesInicio} AND sm.anio = ${anioInicio} LIMIT 1),
+            (SELECT s.salario * (SELECT factor FROM period_factor) FROM salarios s WHERE s.usuario_id::text = u.id::text AND s.activo = true LIMIT 1),
+            0
+          ) as total_salario
+        FROM usuarios u
       ),
       merma_total AS (
         SELECT
@@ -105,8 +142,14 @@ export async function GET(request: NextRequest) {
         u.id as vendedor_id,
         u.nombre as vendedor_nombre,
         COALESCE(vv.venta_total, 0) as venta_total,
+        COALESCE(vv.venta_efectivo, 0) as venta_efectivo,
+        COALESCE(vv.venta_transferencia, 0) as venta_transferencia,
         COALESCE(vv.ganancia_bruta, 0) as ganancia_bruta,
+        COALESCE(vv.ganancia_efectivo, 0) as ganancia_efectivo,
+        COALESCE(vv.ganancia_transferencia, 0) as ganancia_transferencia,
         COALESCE(gv.total_gastos, 0) as gastos,
+        COALESCE(gv.gastos_fijos, 0) as gastos_fijos,
+        COALESCE(gv.gastos_variables, 0) as gastos_variables,
         0 as gastos_merma,  -- Merma en 0 por vendedor
         COALESCE(sv.total_salario, 0) as salario,
         COALESCE(vv.detalles_ventas, '[]'::json) as detalles_ventas,
@@ -144,28 +187,42 @@ export async function GET(request: NextRequest) {
     const totalMerma = parseFloat(mermaResult.rows[0]?.total_merma || 0);
     const detallesMerma = mermaResult.rows[0]?.detalles_merma || [];
 
-    console.log('🔍 MERMA TOTAL:', totalMerma);
-    console.log('🔍 DETALLES MERMA:', detallesMerma);
-
     // ✅ Formatear resultados
     const resultados = result.rows.map(row => {
+      const ventaTotal = parseFloat(row.venta_total) || 0;
+      const ventaEfectivo = parseFloat(row.venta_efectivo) || 0;
+      const ventaTransferencia = parseFloat(row.venta_transferencia) || 0;
       const gananciaBruta = parseFloat(row.ganancia_bruta) || 0;
+      const gananciaEfectivo = parseFloat(row.ganancia_efectivo) || 0;
+      const gananciaTransferencia = parseFloat(row.ganancia_transferencia) || 0;
       const gastos = parseFloat(row.gastos) || 0;
+      const gastosFijos = parseFloat(row.gastos_fijos) || 0;
+      const gastosVariables = parseFloat(row.gastos_variables) || 0;
       const gastosMerma = parseFloat(row.gastos_merma) || 0;
       const salario = parseFloat(row.salario) || 0;
 
-      // ✅ FÓRMULA CORRECTA: Ganancia Bruta - Gastos - Gastos Merma - Salario
-      const resultado = gananciaBruta - gastos - gastosMerma - salario;
+      const utilidadFinal = gananciaBruta - gastos - gastosMerma - salario;
+      const margenBrutoPct = ventaTotal > 0 ? (gananciaBruta / ventaTotal) * 100 : 0;
+      const margenNetoPct = ventaTotal > 0 ? (utilidadFinal / ventaTotal) * 100 : 0;
 
       return {
         vendedorId: row.vendedor_id.toString(),
         vendedorNombre: row.vendedor_nombre,
-        ventaTotal: parseFloat(row.venta_total) || 0,
+        ventaTotal,
+        ventaEfectivo,
+        ventaTransferencia,
         gananciaBruta,
+        gananciaEfectivo,
+        gananciaTransferencia,
         gastos,
+        gastosFijos,
+        gastosVariables,
         gastosMerma,
         salario,
-        resultado,
+        resultado: utilidadFinal,
+        utilidadFinal,
+        margenBrutoPct,
+        margenNetoPct,
         detalles: {
           ventas: Array.isArray(row.detalles_ventas) && row.detalles_ventas[0] !== null
             ? row.detalles_ventas.map((v: any) => ({
@@ -173,7 +230,10 @@ export async function GET(request: NextRequest) {
               cantidad: parseInt(v.cantidad) || 0,
               precioVenta: parseFloat(v.precioVenta) || 0,
               precioCompra: parseFloat(v.precioCompra) || 0,
-              gananciaProducto: parseFloat(v.gananciaProducto) || 0
+              gananciaProducto: parseFloat(v.gananciaProducto) || 0,
+              metodo_pago: v.metodo_pago || 'efectivo',
+              monto_efectivo: parseFloat(v.monto_efectivo) || 0,
+              monto_transferencia: parseFloat(v.monto_transferencia) || 0
             }))
             : [],
           gastosDesglosados: Array.isArray(row.detalles_gastos) && row.detalles_gastos[0] !== null
@@ -181,7 +241,8 @@ export async function GET(request: NextRequest) {
               nombre: g.nombre,
               valorMensual: parseFloat(g.valorMensual) || 0,
               diasSeleccionados: parseInt(g.diasSeleccionados) || 30,
-              valorProrrateado: parseFloat(g.valorProrrateado) || 0
+              valorProrrateado: parseFloat(g.valorProrrateado) || 0,
+              tipo_gasto: g.tipo_gasto || 'fijo'
             }))
             : [],
           mermaDesglosada: []  // Vacío por vendedor

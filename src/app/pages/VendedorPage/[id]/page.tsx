@@ -91,6 +91,9 @@ interface Venta {
   vendedor: string;
   vendedor_nombre?: string;
   fecha: string;
+  metodo_pago?: 'efectivo' | 'transferencia' | 'mixto';
+  monto_efectivo?: number;
+  monto_transferencia?: number;
   parametros?: ProductoParametro[];
   porcentajeGanancia?: string;
   porcentaje_ganancia?: string;
@@ -242,6 +245,19 @@ const useVendedorData = (vendedorId: string) => {
     }
   }, [vendedorId, transacciones]);
 
+  const [metodoPago, setMetodoPago] = useState<'efectivo' | 'transferencia' | 'mixto'>('efectivo');
+  const [montoEfectivoInput, setMontoEfectivoInput] = useState<string>('');
+  const [montoTransferenciaInput, setMontoTransferenciaInput] = useState<string>('');
+
+  const totalCarrito = useMemo(() => {
+    return productosSeleccionados.reduce((total, producto) => {
+      const cantidadTotal = producto.parametrosVenta
+        ? producto.parametrosVenta.reduce((sum, param) => sum + param.cantidad, 0)
+        : producto.cantidadVendida;
+      return total + (producto.precio * cantidadTotal);
+    }, 0);
+  }, [productosSeleccionados]);
+
   const handleEnviarVenta = async () => {
     if (productosSeleccionados.length === 0) {
       toast({ title: "Carrito vacío", description: "Seleccione al menos un producto.", variant: "destructive" });
@@ -250,6 +266,27 @@ const useVendedorData = (vendedorId: string) => {
     if (!fecha) {
       toast({ title: "Falta fecha", description: "Seleccione una fecha para la venta.", variant: "destructive" });
       return;
+    }
+
+    let efectivoTotal = totalCarrito;
+    let transferenciaTotal = 0;
+
+    if (metodoPago === 'transferencia') {
+      efectivoTotal = 0;
+      transferenciaTotal = totalCarrito;
+    } else if (metodoPago === 'mixto') {
+      const eVal = parseFloat(montoEfectivoInput) || 0;
+      const tVal = parseFloat(montoTransferenciaInput) || 0;
+      if (Math.abs((eVal + tVal) - totalCarrito) > 0.5) {
+        toast({
+          title: "Monto no coincide",
+          description: `La suma de efectivo ($${eVal}) y transferencia ($${tVal}) debe ser igual al total ($${totalCarrito}).`,
+          variant: "destructive"
+        });
+        return;
+      }
+      efectivoTotal = eVal;
+      transferenciaTotal = tVal;
     }
 
     // Si offline, guardar directamente
@@ -265,17 +302,27 @@ const useVendedorData = (vendedorId: string) => {
         const cantidadTotal = producto.parametrosVenta
           ? producto.parametrosVenta.reduce((sum, param) => sum + param.cantidad, 0)
           : producto.cantidadVendida;
+        const itemTotal = producto.precio * cantidadTotal;
+        const proporcion = totalCarrito > 0 ? itemTotal / totalCarrito : 1;
+        const itemEfectivo = Math.round(efectivoTotal * proporcion * 100) / 100;
+        const itemTransferencia = Math.round(transferenciaTotal * proporcion * 100) / 100;
 
         await realizarVenta(
           producto.id,
           cantidadTotal,
           fecha,
           producto.parametrosVenta,
-          vendedorId
+          vendedorId,
+          metodoPago,
+          itemEfectivo,
+          itemTransferencia
         );
       }));
 
       setProductosSeleccionados([]);
+      setMontoEfectivoInput('');
+      setMontoTransferenciaInput('');
+      setMetodoPago('efectivo');
       await fetchProductos();
       await fetchVentasRegistro();
       toast({ title: "Venta exitosa", description: "La venta se ha registrado en el servidor." });
@@ -542,25 +589,52 @@ const useVendedorData = (vendedorId: string) => {
   }, [vendedorId]);
 
   const savePendingSale = useCallback((saleItems: any[]) => {
-    const salesToSave = saleItems.map(p => ({
-      id_local: `${Date.now()}_${p.id}`,
-      productoId: p.id,
-      nombre: p.nombre, // Para mostrar en la UI
-      cantidad: p.cantidadVendida,
-      fecha: fecha || new Date().toISOString(),
-      parametros: p.parametrosVenta,
-      status: 'pending'
-    }));
+    let efectivoTotal = totalCarrito;
+    let transferenciaTotal = 0;
+
+    if (metodoPago === 'transferencia') {
+      efectivoTotal = 0;
+      transferenciaTotal = totalCarrito;
+    } else if (metodoPago === 'mixto') {
+      efectivoTotal = parseFloat(montoEfectivoInput) || 0;
+      transferenciaTotal = parseFloat(montoTransferenciaInput) || 0;
+    }
+
+    const salesToSave = saleItems.map(p => {
+      const cantidadTotal = p.parametrosVenta
+        ? p.parametrosVenta.reduce((sum: number, param: any) => sum + param.cantidad, 0)
+        : p.cantidadVendida;
+      const itemTotal = (p.precio || 0) * cantidadTotal;
+      const proporcion = totalCarrito > 0 ? itemTotal / totalCarrito : 1;
+      const itemEfectivo = Math.round(efectivoTotal * proporcion * 100) / 100;
+      const itemTransferencia = Math.round(transferenciaTotal * proporcion * 100) / 100;
+
+      return {
+        id_local: `${Date.now()}_${p.id}`,
+        productoId: p.id,
+        nombre: p.nombre, // Para mostrar en la UI
+        cantidad: cantidadTotal,
+        fecha: fecha || new Date().toISOString(),
+        parametros: p.parametrosVenta,
+        metodoPago: metodoPago,
+        montoEfectivo: itemEfectivo,
+        montoTransferencia: itemTransferencia,
+        status: 'pending'
+      };
+    });
 
     const updated = [...pendingSales, ...salesToSave];
     setPendingSales(updated);
     localStorage.setItem(`pendingSales_${vendedorId}`, JSON.stringify(updated));
     setProductosSeleccionados([]);
+    setMontoEfectivoInput('');
+    setMontoTransferenciaInput('');
+    setMetodoPago('efectivo');
     toast({
       title: "Venta guardada offline",
       description: "La venta se sincronizará cuando haya conexión.",
     });
-  }, [pendingSales, vendedorId, fecha, setProductosSeleccionados]);
+  }, [pendingSales, vendedorId, fecha, setProductosSeleccionados, totalCarrito, metodoPago, montoEfectivoInput, montoTransferenciaInput]);
 
   const syncSales = useCallback(async () => {
     if (pendingSales.length === 0) return;
@@ -718,7 +792,14 @@ const useVendedorData = (vendedorId: string) => {
     parametrosDialogOpen,
     setParametrosDialogOpen,
     selectedProduct,
-    setSelectedProduct
+    setSelectedProduct,
+    metodoPago,
+    setMetodoPago,
+    montoEfectivoInput,
+    setMontoEfectivoInput,
+    montoTransferenciaInput,
+    setMontoTransferenciaInput,
+    totalCarrito
   }
 }
 
@@ -770,6 +851,37 @@ const formatPrice = (price: number | string | undefined): string => {
   const numPrice = typeof price === 'string' ? parseFloat(price) : price;
   return isNaN(numPrice) ? '0.00' : numPrice.toFixed(2);
 }
+
+const renderMetodoPagoBadge = (metodoPago?: string, montoEfectivo?: number, montoTransferencia?: number) => {
+  const m = (metodoPago || 'efectivo').toLowerCase();
+
+  if (m === 'transferencia') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-sky-100 text-sky-800 border border-sky-200">
+        💳 Transferencia
+      </span>
+    );
+  }
+
+  if (m === 'mixto') {
+    const ef = montoEfectivo !== undefined && montoEfectivo !== null ? parseFloat(String(montoEfectivo)) : null;
+    const tr = montoTransferencia !== undefined && montoTransferencia !== null ? parseFloat(String(montoTransferencia)) : null;
+    return (
+      <span
+        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-800 border border-purple-200"
+        title={ef !== null && tr !== null ? `Efectivo: $${ef.toFixed(2)} | Transferencia: $${tr.toFixed(2)}` : undefined}
+      >
+        🔄 Mixto {ef !== null && tr !== null ? `(💵 $${ef.toFixed(2)} / 💳 $${tr.toFixed(2)})` : ''}
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+      💵 Efectivo
+    </span>
+  );
+};
 
 const VentaDiaDesplegable = ({ venta, busqueda }: { venta: VentaDia, busqueda: string }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -846,7 +958,10 @@ const VentaDiaDesplegable = ({ venta, busqueda }: { venta: VentaDia, busqueda: s
                     className="rounded-md"
                   />
                   <div className="flex flex-col">
-                    <span className="font-medium">{v.producto_nombre}</span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium">{v.producto_nombre}</span>
+                      {renderMetodoPagoBadge(v.metodo_pago, v.monto_efectivo, v.monto_transferencia)}
+                    </div>
                     {v.parametros && v.parametros.length > 0 ? (
                       <div className="mt-1">
                         {v.parametros.map((param, index) => (
@@ -1693,7 +1808,14 @@ export default function VendedorPage() {
     parametrosDialogOpen,
     setParametrosDialogOpen,
     selectedProduct,
-    setSelectedProduct
+    setSelectedProduct,
+    metodoPago,
+    setMetodoPago,
+    montoEfectivoInput,
+    setMontoEfectivoInput,
+    montoTransferenciaInput,
+    setMontoTransferenciaInput,
+    totalCarrito
   } = useVendedorData(vendedorId)
 
   const [busqueda, setBusqueda] = useState('')
@@ -2240,13 +2362,95 @@ export default function VendedorPage() {
                   ))}
 
                   {productosSeleccionados.length > 0 && (
-                    <div className="mt-4">
+                    <div className="mt-4 p-4 border rounded-lg bg-slate-50 space-y-3">
+                      <div className="flex justify-between items-center font-bold text-lg">
+                        <span>Total Venta:</span>
+                        <span className="text-emerald-700">${totalCarrito.toLocaleString('es-ES', { minimumFractionDigits: 2 })}</span>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium text-slate-700">Método de Pago:</label>
+                        <div className="grid grid-cols-3 gap-2">
+                          <Button
+                            type="button"
+                            variant={metodoPago === 'efectivo' ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => {
+                              setMetodoPago('efectivo');
+                              setMontoEfectivoInput('');
+                              setMontoTransferenciaInput('');
+                            }}
+                          >
+                            💵 Efectivo
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={metodoPago === 'transferencia' ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => {
+                              setMetodoPago('transferencia');
+                              setMontoEfectivoInput('');
+                              setMontoTransferenciaInput('');
+                            }}
+                          >
+                            💳 Transf.
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={metodoPago === 'mixto' ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => {
+                              setMetodoPago('mixto');
+                              setMontoEfectivoInput((totalCarrito / 2).toFixed(2));
+                              setMontoTransferenciaInput((totalCarrito / 2).toFixed(2));
+                            }}
+                          >
+                            🔄 Mixto
+                          </Button>
+                        </div>
+                      </div>
+
+                      {metodoPago === 'mixto' && (
+                        <div className="grid grid-cols-2 gap-2 pt-2 border-t">
+                          <div>
+                            <label className="text-xs font-semibold text-slate-600">💵 Efectivo ($)</label>
+                            <Input
+                              type="number"
+                              value={montoEfectivoInput}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setMontoEfectivoInput(val);
+                                const num = parseFloat(val) || 0;
+                                setMontoTransferenciaInput(Math.max(0, totalCarrito - num).toFixed(2));
+                              }}
+                              placeholder="0.00"
+                              className="mt-1"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs font-semibold text-slate-600">💳 Transferencia ($)</label>
+                            <Input
+                              type="number"
+                              value={montoTransferenciaInput}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setMontoTransferenciaInput(val);
+                                const num = parseFloat(val) || 0;
+                                setMontoEfectivoInput(Math.max(0, totalCarrito - num).toFixed(2));
+                              }}
+                              placeholder="0.00"
+                              className="mt-1"
+                            />
+                          </div>
+                        </div>
+                      )}
+
                       <Button
                         onClick={handleEnviarVenta}
-                        className="w-full"
-                        disabled={isProcessingVenta} // 👈 Deshabilitar cuando está procesando
+                        className="w-full mt-2"
+                        disabled={isProcessingVenta}
                       >
-                        {isProcessingVenta ? ( // 👈 Mostrar texto diferente según el estado
+                        {isProcessingVenta ? (
                           <>
                             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                             Procesando venta...
@@ -2278,10 +2482,13 @@ export default function VendedorPage() {
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {pendingSales.map((sale) => (
+                    {pendingSales.map((sale: any) => (
                       <div key={sale.id_local} className="p-3 bg-white rounded-lg border border-orange-200 shadow-sm flex justify-between items-center">
                         <div>
-                          <p className="font-semibold text-orange-950">{sale.nombre}</p>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-semibold text-orange-950">{sale.nombre}</p>
+                            {renderMetodoPagoBadge(sale.metodoPago, sale.montoEfectivo, sale.montoTransferencia)}
+                          </div>
                           <p className="text-xs text-orange-700">{formatDate(sale.fecha)}</p>
                           <p className="text-sm font-medium">Cantidad: {sale.cantidad}</p>
                           {sale.parametros && sale.parametros.length > 0 && (

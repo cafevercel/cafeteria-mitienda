@@ -7,7 +7,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Calendar as CalendarComponent } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -20,13 +22,19 @@ import {
   User,
   ChevronDown,
   ChevronUp,
-  Plus
+  Plus,
+  ArrowLeftRight,
+  PieChart,
+  Edit2,
+  Wallet
 } from "lucide-react"
-import { format, startOfDay, endOfDay, isAfter, isBefore, isEqual } from "date-fns"
+import { format, startOfDay, endOfDay, isAfter } from "date-fns"
 import { es } from "date-fns/locale"
 import { toast } from "@/hooks/use-toast"
 import { Vendedor, CalculoContabilidadVendedor } from '@/types'
 import GastosVendedorDialog from './GastosVendedorDialog'
+import SalariosMensualesVendedorDialog from './SalariosMensualesVendedorDialog'
+import ComparativaPage from './ComparativaPage'
 import { cn } from "@/lib/utils"
 import { getContabilidadVendedores } from '@/app/services/api'
 
@@ -35,9 +43,146 @@ interface ContabilidadVendedoresPageProps {
   onRefresh: () => void
 }
 
+const MONTHS = [
+  { value: 1, label: 'Enero' },
+  { value: 2, label: 'Febrero' },
+  { value: 3, label: 'Marzo' },
+  { value: 4, label: 'Abril' },
+  { value: 5, label: 'Mayo' },
+  { value: 6, label: 'Junio' },
+  { value: 7, label: 'Julio' },
+  { value: 8, label: 'Agosto' },
+  { value: 9, label: 'Septiembre' },
+  { value: 10, label: 'Octubre' },
+  { value: 11, label: 'Noviembre' },
+  { value: 12, label: 'Diciembre' }
+]
+
+interface DatePickerConMesesProps {
+  label: string
+  value: Date | null
+  onChange: (date: Date) => void
+}
+
+const MONTH_SHORT_LABELS = [
+  { value: 0, label: 'Ene' },
+  { value: 1, label: 'Feb' },
+  { value: 2, label: 'Mar' },
+  { value: 3, label: 'Abr' },
+  { value: 4, label: 'May' },
+  { value: 5, label: 'Jun' },
+  { value: 6, label: 'Jul' },
+  { value: 7, label: 'Ago' },
+  { value: 8, label: 'Sep' },
+  { value: 9, label: 'Oct' },
+  { value: 10, label: 'Nov' },
+  { value: 11, label: 'Dic' }
+]
+
+function DatePickerConMeses({ label, value, onChange }: DatePickerConMesesProps) {
+  const [open, setOpen] = useState(false)
+  const [viewMonth, setViewMonth] = useState<Date>(value || new Date())
+
+  const currentYear = viewMonth.getFullYear()
+  const currentMonthIdx = viewMonth.getMonth()
+
+  const handleMonthClick = (monthIdx: number) => {
+    setViewMonth(new Date(currentYear, monthIdx, 1))
+  }
+
+  const handleYearChange = (yearStr: string) => {
+    const year = parseInt(yearStr)
+    setViewMonth(new Date(year, currentMonthIdx, 1))
+  }
+
+  return (
+    <div>
+      <Label className="text-xs font-semibold text-slate-700">{label}</Label>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            className={cn(
+              "w-full justify-start text-left font-normal text-xs sm:text-sm mt-1 border-slate-300 shadow-sm",
+              !value && "text-muted-foreground"
+            )}
+          >
+            <Calendar className="mr-2 h-4 w-4 text-blue-600" />
+            {value ? format(value, "dd/MM/yyyy") : "Seleccionar fecha"}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-80 p-3" align="start">
+          {/* Header con Selección de Año */}
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-bold text-slate-700">Seleccionar Mes y Año:</span>
+            <Select value={currentYear.toString()} onValueChange={handleYearChange}>
+              <SelectTrigger className="h-7 w-24 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {[2024, 2025, 2026, 2027, 2028, 2029, 2030].map((y) => (
+                  <SelectItem key={y} value={y.toString()} className="text-xs">
+                    {y}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Grilla de los 12 Meses del Año */}
+          <div className="grid grid-cols-4 gap-1.5 mb-3 bg-slate-100 p-1.5 rounded-lg">
+            {MONTH_SHORT_LABELS.map((m) => {
+              const isSelectedMonth = m.value === currentMonthIdx
+              return (
+                <Button
+                  key={m.value}
+                  type="button"
+                  size="sm"
+                  variant={isSelectedMonth ? "default" : "ghost"}
+                  onClick={() => handleMonthClick(m.value)}
+                  className={cn(
+                    "h-7 text-xs px-1 font-medium transition-all",
+                    isSelectedMonth ? "bg-blue-600 text-white font-bold shadow-sm" : "hover:bg-white text-slate-700"
+                  )}
+                >
+                  {m.label}
+                </Button>
+              )
+            })}
+          </div>
+
+          <Separator className="mb-2" />
+
+          {/* Calendario con los días del mes elegido */}
+          <div className="flex justify-center">
+            <CalendarComponent
+              mode="single"
+              month={viewMonth}
+              onMonthChange={setViewMonth}
+              selected={value || undefined}
+              onSelect={(d) => {
+                if (d) {
+                  onChange(d)
+                  setOpen(false)
+                }
+              }}
+              className="rounded-md border p-2"
+            />
+          </div>
+        </PopoverContent>
+      </Popover>
+    </div>
+  )
+}
+
 export default function ContabilidadVendedoresPage({ vendedores, onRefresh }: ContabilidadVendedoresPageProps) {
-  const [fechaInicio, setFechaInicio] = useState<Date | null>(null)
-  const [fechaFin, setFechaFin] = useState<Date | null>(null)
+  const [activeTab, setActiveTab] = useState<'balance' | 'comparativa'>('balance')
+  const [fechaInicio, setFechaInicio] = useState<Date | null>(new Date(new Date().getFullYear(), new Date().getMonth(), 1))
+  const [fechaFin, setFechaFin] = useState<Date | null>(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0))
+  
+  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1)
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear())
+
   const [showDatePicker, setShowDatePicker] = useState<'inicio' | 'fin' | null>(null)
   const [isCalculating, setIsCalculating] = useState(false)
   const [calculos, setCalculos] = useState<CalculoContabilidadVendedor[]>([])
@@ -45,32 +190,29 @@ export default function ContabilidadVendedoresPage({ vendedores, onRefresh }: Co
   const [showGastosDialog, setShowGastosDialog] = useState(false)
   const [selectedVendedor, setSelectedVendedor] = useState<Vendedor | null>(null)
   const [filtroVendedor, setFiltroVendedor] = useState('')
+  const [showGastosDetalleModal, setShowGastosDetalleModal] = useState(false)
 
-  const handleDateSelect = (type: 'inicio' | 'fin', date: Date | undefined) => {
-    if (type === 'inicio') {
-      setFechaInicio(date || null)
-    } else {
-      setFechaFin(date || null)
-    }
-    setShowDatePicker(null)
+  // Diálogo para editar salario mensual del vendedor
+  const [showSalarioDialog, setShowSalarioDialog] = useState(false)
+  const [salarioModalData, setSalarioModalData] = useState<{ vendedorId: string; vendedorNombre: string; salario: string }>({ vendedorId: '', vendedorNombre: '', salario: '' })
+
+  const handleQuickMonthSelect = (mes: number, anio: number) => {
+    setSelectedMonth(mes)
+    setSelectedYear(anio)
+    const start = new Date(anio, mes - 1, 1)
+    const end = new Date(anio, mes, 0)
+    setFechaInicio(start)
+    setFechaFin(end)
   }
 
   const handleCalcular = async () => {
     if (!fechaInicio || !fechaFin) {
-      toast({
-        title: "Error",
-        description: "Debe seleccionar un rango de fechas",
-        variant: "destructive",
-      })
+      toast({ title: "Error", description: "Debe seleccionar un rango de fechas", variant: "destructive" })
       return
     }
 
     if (isAfter(fechaInicio, fechaFin)) {
-      toast({
-        title: "Error",
-        description: "La fecha de inicio debe ser anterior a la fecha fin",
-        variant: "destructive",
-      })
+      toast({ title: "Error", description: "La fecha de inicio debe ser anterior a la fecha fin", variant: "destructive" })
       return
     }
 
@@ -81,20 +223,17 @@ export default function ContabilidadVendedoresPage({ vendedores, onRefresh }: Co
 
       const data = await getContabilidadVendedores(fechaInicioStr, fechaFinStr)
       setCalculos(data)
-      toast({
-        title: "Éxito",
-        description: "Cálculos completados correctamente",
-      })
+      toast({ title: "Éxito", description: "Cálculos completados correctamente" })
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "No se pudieron realizar los cálculos",
-        variant: "destructive",
-      })
+      toast({ title: "Error", description: "No se pudieron realizar los cálculos", variant: "destructive" })
     } finally {
       setIsCalculating(false)
     }
   }
+
+  useEffect(() => {
+    handleCalcular()
+  }, [])
 
   const toggleSellerExpansion = (vendedorId: string) => {
     const newExpanded = new Set(expandedSellers)
@@ -111,17 +250,42 @@ export default function ContabilidadVendedoresPage({ vendedores, onRefresh }: Co
     setShowGastosDialog(true)
   }
 
+  const handleOpenSalarioModal = (vendedorId: string, vendedorNombre: string, actualSalario: number) => {
+    setSalarioModalData({ vendedorId, vendedorNombre, salario: actualSalario.toString() })
+    setShowSalarioDialog(true)
+  }
+
+  const handleSaveSalarioMensual = async () => {
+    if (!salarioModalData.salario || parseFloat(salarioModalData.salario) < 0) {
+      toast({ title: 'Error', description: 'Ingrese un salario válido', variant: 'destructive' })
+      return
+    }
+    try {
+      const res = await fetch('/api/salarios-mensuales', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          usuario_id: salarioModalData.vendedorId,
+          mes: selectedMonth,
+          anio: selectedYear,
+          salario: parseFloat(salarioModalData.salario)
+        })
+      })
+      if (!res.ok) throw new Error('Error al guardar salario')
+      toast({ title: 'Éxito', description: 'Salario actualizado correctamente para el mes' })
+      setShowSalarioDialog(false)
+      handleCalcular()
+    } catch (err) {
+      toast({ title: 'Error', description: 'No se pudo guardar el salario', variant: 'destructive' })
+    }
+  }
+
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('es-CU', {
-      style: 'currency',
-      currency: 'CUP',
-      minimumFractionDigits: 2
-    }).format(value)
+    return new Intl.NumberFormat('es-CU', { style: 'currency', currency: 'CUP', minimumFractionDigits: 2 }).format(value)
   }
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    return format(date, "dd/MM/yyyy")
+    return format(new Date(dateString), "dd/MM/yyyy")
   }
 
   const getDaysInRange = () => {
@@ -135,353 +299,366 @@ export default function ContabilidadVendedoresPage({ vendedores, onRefresh }: Co
   )
 
   const filteredCalculos = calculos.filter(calculo =>
-    filtroVendedor === '' ||
-    calculo.vendedorNombre.toLowerCase().includes(filtroVendedor.toLowerCase())
+    filtroVendedor === '' || calculo.vendedorNombre.toLowerCase().includes(filtroVendedor.toLowerCase())
   )
+
+  // Totales Globales
+  const totalVentaGlobal = filteredCalculos.reduce((sum, calc) => sum + calc.ventaTotal, 0)
+  const totalVentaEfectivoGlobal = filteredCalculos.reduce((sum, calc) => sum + calc.ventaEfectivo, 0)
+  const totalVentaTransferenciaGlobal = filteredCalculos.reduce((sum, calc) => sum + calc.ventaTransferencia, 0)
+
+  const totalGananciaBrutaGlobal = filteredCalculos.reduce((sum, calc) => sum + calc.gananciaBruta, 0)
+  const totalGananciaEfectivoGlobal = filteredCalculos.reduce((sum, calc) => sum + calc.gananciaEfectivo, 0)
+  const totalGananciaTransferenciaGlobal = filteredCalculos.reduce((sum, calc) => sum + calc.gananciaTransferencia, 0)
+
+  const totalGastosFijosGlobal = filteredCalculos.reduce((sum, calc) => sum + calc.gastosFijos, 0)
+  const totalGastosVariablesGlobal = filteredCalculos.reduce((sum, calc) => sum + calc.gastosVariables, 0)
+  const totalGastosMermaGlobal = filteredCalculos.length > 0 ? filteredCalculos[0].gastosMerma : 0
+  const totalSalariosGlobal = filteredCalculos.reduce((sum, calc) => sum + calc.salario, 0)
+
+  const totalGastosAgrupadosGlobal = totalGastosFijosGlobal + totalGastosVariablesGlobal + totalGastosMermaGlobal + totalSalariosGlobal
+  const utilidadFinalGlobal = totalGananciaBrutaGlobal - totalGastosAgrupadosGlobal
+
+  const margenGananciaBrutoPct = totalVentaGlobal > 0 ? (totalGananciaBrutaGlobal / totalVentaGlobal) * 100 : 0
+  const margenGananciaNetoPct = totalVentaGlobal > 0 ? (utilidadFinalGlobal / totalVentaGlobal) * 100 : 0
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
-          <FileText className="h-5 w-5 sm:h-6 sm:w-6" />
-          Contabilidad de Puntos de Venta
+      {/* Tab Navigation */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white p-3 rounded-xl border shadow-sm">
+        <h2 className="text-lg sm:text-2xl font-bold flex items-center gap-2">
+          <FileText className="h-5 w-5 sm:h-6 sm:w-6 text-indigo-600 flex-shrink-0" />
+          <span className="truncate">Contabilidad de Puntos de Venta</span>
         </h2>
+        <div className="flex gap-2 w-full sm:w-auto">
+          <Button
+            variant={activeTab === 'balance' ? 'default' : 'outline'}
+            onClick={() => setActiveTab('balance')}
+            size="sm"
+            className="flex-1 sm:flex-initial text-xs sm:text-sm h-8 sm:h-9"
+          >
+            <Calculator className="mr-1.5 h-3.5 w-3.5 sm:h-4 sm:w-4" />
+            Balance
+          </Button>
+          <Button
+            variant={activeTab === 'comparativa' ? 'default' : 'outline'}
+            onClick={() => setActiveTab('comparativa')}
+            size="sm"
+            className="flex-1 sm:flex-initial text-xs sm:text-sm h-8 sm:h-9"
+          >
+            <ArrowLeftRight className="mr-1.5 h-3.5 w-3.5 sm:h-4 sm:w-4" />
+            Comparativa
+          </Button>
+        </div>
       </div>
 
-      {/* Date Selection */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Calendar className="h-5 w-5" />
-            Seleccionar Período
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-            <div>
-              <Label htmlFor="fecha-inicio" className="text-sm">Fecha de Inicio</Label>
-              <Popover open={showDatePicker === 'inicio'} onOpenChange={(open) => setShowDatePicker(open ? 'inicio' : null)}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal text-sm",
-                      !fechaInicio && "text-muted-foreground"
-                    )}
-                  >
-                    <Calendar className="mr-2 h-4 w-4" />
-                    <span className="truncate">
-                      {fechaInicio ? format(fechaInicio, "PPP", { locale: es }) : "Seleccionar fecha"}
-                    </span>
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <CalendarComponent
-                    mode="single"
-                    selected={fechaInicio || undefined}
-                    onSelect={(date) => handleDateSelect('inicio', date)}
-                    disabled={(date) => date < startOfDay(new Date(2000, 0, 1))}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            <div>
-              <Label htmlFor="fecha-fin" className="text-sm">Fecha Fin</Label>
-              <Popover open={showDatePicker === 'fin'} onOpenChange={(open) => setShowDatePicker(open ? 'fin' : null)}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal text-sm",
-                      !fechaFin && "text-muted-foreground"
-                    )}
-                  >
-                    <Calendar className="mr-2 h-4 w-4" />
-                    <span className="truncate">
-                      {fechaFin ? format(fechaFin, "PPP", { locale: es }) : "Seleccionar fecha"}
-                    </span>
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <CalendarComponent
-                    mode="single"
-                    selected={fechaFin || undefined}
-                    onSelect={(date) => handleDateSelect('fin', date)}
-                    disabled={(date) => {
-                      const isBefore2000 = date < startOfDay(new Date(2000, 0, 1))
-                      const isBeforeStart = fechaInicio ? date < startOfDay(fechaInicio) : false
-                      return isBefore2000 || isBeforeStart
-                    }}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            <div className="sm:col-span-2 lg:col-span-1">
-              <Button
-                onClick={handleCalcular}
-                disabled={isCalculating || !fechaInicio || !fechaFin}
-                className="w-full"
-                size="sm"
-              >
-                <Calculator className="mr-2 h-4 w-4" />
-                <span className="text-sm">
-                  {isCalculating ? 'Calculando...' : 'Calcular'}
+      {activeTab === 'comparativa' ? (
+        <ComparativaPage />
+      ) : (
+        <>
+          {/* Selección Rápida de Período / Solo Fecha Inicio y Fecha Fin */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <Calendar className="h-5 w-5 text-blue-600" />
+                  Seleccionar Período
                 </span>
-              </Button>
-            </div>
-          </div>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {/* Solo Fecha Inicio y Fecha Fin con el Popover de los 12 meses */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border">
+                  <DatePickerConMeses
+                    label="Fecha de Inicio"
+                    value={fechaInicio}
+                    onChange={(date) => setFechaInicio(date)}
+                  />
+                  <DatePickerConMeses
+                    label="Fecha Fin"
+                    value={fechaFin}
+                    onChange={(date) => setFechaFin(date)}
+                  />
+                </div>
 
-          {fechaInicio && fechaFin && (
-            <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-              <p className="text-sm text-blue-700">
-                <strong>Período seleccionado:</strong> {format(fechaInicio, "PPP", { locale: es })} - {format(fechaFin, "PPP", { locale: es })}
-                <br />
-                <strong>Total de días:</strong> {getDaysInRange()} días
-              </p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                <Button onClick={handleCalcular} disabled={isCalculating} className="w-full bg-blue-600 hover:bg-blue-700">
+                  <Calculator className="mr-2 h-4 w-4" />
+                  {isCalculating ? 'Calculando Balance...' : 'Calcular Balance del Período'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
 
-      {/* Sellers List */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <User className="h-5 w-5" />
-            Lista de Puntos de Venta
-          </CardTitle>
-          <div className="mt-4">
-            <Input
-              placeholder="Filtrar puntos..."
-              value={filtroVendedor}
-              onChange={(e) => setFiltroVendedor(e.target.value)}
-            />
-          </div>
-        </CardHeader>
-        <CardContent>
-          {filteredVendedores.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              {filtroVendedor ? 'No se encontraron vendedores con ese filtro' : 'No hay vendedores registrados'}
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {filteredVendedores.map((vendedor) => (
-                <div
-                  key={vendedor.id}
-                  className="p-3 sm:p-4 border rounded-lg hover:bg-gray-50"
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                      <User className="h-5 w-5 text-gray-400 flex-shrink-0" />
-                      <div className="min-w-0 flex-1">
-                        <h3 className="font-medium text-sm sm:text-base break-words">{vendedor.nombre}</h3>
-                        {vendedor.telefono && (
-                          <p className="text-xs sm:text-sm text-gray-500 break-words">{vendedor.telefono}</p>
-                        )}
+          {/* NUEVO SISTEMA DE BALANCE */}
+          {calculos.length > 0 && (
+            <Card className="border-2 border-indigo-100 shadow-md">
+              <CardHeader className="bg-gradient-to-r from-slate-900 to-indigo-950 text-white rounded-t-lg">
+                <CardTitle className="text-xl flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <Wallet className="h-6 w-6 text-emerald-400" />
+                    Balance y Resultados
+                  </span>
+                  <Badge variant="outline" className="text-white border-white/30 text-xs">
+                    {MONTHS.find(m => m.value === selectedMonth)?.label} {selectedYear}
+                  </Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-6 space-y-6">
+                
+                {/* 1. VENTAS Y GANANCIAS */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Venta Total */}
+                  <div className="p-4 rounded-xl bg-blue-50/70 border border-blue-200 space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-semibold text-blue-900">Venta Total</span>
+                      <span className="text-xl font-extrabold text-blue-700">{formatCurrency(totalVentaGlobal)}</span>
+                    </div>
+                    <Separator className="bg-blue-200" />
+                    <div className="grid grid-cols-2 gap-2 text-xs pt-1">
+                      <div className="p-2 bg-white rounded border">
+                        <span className="text-slate-500 block">💵 Venta Efectivo</span>
+                        <span className="font-bold text-slate-800">{formatCurrency(totalVentaEfectivoGlobal)}</span>
+                      </div>
+                      <div className="p-2 bg-white rounded border">
+                        <span className="text-slate-500 block">💳 Venta Transferencia</span>
+                        <span className="font-bold text-slate-800">{formatCurrency(totalVentaTransferenciaGlobal)}</span>
                       </div>
                     </div>
-                    <div className="flex justify-end sm:justify-end">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleGastosClick(vendedor)}
-                        className="w-full sm:w-auto"
-                      >
-                        <Plus className="mr-2 h-4 w-4" />
-                        Gastos
-                      </Button>
+                  </div>
+
+                  {/* Ganancia Total Bruta */}
+                  <div className="p-4 rounded-xl bg-emerald-50/70 border border-emerald-200 space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-semibold text-emerald-900">Ganancia Total (Bruta)</span>
+                      <span className="text-xl font-extrabold text-emerald-700">{formatCurrency(totalGananciaBrutaGlobal)}</span>
+                    </div>
+                    <Separator className="bg-emerald-200" />
+                    <div className="grid grid-cols-2 gap-2 text-xs pt-1">
+                      <div className="p-2 bg-white rounded border">
+                        <span className="text-slate-500 block">💵 Ganancia Efectivo</span>
+                        <span className="font-bold text-slate-800">{formatCurrency(totalGananciaEfectivoGlobal)}</span>
+                      </div>
+                      <div className="p-2 bg-white rounded border">
+                        <span className="text-slate-500 block">💳 Ganancia Transferencia</span>
+                        <span className="font-bold text-slate-800">{formatCurrency(totalGananciaTransferenciaGlobal)}</span>
+                      </div>
                     </div>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
 
-      {/* Results */}
-      {calculos.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <TrendingUp className="h-5 w-5" />
-              Resultados de Cálculos
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {filteredCalculos.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                No hay resultados para mostrar
-              </div>
-            ) : (
-              <div className="space-y-4">
+                {/* 2. GASTOS TOTALES INTERACTIVOS */}
+                <div
+                  className="p-4 rounded-xl bg-rose-50 border-2 border-rose-200 cursor-pointer hover:bg-rose-100/70 transition-all shadow-sm"
+                  onClick={() => setShowGastosDetalleModal(true)}
+                >
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <h3 className="font-bold text-rose-950 text-base flex items-center gap-2">
+                        <TrendingDown className="h-5 w-5 text-rose-600" />
+                        Gastos Totales
+                      </h3>
+                      <p className="text-xs text-rose-700 mt-0.5">Toca aquí para ver el desglose detallado completo</p>
+                    </div>
+                    <span className="text-2xl font-black text-rose-700">{formatCurrency(totalGastosAgrupadosGlobal)}</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4 pt-3 border-t border-rose-200 text-xs">
+                    <div className="p-2 bg-white rounded border">
+                      <span className="text-slate-500 block">Gastos Fijos (GF)</span>
+                      <span className="font-bold text-slate-800">{formatCurrency(totalGastosFijosGlobal)}</span>
+                    </div>
+                    <div className="p-2 bg-white rounded border">
+                      <span className="text-slate-500 block">Gastos Variables (GV)</span>
+                      <span className="font-bold text-slate-800">{formatCurrency(totalGastosVariablesGlobal)}</span>
+                    </div>
+                    <div className="p-2 bg-white rounded border">
+                      <span className="text-slate-500 block">Gastos Merma (GM)</span>
+                      <span className="font-bold text-slate-800">{formatCurrency(totalGastosMermaGlobal)}</span>
+                    </div>
+                    <div className="p-2 bg-white rounded border">
+                      <span className="text-slate-500 block">Salarios (S)</span>
+                      <span className="font-bold text-slate-800">{formatCurrency(totalSalariosGlobal)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. UTILIDAD FINAL Y MARGEN BRUTO */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="p-4 rounded-xl bg-slate-900 text-white flex justify-between items-center">
+                    <div>
+                      <span className="text-xs text-slate-400 block font-medium">UTILIDAD FINAL</span>
+                      <span className="text-2xl font-black text-emerald-400">{formatCurrency(utilidadFinalGlobal)}</span>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-slate-100 border flex justify-between items-center">
+                    <div>
+                      <span className="text-xs text-slate-500 block font-medium">MARGEN DE GANANCIA BRUTO</span>
+                      <span className="text-2xl font-black text-slate-800">{margenGananciaBrutoPct.toFixed(1)}%</span>
+                    </div>
+                    <PieChart className="h-8 w-8 text-indigo-600" />
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* 4. ANÁLISIS PORCENTUAL (% SOBRE VENTAS) */}
+                <div className="space-y-3">
+                  <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                    <PieChart className="h-4 w-4 text-indigo-600" />
+                    Gastos y Métodos de Pago como % de las Ventas
+                  </h4>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="p-3 bg-white border rounded-lg">
+                      <span className="text-xs text-slate-500 block">Gastos Fijos %</span>
+                      <span className="font-bold text-sm text-rose-600">
+                        {totalVentaGlobal > 0 ? `${((totalGastosFijosGlobal / totalVentaGlobal) * 100).toFixed(1)}%` : '0%'}
+                      </span>
+                    </div>
+
+                    <div className="p-3 bg-white border rounded-lg">
+                      <span className="text-xs text-slate-500 block">Gastos Variables %</span>
+                      <span className="font-bold text-sm text-rose-600">
+                        {totalVentaGlobal > 0 ? `${((totalGastosVariablesGlobal / totalVentaGlobal) * 100).toFixed(1)}%` : '0%'}
+                      </span>
+                    </div>
+
+                    <div className="p-3 bg-white border rounded-lg">
+                      <span className="text-xs text-slate-500 block">Merma %</span>
+                      <span className="font-bold text-sm text-rose-700">
+                        {totalVentaGlobal > 0 ? `${((totalGastosMermaGlobal / totalVentaGlobal) * 100).toFixed(1)}%` : '0%'}
+                      </span>
+                    </div>
+
+                    <div className="p-3 bg-white border rounded-lg">
+                      <span className="text-xs text-slate-500 block">Salarios %</span>
+                      <span className="font-bold text-sm text-rose-600">
+                        {totalVentaGlobal > 0 ? `${((totalSalariosGlobal / totalVentaGlobal) * 100).toFixed(1)}%` : '0%'}
+                      </span>
+                    </div>
+
+                    <div className="p-3 bg-white border rounded-lg">
+                      <span className="text-xs text-slate-500 block">Ventas en Efectivo %</span>
+                      <span className="font-bold text-sm text-blue-600">
+                        {totalVentaGlobal > 0 ? `${((totalVentaEfectivoGlobal / totalVentaGlobal) * 100).toFixed(1)}%` : '0%'}
+                      </span>
+                    </div>
+
+                    <div className="p-3 bg-white border rounded-lg">
+                      <span className="text-xs text-slate-500 block">Ventas en Transferencia %</span>
+                      <span className="font-bold text-sm text-indigo-600">
+                        {totalVentaGlobal > 0 ? `${((totalVentaTransferenciaGlobal / totalVentaGlobal) * 100).toFixed(1)}%` : '0%'}
+                      </span>
+                    </div>
+
+                    <div className="p-3 bg-white border rounded-lg col-span-2">
+                      <span className="text-xs text-slate-500 block">Margen de Ganancia Neto</span>
+                      <span className={cn(
+                        "font-extrabold text-base",
+                        margenGananciaNetoPct >= 15 ? "text-emerald-600" : margenGananciaNetoPct >= 0 ? "text-yellow-600" : "text-rose-600"
+                      )}>
+                        {margenGananciaNetoPct.toFixed(1)}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+              </CardContent>
+            </Card>
+          )}
+
+          {/* LISTA Y DESGLOSE POR VENDEDOR */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <User className="h-5 w-5 text-indigo-600" />
+                  Lista de Puntos de Venta
+                </span>
+                <Input
+                  placeholder="Filtrar por nombre..."
+                  value={filtroVendedor}
+                  onChange={(e) => setFiltroVendedor(e.target.value)}
+                  className="w-48 text-xs"
+                />
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
                 {filteredCalculos.map((calculo) => {
                   const isExpanded = expandedSellers.has(calculo.vendedorId)
                   return (
-                    <div key={calculo.vendedorId} className="border rounded-lg overflow-hidden">
-                      <div
-                        className="p-4 cursor-pointer hover:bg-gray-50"
-                        onClick={() => toggleSellerExpansion(calculo.vendedorId)}
-                      >
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3 min-w-0 flex-1">
-                              <h3 className="font-medium text-lg truncate">{calculo.vendedorNombre}</h3>
-                              {isExpanded ? (
-                                <ChevronUp className="h-4 w-4 flex-shrink-0" />
-                              ) : (
-                                <ChevronDown className="h-4 w-4 flex-shrink-0" />
-                              )}
-                            </div>
+                    <div key={calculo.vendedorId} className="border rounded-xl overflow-hidden bg-white shadow-sm">
+                      <div className="p-4 cursor-pointer hover:bg-slate-50 flex justify-between items-center" onClick={() => toggleSellerExpansion(calculo.vendedorId)}>
+                        <div>
+                          <h3 className="font-bold text-slate-800 text-base">{calculo.vendedorNombre}</h3>
+                          <div className="flex gap-4 text-xs text-slate-500 mt-1">
+                            <span>Venta: <strong className="text-blue-600">{formatCurrency(calculo.ventaTotal)}</strong></span>
+                            <span>Utilidad: <strong className={calculo.utilidadFinal >= 0 ? 'text-emerald-600' : 'text-rose-600'}>{formatCurrency(calculo.utilidadFinal)}</strong></span>
                           </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div className="text-center sm:text-left">
-                              <p className="text-xs sm:text-sm text-gray-500">Venta Total</p>
-                              <p className="font-medium text-sm sm:text-base break-words">{formatCurrency(calculo.ventaTotal)}</p>
-                            </div>
-                            <div className="text-center sm:text-right">
-                              <p className="text-xs sm:text-sm text-gray-500">Resultado</p>
-                              <p className={cn(
-                                "font-medium text-sm sm:text-base break-words",
-                                calculo.resultado >= 0 ? "text-green-600" : "text-red-600"
-                              )}>
-                                {formatCurrency(calculo.resultado)}
-                              </p>
-                            </div>
-                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5 sm:gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-xs bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100 hover:text-rose-800 h-8 px-2 sm:px-3"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              const vendObj = vendedores.find(v => v.id.toString() === calculo.vendedorId.toString()) || ({ id: calculo.vendedorId, nombre: calculo.vendedorNombre } as Vendedor)
+                              handleGastosClick(vendObj)
+                            }}
+                          >
+                            <Plus className="h-3.5 w-3.5 mr-1" /> Gastos
+                          </Button>
+
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-xs h-8 px-2 sm:px-3"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleOpenSalarioModal(calculo.vendedorId, calculo.vendedorNombre, calculo.salario)
+                            }}
+                          >
+                            <Edit2 className="h-3.5 w-3.5 mr-1" /> Salario Mes
+                          </Button>
+                          {isExpanded ? <ChevronUp className="h-5 w-5 text-slate-400" /> : <ChevronDown className="h-5 w-5 text-slate-400" />}
                         </div>
                       </div>
 
                       {isExpanded && (
-                        <div className="border-t bg-gray-50 p-3 sm:p-4">
-                          <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-4 mb-4 sm:mb-6">
-                            <div className="text-center p-2 sm:p-3 bg-white rounded-lg">
-                              <DollarSign className="h-4 w-4 sm:h-5 sm:w-5 text-blue-500 mx-auto mb-1" />
-                              <p className="text-xs sm:text-sm text-gray-500">Venta Total</p>
-                              <p className="font-medium text-xs sm:text-sm break-words">{formatCurrency(calculo.ventaTotal)}</p>
-                            </div>
-                            <div className="text-center p-2 sm:p-3 bg-white rounded-lg">
-                              <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-green-500 mx-auto mb-1" />
-                              <p className="text-xs sm:text-sm text-gray-500">Ganancia Bruta</p>
-                              <p className="font-medium text-green-600 text-xs sm:text-sm break-words">{formatCurrency(calculo.gananciaBruta)}</p>
-                            </div>
-                            <div className="text-center p-2 sm:p-3 bg-white rounded-lg">
-                              <TrendingDown className="h-4 w-4 sm:h-5 sm:w-5 text-red-500 mx-auto mb-1" />
-                              <p className="text-xs sm:text-sm text-gray-500">Gastos</p>
-                              <p className="font-medium text-red-600 text-xs sm:text-sm break-words">{formatCurrency(calculo.gastos)}</p>
-                            </div>
-                            <div className="text-center p-2 sm:p-3 bg-white rounded-lg">
-                              <TrendingDown className="h-4 w-4 sm:h-5 sm:w-5 text-red-500 mx-auto mb-1" />
-                              <p className="text-xs sm:text-sm text-gray-500">Gastos Merma</p>
-                              <p className="font-medium text-red-600 text-xs sm:text-sm break-words">{formatCurrency(calculo.gastosMerma)}</p>
-                            </div>
-                            <div className="text-center p-2 sm:p-3 bg-white rounded-lg">
-                              <TrendingDown className="h-4 w-4 sm:h-5 sm:w-5 text-red-500 mx-auto mb-1" />
-                              <p className="text-xs sm:text-sm text-gray-500">Salario</p>
-                              <p className="font-medium text-red-600 text-xs sm:text-sm break-words">{formatCurrency(calculo.salario)}</p>
-                            </div>
+                        <div className="p-4 bg-slate-50 border-t space-y-4 text-xs">
+                          <div className="flex justify-between items-center bg-white p-2.5 rounded-lg border">
+                            <span className="font-semibold text-slate-700">Registrar Gastos del Mes:</span>
+                            <Button
+                              size="sm"
+                              className="bg-rose-600 hover:bg-rose-700 text-white text-xs h-8"
+                              onClick={() => {
+                                const vendObj = vendedores.find(v => v.id.toString() === calculo.vendedorId.toString()) || ({ id: calculo.vendedorId, nombre: calculo.vendedorNombre } as Vendedor)
+                                handleGastosClick(vendObj)
+                              }}
+                            >
+                              <Plus className="h-3.5 w-3.5 mr-1" /> Agregar / Gestionar Gastos
+                            </Button>
                           </div>
 
-                          <Separator className="my-4" />
-
-                          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
-                            {/* Sales Detail */}
-                            <div>
-                              <h4 className="font-medium mb-3 flex items-center gap-2 text-sm sm:text-base">
-                                <FileText className="h-4 w-4" />
-                                Detalle de Ventas
-                              </h4>
-                              <div className="space-y-2 max-h-60 overflow-y-auto">
-                                {calculo.detalles.ventas.length === 0 ? (
-                                  <p className="text-xs sm:text-sm text-gray-500 italic">No hay ventas en este período</p>
-                                ) : (
-                                  calculo.detalles.ventas.map((venta, index) => (
-                                    <div key={index} className="p-2 sm:p-3 bg-white rounded border">
-                                      <div className="space-y-1">
-                                        <p className="font-medium text-xs sm:text-sm break-words">{venta.producto}</p>
-                                        <p className="text-xs text-gray-500">
-                                          {venta.cantidad} × {formatCurrency(venta.precioVenta)}
-                                        </p>
-                                        <div className="flex justify-between items-center pt-1">
-                                          <p className="text-xs text-gray-500">
-                                            Costo: {formatCurrency(venta.precioCompra)}
-                                          </p>
-                                          <p className="font-medium text-xs sm:text-sm">{formatCurrency(venta.gananciaProducto)}</p>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  ))
-                                )}
-                              </div>
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                            <div className="p-2 bg-white rounded border">
+                              <span className="text-slate-400 block">Venta Efectivo</span>
+                              <span className="font-bold">{formatCurrency(calculo.ventaEfectivo)}</span>
                             </div>
-
-                            {/* Expenses Detail */}
-                            <div>
-                              <h4 className="font-medium mb-3 flex items-center gap-2 text-sm sm:text-base">
-                                <TrendingDown className="h-4 w-4" />
-                                Desglose de Gastos
-                              </h4>
-                              <div className="space-y-2 max-h-60 overflow-y-auto">
-                                {calculo.detalles.gastosDesglosados.length === 0 ? (
-                                  <p className="text-xs sm:text-sm text-gray-500 italic">No hay gastos registrados</p>
-                                ) : (
-                                  calculo.detalles.gastosDesglosados.map((gasto, index) => (
-                                    <div key={index} className="p-2 sm:p-3 bg-white rounded border">
-                                      <div className="space-y-1">
-                                        <p className="font-medium text-xs sm:text-sm break-words">{gasto.nombre}</p>
-                                        <p className="text-xs text-gray-500">
-                                          {formatCurrency(gasto.valorMensual)}/mes
-                                        </p>
-                                        <div className="flex justify-between items-center pt-1">
-                                          <Badge variant="secondary" className="text-xs">
-                                            {gasto.diasSeleccionados} días
-                                          </Badge>
-                                          <p className="font-medium text-xs sm:text-sm text-red-600">
-                                            {formatCurrency(gasto.valorProrrateado)}
-                                          </p>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  ))
-                                )}
-                              </div>
+                            <div className="p-2 bg-white rounded border">
+                              <span className="text-slate-400 block">Venta Transferencia</span>
+                              <span className="font-bold">{formatCurrency(calculo.ventaTransferencia)}</span>
                             </div>
-
-                            {/* Merma Detail */}
-                            <div>
-                              <h4 className="font-medium mb-3 flex items-center gap-2 text-sm sm:text-base">
-                                <TrendingDown className="h-4 w-4 text-red-600" />
-                                Detalle de Merma
-                              </h4>
-                              <div className="space-y-2 max-h-60 overflow-y-auto">
-                                {calculo.detalles.mermaDesglosada.length === 0 ? (
-                                  <p className="text-xs sm:text-sm text-gray-500 italic">No hay mermas registradas</p>
-                                ) : (
-                                  calculo.detalles.mermaDesglosada.map((merma, index) => (
-                                    <div key={index} className="p-2 sm:p-3 bg-red-50 rounded border border-red-200">
-                                      <div className="space-y-1">
-                                        <p className="font-medium text-xs sm:text-sm break-words">{merma.producto}</p>
-                                        <p className="text-xs text-gray-600">
-                                          {merma.cantidad} × {formatCurrency(merma.precio)}
-                                        </p>
-                                        <div className="flex justify-between items-center pt-1">
-                                          <p className="text-xs text-gray-500">
-                                            {formatDate(merma.fecha)}
-                                          </p>
-                                          <p className="font-medium text-xs sm:text-sm text-red-600">
-                                            {formatCurrency(merma.total)}
-                                          </p>
-                                      </div>
-                                      </div>
-                                    </div>
-                                  ))
-                                )}
-                              </div>
+                            <div className="p-2 bg-white rounded border">
+                              <span className="text-slate-400 block">Gastos Fijos</span>
+                              <span className="font-bold text-rose-600">{formatCurrency(calculo.gastosFijos)}</span>
+                            </div>
+                            <div className="p-2 bg-white rounded border">
+                              <span className="text-slate-400 block">Gastos Variables</span>
+                              <span className="font-bold text-rose-600">{formatCurrency(calculo.gastosVariables)}</span>
                             </div>
                           </div>
                         </div>
@@ -490,146 +667,61 @@ export default function ContabilidadVendedoresPage({ vendedores, onRefresh }: Co
                   )
                 })}
               </div>
-            )}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </>
       )}
 
-      {/* Global Accounting Summary */}
-      {calculos.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Calculator className="h-5 w-5" />
-              Resumen Global de Contabilidad
-            </CardTitle>
-            <div className="mt-2">
-              <p className="text-sm text-gray-500">
-                Período: {fechaInicio && fechaFin ? `${format(fechaInicio, "PPP", { locale: es })} - ${format(fechaFin, "PPP", { locale: es })}` : ''}
-              </p>
+      {/* MODAL DETALLE DE GASTOS TOTALES */}
+      <Dialog open={showGastosDetalleModal} onOpenChange={setShowGastosDetalleModal}>
+        <DialogContent className="w-[95vw] max-w-xl max-h-[85dvh] overflow-y-auto p-4 sm:p-6">
+          <DialogHeader>
+            <DialogTitle className="text-base sm:text-lg font-bold flex items-center gap-2">
+              <TrendingDown className="h-5 w-5 text-rose-600 flex-shrink-0" />
+              Detalle de Gastos Totales
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-3 pt-2">
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex justify-between items-center font-bold text-xs sm:text-sm">
+              <span>Suma Total Gastos:</span>
+              <span className="text-rose-700 text-base sm:text-lg font-extrabold">{formatCurrency(totalGastosAgrupadosGlobal)}</span>
             </div>
-          </CardHeader>
-          <CardContent>
-            {/* Calculate global totals */}
-            {(() => {
-              const totalVentaGlobal = filteredCalculos.reduce((sum, calc) => sum + calc.ventaTotal, 0)
-              const totalGananciaBrutaGlobal = filteredCalculos.reduce((sum, calc) => sum + calc.gananciaBruta, 0)
-              const totalGastosGlobal = filteredCalculos.reduce((sum, calc) => sum + calc.gastos, 0)
-              // La merma solo se muestra en el primer vendedor para evitar duplicados
-              const totalGastosMermaGlobal = filteredCalculos.length > 0 ? filteredCalculos[0].gastosMerma : 0
-              const totalSalariosGlobal = filteredCalculos.reduce((sum, calc) => sum + calc.salario, 0)
-              // El resultado global debe restar la merma solo una vez
-              const resultadoGlobal = totalGananciaBrutaGlobal - totalGastosGlobal - totalGastosMermaGlobal - totalSalariosGlobal
 
-              return (
-                <div className="space-y-6">
-                  {/* Main totals grid */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 sm:gap-4">
-                    <div className="text-center p-3 sm:p-4 bg-blue-50 rounded-lg border">
-                      <DollarSign className="h-5 w-5 sm:h-6 sm:w-6 text-blue-500 mx-auto mb-2" />
-                      <p className="text-xs sm:text-sm text-gray-600 font-medium">Venta Total Global</p>
-                      <p className="font-bold text-sm sm:text-lg text-blue-600 break-words">{formatCurrency(totalVentaGlobal)}</p>
-                    </div>
-                    <div className="text-center p-3 sm:p-4 bg-green-50 rounded-lg border">
-                      <TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 text-green-500 mx-auto mb-2" />
-                      <p className="text-xs sm:text-sm text-gray-600 font-medium">Ganancia Bruta Global</p>
-                      <p className="font-bold text-sm sm:text-lg text-green-600 break-words">{formatCurrency(totalGananciaBrutaGlobal)}</p>
-                    </div>
-                    <div className="text-center p-3 sm:p-4 bg-red-50 rounded-lg border">
-                      <TrendingDown className="h-5 w-5 sm:h-6 sm:w-6 text-red-500 mx-auto mb-2" />
-                      <p className="text-xs sm:text-sm text-gray-600 font-medium">Gastos Totales</p>
-                      <p className="font-bold text-sm sm:text-lg text-red-600 break-words">{formatCurrency(totalGastosGlobal)}</p>
-                    </div>
-                    <div className="text-center p-3 sm:p-4 bg-red-100 rounded-lg border">
-                      <TrendingDown className="h-5 w-5 sm:h-6 sm:w-6 text-red-600 mx-auto mb-2" />
-                      <p className="text-xs sm:text-sm text-gray-700 font-medium">Gastos Merma</p>
-                      <p className="font-bold text-sm sm:text-lg text-red-700 break-words">{formatCurrency(totalGastosMermaGlobal)}</p>
-                    </div>
-                    <div className="text-center p-3 sm:p-4 bg-red-50 rounded-lg border">
-                      <TrendingDown className="h-5 w-5 sm:h-6 sm:w-6 text-red-500 mx-auto mb-2" />
-                      <p className="text-xs sm:text-sm text-gray-600 font-medium">Salarios Totales</p>
-                      <p className="font-bold text-sm sm:text-lg text-red-600 break-words">{formatCurrency(totalSalariosGlobal)}</p>
-                    </div>
-                    <div className="text-center p-3 sm:p-4 bg-gray-50 rounded-lg border">
-                      <Calculator className="h-5 w-5 sm:h-6 sm:w-6 text-gray-500 mx-auto mb-2" />
-                      <p className="text-xs sm:text-sm text-gray-600 font-medium">Resultado Final</p>
-                      <p className={cn(
-                        "font-bold text-sm sm:text-lg break-words",
-                        resultadoGlobal >= 0 ? "text-green-600" : "text-red-600"
-                      )}>
-                        {formatCurrency(resultadoGlobal)}
-                      </p>
-                    </div>
-                  </div>
+            <div className="grid grid-cols-1 gap-2 pt-1">
+              <div className="p-2.5 bg-slate-50 border rounded-lg flex justify-between items-center text-xs sm:text-sm">
+                <span className="font-semibold text-slate-700">1. Gastos Fijos (GF)</span>
+                <span className="font-bold text-slate-900">{formatCurrency(totalGastosFijosGlobal)}</span>
+              </div>
+              <div className="p-2.5 bg-slate-50 border rounded-lg flex justify-between items-center text-xs sm:text-sm">
+                <span className="font-semibold text-slate-700">2. Gastos Variables (GV)</span>
+                <span className="font-bold text-slate-900">{formatCurrency(totalGastosVariablesGlobal)}</span>
+              </div>
+              <div className="p-2.5 bg-slate-50 border rounded-lg flex justify-between items-center text-xs sm:text-sm">
+                <span className="font-semibold text-slate-700">3. Merma (GM)</span>
+                <span className="font-bold text-slate-900">{formatCurrency(totalGastosMermaGlobal)}</span>
+              </div>
+              <div className="p-2.5 bg-slate-50 border rounded-lg flex justify-between items-center text-xs sm:text-sm">
+                <span className="font-semibold text-slate-700">4. Salarios (S)</span>
+                <span className="font-bold text-slate-900">{formatCurrency(totalSalariosGlobal)}</span>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
-                  {/* Summary statistics */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg">
-                    <div className="text-center">
-                      <p className="text-sm text-gray-600">Vendedores Analizados</p>
-                      <p className="text-2xl font-bold text-gray-800">{filteredCalculos.length}</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-sm text-gray-600">Venta Promedio por Vendedor</p>
-                      <p className="text-lg font-semibold text-gray-800 break-words">
-                        {filteredCalculos.length > 0 ? formatCurrency(totalVentaGlobal / filteredCalculos.length) : formatCurrency(0)}
-                      </p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-sm text-gray-600">Margen de Ganancia</p>
-                      <p className={cn(
-                        "text-lg font-semibold break-words",
-                        totalVentaGlobal > 0 ? (totalGananciaBrutaGlobal / totalVentaGlobal >= 0.3 ? "text-green-600" : "text-yellow-600") : "text-gray-600"
-                      )}>
-                        {totalVentaGlobal > 0 ? `${((totalGananciaBrutaGlobal / totalVentaGlobal) * 100).toFixed(1)}%` : '0%'}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Additional financial insights */}
-                  <div className="space-y-3">
-                    <h4 className="font-medium text-sm sm:text-base flex items-center gap-2">
-                      <FileText className="h-4 w-4" />
-                      Análisis Financiero Adicional
-                    </h4>
-                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                      <div className="p-3 bg-white rounded border">
-                        <p className="text-xs sm:text-sm text-gray-600">Gastos como % de Ventas</p>
-                        <p className="font-semibold text-sm sm:text-base text-red-600">
-                          {totalVentaGlobal > 0 ? `${((totalGastosGlobal / totalVentaGlobal) * 100).toFixed(1)}%` : '0%'}
-                        </p>
-                      </div>
-                      <div className="p-3 bg-white rounded border">
-                        <p className="text-xs sm:text-sm text-gray-600">Merma como % de Ventas</p>
-                        <p className="font-semibold text-sm sm:text-base text-red-700">
-                          {totalVentaGlobal > 0 ? `${((totalGastosMermaGlobal / totalVentaGlobal) * 100).toFixed(1)}%` : '0%'}
-                        </p>
-                      </div>
-                      <div className="p-3 bg-white rounded border">
-                        <p className="text-xs sm:text-sm text-gray-600">Salarios como % de Ventas</p>
-                        <p className="font-semibold text-sm sm:text-base text-red-600">
-                          {totalVentaGlobal > 0 ? `${((totalSalariosGlobal / totalVentaGlobal) * 100).toFixed(1)}%` : '0%'}
-                        </p>
-                      </div>
-                      <div className="p-3 bg-white rounded border">
-                        <p className="text-xs sm:text-sm text-gray-600">Margen de Ganancia Neto</p>
-                        <p className={cn(
-                          "font-semibold text-sm sm:text-base",
-                          totalVentaGlobal > 0 ? (resultadoGlobal / totalVentaGlobal >= 0.15 ? "text-green-600" :
-                            resultadoGlobal / totalVentaGlobal >= 0 ? "text-yellow-600" : "text-red-600") : "text-gray-600"
-                        )}>
-                          {totalVentaGlobal > 0 ? `${((resultadoGlobal / totalVentaGlobal) * 100).toFixed(1)}%` : '0%'}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )
-            })()}
-          </CardContent>
-        </Card>
+      {/* MODAL GESTION SALARIOS MES A MES */}
+      {showSalarioDialog && (
+        <SalariosMensualesVendedorDialog
+          isOpen={showSalarioDialog}
+          onClose={() => setShowSalarioDialog(false)}
+          vendedorId={salarioModalData.vendedorId}
+          vendedorNombre={salarioModalData.vendedorNombre}
+          onSaveSuccess={() => handleCalcular()}
+        />
       )}
 
-      {/* Gastos Vendedor Dialog */}
+      {/* DIÁLOGO GASTOS VENDEDOR */}
       {selectedVendedor && (
         <GastosVendedorDialog
           isOpen={showGastosDialog}

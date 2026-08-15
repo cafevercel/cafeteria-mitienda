@@ -4,7 +4,7 @@ import { query } from '@/lib/db';
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { productoId, cantidad, fecha, parametros, vendedorId } = body;
+  const { productoId, cantidad, fecha, parametros, vendedorId, metodoPago, montoEfectivo, montoTransferencia } = body;
 
   if (!productoId || !cantidad || !fecha || !vendedorId) {
     return NextResponse.json({ error: 'Faltan datos requeridos' }, { status: 400 });
@@ -57,19 +57,35 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Stock insuficiente' }, { status: 400 });
     }
 
+    // Determinar desgloses por método de pago
+    const totalVenta = precioUnitario * cantidad;
+    const mPago = metodoPago || 'efectivo';
+    let mEfectivo = totalVenta;
+    let mTransferencia = 0;
+
+    if (mPago === 'transferencia') {
+      mEfectivo = 0;
+      mTransferencia = totalVenta;
+    } else if (mPago === 'mixto') {
+      mEfectivo = parseFloat(montoEfectivo) || 0;
+      mTransferencia = parseFloat(montoTransferencia) || 0;
+    }
+
     // Crear venta
-    // ✅ MODIFICADO: Incluye precio_compra en el INSERT
     const ventaResult = await query(
-      `INSERT INTO ventas (producto, cantidad, precio_unitario, precio_compra, total, vendedor, fecha) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      `INSERT INTO ventas (producto, cantidad, precio_unitario, precio_compra, total, vendedor, fecha, metodo_pago, monto_efectivo, monto_transferencia) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
       [
         productoId,
         cantidad,
         precioUnitario,
-        precioCompra || 0, // Fallback si es nulo
-        precioUnitario * cantidad,
+        precioCompra || 0,
+        totalVenta,
         vendedorId,
-        fechaVenta
+        fechaVenta,
+        mPago,
+        mEfectivo,
+        mTransferencia
       ]
     );
 

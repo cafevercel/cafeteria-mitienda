@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { Plus, Trash2, Calendar, Edit } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
@@ -40,7 +41,42 @@ export default function GastosVendedorDialog({ isOpen, onClose, onRefresh, vende
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1)
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear())
   const [gastos, setGastos] = useState<GastoVendedor[]>([])
-  const [newGasto, setNewGasto] = useState({ nombre: '', valor: '' })
+  const [newGasto, setNewGasto] = useState<{ nombre: string; valor: string; tipo: 'fijo' | 'variable' }>({ nombre: '', valor: '', tipo: 'fijo' })
+
+  const handleAddGasto = async () => {
+    if (!newGasto.nombre.trim() || !newGasto.valor || parseFloat(newGasto.valor) <= 0) {
+      toast({
+        title: "Error",
+        description: "El nombre y el valor son obligatorios y el valor debe ser mayor a 0",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      await crearGastoVendedor({
+        vendedorId: vendedor?.id || '',
+        nombre: newGasto.nombre.trim(),
+        valor: parseFloat(newGasto.valor),
+        mes: selectedMonth,
+        anio: selectedYear,
+        tipo_gasto: newGasto.tipo
+      } as any)
+
+      toast({
+        title: "Éxito",
+        description: "Gasto agregado correctamente",
+      })
+      setNewGasto({ nombre: '', valor: '', tipo: 'fijo' })
+      loadExpenses()
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "No se pudo agregar el gasto",
+        variant: "destructive",
+      })
+    }
+  }
   const [isLoading, setIsLoading] = useState(false)
   const [editingGasto, setEditingGasto] = useState<GastoVendedor | null>(null)
   const [editGasto, setEditGasto] = useState({ nombre: '', valor: '' })
@@ -99,8 +135,9 @@ export default function GastosVendedorDialog({ isOpen, onClose, onRefresh, vende
       setGastos(data.map((item: any) => ({
         id: item.id,
         nombre: item.nombre,
-        cantidad: parseFloat(item.cantidad), // Cambiado de 'valor' a 'cantidad'
+        cantidad: parseFloat(item.cantidad),
         fecha: item.fecha,
+        tipo_gasto: item.tipo_gasto || 'fijo',
         vendedor_id: item.vendedor_id,
         mes: item.mes || selectedMonth,
         anio: item.anio || selectedYear
@@ -116,39 +153,7 @@ export default function GastosVendedorDialog({ isOpen, onClose, onRefresh, vende
     }
   }
 
-  const handleAddGasto = async () => {
-    if (!newGasto.nombre.trim() || !newGasto.valor || parseFloat(newGasto.valor) <= 0) {
-      toast({
-        title: "Error",
-        description: "El nombre y el valor son obligatorios y el valor debe ser mayor a 0",
-        variant: "destructive",
-      })
-      return
-    }
 
-    try {
-      await crearGastoVendedor({
-        vendedorId: vendedor?.id || '',
-        nombre: newGasto.nombre.trim(),
-        valor: parseFloat(newGasto.valor),
-        mes: selectedMonth,
-        anio: selectedYear
-      })
-
-      toast({
-        title: "Éxito",
-        description: "Gasto agregado correctamente",
-      })
-      setNewGasto({ nombre: '', valor: '' })
-      loadExpenses()
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "No se pudo agregar el gasto",
-        variant: "destructive",
-      })
-    }
-  }
 
   const handleDeleteGasto = async (gasto: GastoVendedor) => {
     try {
@@ -184,28 +189,28 @@ export default function GastosVendedorDialog({ isOpen, onClose, onRefresh, vende
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+      <DialogContent className="w-[95vw] max-w-3xl max-h-[90dvh] overflow-hidden flex flex-col p-3 sm:p-6">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Calendar className="h-5 w-5" />
-            Gestión de Gastos - {vendedor?.nombre}
+          <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
+            <Calendar className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
+            <span className="truncate">Gestión de Gastos — {vendedor?.nombre}</span>
           </DialogTitle>
         </DialogHeader>
 
-        <div className="flex-1 overflow-auto">
-          <div className="flex gap-4 mb-4">
+        <div className="flex-1 overflow-y-auto space-y-3 sm:space-y-4 pr-1">
+          <div className="flex gap-2 sm:gap-4">
             <div className="flex-1">
-              <Label htmlFor="month">Mes</Label>
+              <Label htmlFor="month" className="text-xs">Mes</Label>
               <Select
                 value={selectedMonth.toString()}
                 onValueChange={(value) => setSelectedMonth(parseInt(value))}
               >
-                <SelectTrigger>
+                <SelectTrigger className="h-8 text-xs">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   {MONTHS.map((month) => (
-                    <SelectItem key={month.value} value={month.value.toString()}>
+                    <SelectItem key={month.value} value={month.value.toString()} className="text-xs">
                       {month.label}
                     </SelectItem>
                   ))}
@@ -213,17 +218,17 @@ export default function GastosVendedorDialog({ isOpen, onClose, onRefresh, vende
               </Select>
             </div>
             <div className="flex-1">
-              <Label htmlFor="year">Año</Label>
+              <Label htmlFor="year" className="text-xs">Año</Label>
               <Select
                 value={selectedYear.toString()}
                 onValueChange={(value) => setSelectedYear(parseInt(value))}
               >
-                <SelectTrigger>
+                <SelectTrigger className="h-8 text-xs">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   {[2020, 2021, 2022, 2023, 2024, 2025, 2026, 2027, 2028, 2029, 2030].map((year) => (
-                    <SelectItem key={year} value={year.toString()}>
+                    <SelectItem key={year} value={year.toString()} className="text-xs">
                       {year}
                     </SelectItem>
                   ))}
@@ -232,32 +237,49 @@ export default function GastosVendedorDialog({ isOpen, onClose, onRefresh, vende
             </div>
           </div>
 
-          <Card className="mb-4">
-            <CardHeader>
-              <CardTitle className="text-lg">Agregar Nuevo Gasto</CardTitle>
+          <Card className="shadow-sm">
+            <CardHeader className="p-3 sm:p-4">
+              <CardTitle className="text-sm sm:text-base">Agregar Nuevo Gasto</CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="flex gap-2">
-                <div className="flex-1">
+            <CardContent className="p-3 sm:p-4 pt-0">
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
+                <div className="sm:col-span-6">
                   <Input
-                    placeholder="Nombre del gasto (ej: renta, servicios, etc.)"
+                    placeholder="Nombre del gasto (ej: renta, servicios)"
                     value={newGasto.nombre}
                     onChange={(e) => setNewGasto({ ...newGasto, nombre: e.target.value })}
+                    className="text-xs h-9"
                   />
                 </div>
-                <div className="w-32">
+                <div className="grid grid-cols-2 gap-2 sm:col-span-5">
+                  <Select
+                    value={newGasto.tipo}
+                    onValueChange={(val: 'fijo' | 'variable') => setNewGasto({ ...newGasto, tipo: val })}
+                  >
+                    <SelectTrigger className="h-9 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="fijo" className="text-xs">Fijo</SelectItem>
+                      <SelectItem value="variable" className="text-xs">Variable</SelectItem>
+                    </SelectContent>
+                  </Select>
+
                   <Input
                     type="number"
                     step="0.01"
                     min="0"
-                    placeholder="Valor"
+                    placeholder="Monto ($)"
                     value={newGasto.valor}
                     onChange={(e) => setNewGasto({ ...newGasto, valor: e.target.value })}
+                    className="text-xs h-9"
                   />
                 </div>
-                <Button onClick={handleAddGasto} disabled={isLoading}>
-                  <Plus className="h-4 w-4" />
-                </Button>
+                <div className="sm:col-span-1">
+                  <Button onClick={handleAddGasto} disabled={isLoading} className="w-full h-9 bg-blue-600 hover:bg-blue-700">
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -317,12 +339,21 @@ export default function GastosVendedorDialog({ isOpen, onClose, onRefresh, vende
                         // Modo visualización
                         <>
                           <div className="flex-1">
-                            <div className="font-medium">{gasto.nombre}</div>
-                            <div className="text-sm text-gray-500">
-                              {formatCurrency(gasto.cantidad)}
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-slate-800">{gasto.nombre}</span>
+                              <Badge
+                                variant="outline"
+                                className={
+                                  gasto.tipo_gasto === 'variable'
+                                    ? "bg-amber-50 text-amber-800 border-amber-300 text-[10px] px-1.5 py-0"
+                                    : "bg-slate-100 text-slate-700 border-slate-300 text-[10px] px-1.5 py-0"
+                                }
+                              >
+                                {gasto.tipo_gasto === 'variable' ? 'Variable' : 'Fijo'}
+                              </Badge>
                             </div>
-                            <div className="text-xs text-gray-400">
-                              {new Date(gasto.fecha).toLocaleDateString('es-ES')}
+                            <div className="text-sm font-semibold text-slate-700 mt-0.5">
+                              {formatCurrency(gasto.cantidad)}
                             </div>
                           </div>
                           <div className="flex gap-2">

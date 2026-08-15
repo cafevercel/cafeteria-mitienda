@@ -13,17 +13,28 @@ export async function GET(request: NextRequest) {
           fecha_vencimiento
         FROM (
           SELECT 
-            id,
-            fecha_vencimiento,
+            p.id,
+            p.fecha_vencimiento,
             CASE 
-              WHEN fecha_vencimiento < CURRENT_DATE THEN 'vencido'
-              WHEN fecha_vencimiento <= CURRENT_DATE + INTERVAL '7 days' THEN 'vence_pronto'
+              WHEN p.fecha_vencimiento < CURRENT_DATE THEN 'vencido'
+              WHEN p.fecha_vencimiento <= CURRENT_DATE + INTERVAL '7 days' THEN 'vence_pronto'
               ELSE 'vigente'
-            END as estado
-          FROM productos 
-          WHERE tiene_vencimiento = true AND fecha_vencimiento IS NOT NULL
+            END as estado,
+            COALESCE(
+              CASE 
+                WHEN p.tiene_parametros = true THEN (
+                  SELECT SUM(pp.cantidad) 
+                  FROM producto_parametros pp 
+                  WHERE pp.producto_id = p.id
+                )
+                ELSE p.cantidad
+              END, 
+              0
+            ) as cantidad
+          FROM productos p
+          WHERE p.tiene_vencimiento = true AND p.fecha_vencimiento IS NOT NULL
         ) sub
-        WHERE estado IN ('vencido', 'vence_pronto')
+        WHERE estado IN ('vencido', 'vence_pronto') AND cantidad > 0
       `);
       vencimientosSummary = resVencimientos.rows;
     } catch (err) {

@@ -136,6 +136,9 @@ export interface Venta {
   total: number;
   vendedor: string;
   fecha: string;
+  metodo_pago?: 'efectivo' | 'transferencia' | 'mixto';
+  monto_efectivo?: number;
+  monto_transferencia?: number;
   parametros?: VentaParametro[];
   ganancia_unitaria?: number; // Ganancia por unidad (precio venta - precio compra)
   ganancia_total?: number; // Ganancia total de la venta (ganancia_unitaria * cantidad)
@@ -146,6 +149,7 @@ export interface Gasto {
   nombre: string;
   cantidad: number;
   fecha: string;
+  tipo_gasto?: 'fijo' | 'variable';
 }
 
 export interface Vendedor {
@@ -220,6 +224,7 @@ export interface TransferProductParams {
 export interface GastoBalance {
   nombre: string;
   cantidad: number | string;
+  tipo_gasto?: 'fijo' | 'variable';
 }
 
 export interface IngresoBalance {
@@ -254,9 +259,18 @@ export interface GastoVendedor {
   nombre: string;
   cantidad: number;
   fecha: string;
+  tipo_gasto?: 'fijo' | 'variable';
   vendedor_id?: string; // Opcional para compatibilidad
   mes?: number; // Opcional para compatibilidad
   anio?: number; // Opcional para compatibilidad
+}
+
+export interface SalarioMensualVendedor {
+  id?: number;
+  vendedor_id: string;
+  mes: number;
+  anio: number;
+  salario: number;
 }
 
 export interface VendedorConSalario extends Vendedor {
@@ -267,11 +281,20 @@ export interface CalculoContabilidadVendedor {
   vendedorId: string;
   vendedorNombre: string;
   ventaTotal: number;
+  ventaEfectivo: number;
+  ventaTransferencia: number;
   gananciaBruta: number;
+  gananciaEfectivo: number;
+  gananciaTransferencia: number;
   gastos: number;
+  gastosFijos: number;
+  gastosVariables: number;
   gastosMerma: number;
   salario: number;
   resultado: number;
+  utilidadFinal: number;
+  margenBrutoPct: number;
+  margenNetoPct: number;
   detalles: {
     ventas: Array<{
       producto: string;
@@ -279,12 +302,16 @@ export interface CalculoContabilidadVendedor {
       precioVenta: number;
       precioCompra: number;
       gananciaProducto: number;
+      metodo_pago?: string;
+      monto_efectivo?: number;
+      monto_transferencia?: number;
     }>;
     gastosDesglosados: Array<{
       nombre: string;
       valorMensual: number;
       diasSeleccionados: number;
       valorProrrateado: number;
+      tipo_gasto?: 'fijo' | 'variable';
     }>;
     mermaDesglosada: Array<{
       producto: string;

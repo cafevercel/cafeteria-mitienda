@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
         }
 
         let query = `
-      SELECT id, nombre, cantidad, fecha, vendedor_id, mes, anio 
+      SELECT id, nombre, cantidad, fecha, vendedor_id, mes, anio, COALESCE(tipo_gasto, 'fijo') as tipo_gasto 
       FROM gastos 
       WHERE vendedor_id = $1 AND mes = $2 AND anio = $3
     `;
@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
-        const { vendedorId, nombre, valor, mes, anio } = body;
+        const { vendedorId, nombre, valor, mes, anio, tipo_gasto } = body;
 
         if (!vendedorId || !nombre || !valor || !mes || !anio) {
             return NextResponse.json(
@@ -56,15 +56,15 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Crear fecha para el primer día del mes
         const fecha = new Date(anio, mes - 1, 1).toISOString();
+        const tipo = tipo_gasto === 'variable' ? 'variable' : 'fijo';
 
         const query = `
-      INSERT INTO gastos (nombre, cantidad, fecha, vendedor_id, mes, anio)
-      VALUES ($1, $2, $3, $4, $5, $6)
+      INSERT INTO gastos (nombre, cantidad, fecha, vendedor_id, mes, anio, tipo_gasto)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING *
     `;
-        const params = [nombre, valor, fecha, vendedorId, mes, anio];
+        const params = [nombre, valor, fecha, vendedorId, mes, anio, tipo];
 
         const result = await sql.query(query, params);
         return NextResponse.json(result.rows[0], { status: 201 });

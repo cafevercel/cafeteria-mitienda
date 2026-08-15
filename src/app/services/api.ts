@@ -415,14 +415,17 @@ export const realizarVenta = async (
   cantidad: number,
   fecha: string,
   parametros?: VentaParametro[],
-  vendedorId?: string
+  vendedorId?: string,
+  metodoPago?: 'efectivo' | 'transferencia' | 'mixto',
+  montoEfectivo?: number,
+  montoTransferencia?: number
 ): Promise<Venta> => {
   if (!vendedorId) {
     throw new Error('Se requiere ID del vendedor');
   }
 
   try {
-    const requestBody = { productoId, cantidad, fecha, parametros, vendedorId };
+    const requestBody = { productoId, cantidad, fecha, parametros, vendedorId, metodoPago, montoEfectivo, montoTransferencia };
     console.log('Enviando datos de venta:', requestBody);
 
     const response = await api.post('/ventas', requestBody);

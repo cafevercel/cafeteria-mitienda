@@ -6,4 +6,7 @@ export interface IVenta {
   total: number;
   vendedor: string;
   fecha: Date;
+  metodo_pago?: 'efectivo' | 'transferencia' | 'mixto';
+  monto_efectivo?: number;
+  monto_transferencia?: number;
 }

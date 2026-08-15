@@ -15,58 +15,75 @@ export async function POST(request: NextRequest) {
     const errors = [];
 
     for (const sale of sales) {
-      const { productoId, cantidad, fecha, parametros, id_local } = sale;
+        const { productoId, cantidad, fecha, parametros, id_local, metodoPago, montoEfectivo, montoTransferencia } = sale;
 
-      try {
-        await query('BEGIN');
+        try {
+          await query('BEGIN');
 
-        // Verificar stock y obtener datos del producto
-        const productoResult = await query(
-          `SELECT p.precio, p.precio_compra, p.tiene_parametros, up.cantidad as stock_disponible 
-           FROM productos p 
-           JOIN usuario_productos up ON p.id = up.producto_id 
-           WHERE p.id = $1 AND up.usuario_id = $2`,
-          [productoId, vendedorId]
-        );
+          // Verificar stock y obtener datos del producto
+          const productoResult = await query(
+            `SELECT p.precio, p.precio_compra, p.tiene_parametros, up.cantidad as stock_disponible 
+             FROM productos p 
+             JOIN usuario_productos up ON p.id = up.producto_id 
+             WHERE p.id = $1 AND up.usuario_id = $2`,
+            [productoId, vendedorId]
+          );
 
-        if (productoResult.rows.length === 0) {
-          throw new Error('Producto no encontrado en el inventario del vendedor');
-        }
-
-        const { precio: precioUnitario, precio_compra: precioCompra, stock_disponible, tiene_parametros } = productoResult.rows[0];
-
-        // Verificar stock
-        if (tiene_parametros && parametros) {
-          for (const param of parametros) {
-            const stockParam = await query(
-              `SELECT cantidad FROM usuario_producto_parametros 
-               WHERE producto_id = $1 AND nombre = $2 AND usuario_id = $3`,
-              [productoId, param.nombre, vendedorId]
-            );
-
-            if (!stockParam.rows.length || stockParam.rows[0].cantidad < param.cantidad) {
-              throw new Error(`Stock insuficiente para ${param.nombre}`);
-            }
+          if (productoResult.rows.length === 0) {
+            throw new Error('Producto no encontrado en el inventario del vendedor');
           }
-        } else if (!tiene_parametros && stock_disponible < cantidad) {
-          throw new Error('Stock insuficiente');
-        }
 
-        // Crear venta
-        const fechaVenta = new Date(fecha);
-        const ventaResult = await query(
-          `INSERT INTO ventas (producto, cantidad, precio_unitario, precio_compra, total, vendedor, fecha) 
-           VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-          [
-            productoId,
-            cantidad,
-            precioUnitario,
-            precioCompra || 0,
-            precioUnitario * cantidad,
-            vendedorId,
-            fechaVenta
-          ]
-        );
+          const { precio: precioUnitario, precio_compra: precioCompra, stock_disponible, tiene_parametros } = productoResult.rows[0];
+
+          // Verificar stock
+          if (tiene_parametros && parametros) {
+            for (const param of parametros) {
+              const stockParam = await query(
+                `SELECT cantidad FROM usuario_producto_parametros 
+                 WHERE producto_id = $1 AND nombre = $2 AND usuario_id = $3`,
+                [productoId, param.nombre, vendedorId]
+              );
+
+              if (!stockParam.rows.length || stockParam.rows[0].cantidad < param.cantidad) {
+                throw new Error(`Stock insuficiente para ${param.nombre}`);
+              }
+            }
+          } else if (!tiene_parametros && stock_disponible < cantidad) {
+            throw new Error('Stock insuficiente');
+          }
+
+          // Determinar desgloses por método de pago
+          const totalVenta = precioUnitario * cantidad;
+          const mPago = metodoPago || 'efectivo';
+          let mEfectivo = totalVenta;
+          let mTransferencia = 0;
+
+          if (mPago === 'transferencia') {
+            mEfectivo = 0;
+            mTransferencia = totalVenta;
+          } else if (mPago === 'mixto') {
+            mEfectivo = parseFloat(montoEfectivo) || 0;
+            mTransferencia = parseFloat(montoTransferencia) || 0;
+          }
+
+          // Crear venta
+          const fechaVenta = new Date(fecha);
+          const ventaResult = await query(
+            `INSERT INTO ventas (producto, cantidad, precio_unitario, precio_compra, total, vendedor, fecha, metodo_pago, monto_efectivo, monto_transferencia) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+            [
+              productoId,
+              cantidad,
+              precioUnitario,
+              precioCompra || 0,
+              totalVenta,
+              vendedorId,
+              fechaVenta,
+              mPago,
+              mEfectivo,
+              mTransferencia
+            ]
+          );
 
         const newVentaId = ventaResult.rows[0].id;
 

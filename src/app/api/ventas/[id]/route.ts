@@ -247,7 +247,19 @@ export async function PUT(
     console.log('💾 Actualizando venta...');
     const ventaActualizadaResult = await query(
       `UPDATE ventas 
-       SET producto = $1, cantidad = $2, precio_unitario = $3, total = $4, fecha = $5
+       SET producto = $1, cantidad = $2, precio_unitario = $3, total = $4, fecha = $5,
+           monto_efectivo = CASE 
+             WHEN metodo_pago = 'transferencia' THEN 0
+             WHEN metodo_pago = 'efectivo' OR metodo_pago IS NULL THEN $4
+             WHEN metodo_pago = 'mixto' AND total > 0 THEN ROUND((COALESCE(monto_efectivo, 0) / total) * $4, 2)
+             ELSE $4
+           END,
+           monto_transferencia = CASE 
+             WHEN metodo_pago = 'transferencia' THEN $4
+             WHEN metodo_pago = 'efectivo' OR metodo_pago IS NULL THEN 0
+             WHEN metodo_pago = 'mixto' AND total > 0 THEN ROUND((COALESCE(monto_transferencia, 0) / total) * $4, 2)
+             ELSE 0
+           END
        WHERE id = $6 
        RETURNING *`,
       [

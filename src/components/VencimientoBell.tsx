@@ -1,5 +1,7 @@
+'use client';
+
 import React, { useState, useEffect, useCallback } from 'react';
-import { Bell, AlertTriangle, AlertCircle, ArrowRight, ExternalLink, CheckCheck, Loader2, Clock } from 'lucide-react';
+import { Bell, AlertTriangle, AlertCircle, ExternalLink, CheckCheck, Check, Loader2, Clock, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
@@ -29,8 +31,26 @@ export interface NotificationItemText {
   estado: string;
   read: boolean;
   dateStr?: string;
+  dateLabel?: string;
   tabTarget: 'vencimientos' | 'almacen' | 'vendedores' | 'recordatorios';
 }
+
+const formatFecha = (dateStr?: string): string => {
+  if (!dateStr) return '';
+  try {
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    const d = new Date(dateStr);
+    if (!isNaN(d.getTime())) {
+      return d.toLocaleDateString('es-ES');
+    }
+    return dateStr;
+  } catch {
+    return dateStr;
+  }
+};
 
 export const VencimientoBell: React.FC<VencimientoBellProps> = ({
   vencidosCount,
@@ -71,6 +91,8 @@ export const VencimientoBell: React.FC<VencimientoBellProps> = ({
       let count = 0;
       let urgent = false;
 
+      const hoyStr = new Date().toISOString().split('T')[0];
+
       // 1. Notificaciones de Vencimientos
       vencimientos.forEach((v: any) => {
         if (v.estado === 'vigente') return;
@@ -83,19 +105,20 @@ export const VencimientoBell: React.FC<VencimientoBellProps> = ({
 
         let text = '';
         if (v.estado === 'vencido') {
-          text = `"${v.nombre}" se venció en Almacén (${v.fecha_vencimiento})`;
+          text = `"${v.nombre}" se venció en Almacén`;
         } else if (v.estado === 'vence_pronto') {
-          text = `"${v.nombre}" vence pronto en Almacén (${v.fecha_vencimiento})`;
+          text = `"${v.nombre}" vence pronto en Almacén`;
         }
 
         list.push({
           id: key,
           type: 'vencimiento',
           text,
-          subtext: `Stock global: ${v.cantidad} | Días: ${v.dias_diferencia}`,
+          subtext: `Stock: ${v.cantidad} | ${v.dias_diferencia === 0 ? 'Vence hoy' : `${v.dias_diferencia} días de diferencia`}`,
           estado: v.estado,
           read: isRead,
           dateStr: v.fecha_vencimiento,
+          dateLabel: `Vence: ${formatFecha(v.fecha_vencimiento)}`,
           tabTarget: 'vencimientos'
         });
       });
@@ -121,9 +144,11 @@ export const VencimientoBell: React.FC<VencimientoBellProps> = ({
           id: key,
           type: 'almacen',
           text,
-          subtext: `Cantidad actual: ${a.cantidad} | Mín: ${a.stock_minimo}`,
+          subtext: `Stock actual: ${a.cantidad} | Mín: ${a.stock_minimo}`,
           estado: a.estado,
           read: isRead,
+          dateStr: hoyStr,
+          dateLabel: `Fecha: ${formatFecha(hoyStr)}`,
           tabTarget: 'almacen'
         });
       });
@@ -140,10 +165,11 @@ export const VencimientoBell: React.FC<VencimientoBellProps> = ({
           id: key,
           type: 'recordatorio',
           text: `Recordatorio: ${r.texto}`,
-          subtext: `Fecha programada: ${r.fecha}`,
+          subtext: `Programado para hoy`,
           estado: 'recordatorio',
           read: isRead,
           dateStr: r.fecha,
+          dateLabel: `Fecha: ${formatFecha(r.fecha)}`,
           tabTarget: 'recordatorios'
         });
       });
@@ -177,13 +203,35 @@ export const VencimientoBell: React.FC<VencimientoBellProps> = ({
   const markAllAsRead = () => {
     try {
       let readKeysSet = new Set<string>();
+      try {
+        const stored = localStorage.getItem('read_notif_keys');
+        if (stored) {
+          readKeysSet = new Set(JSON.parse(stored));
+        }
+      } catch {}
+
       notificationsList.forEach((n) => readKeysSet.add(n.id));
       localStorage.setItem('read_notif_keys', JSON.stringify(Array.from(readKeysSet)));
       window.dispatchEvent(new Event('notificaciones_updated'));
       setUnreadCount(0);
-      setNotificationsList(prev => prev.map(n => ({ ...n, read: true })));
+      setNotificationsList([]);
     } catch (e) {
       console.error('Error marking all as read:', e);
+    }
+  };
+
+  const markSingleAsRead = (e: React.MouseEvent, item: NotificationItemText) => {
+    e.stopPropagation();
+    try {
+      const stored = localStorage.getItem('read_notif_keys');
+      let readKeysSet = new Set<string>(stored ? JSON.parse(stored) : []);
+      readKeysSet.add(item.id);
+      localStorage.setItem('read_notif_keys', JSON.stringify(Array.from(readKeysSet)));
+      window.dispatchEvent(new Event('notificaciones_updated'));
+      setNotificationsList(prev => prev.filter(n => n.id !== item.id));
+      setUnreadCount(prev => Math.max(0, prev - 1));
+    } catch (err) {
+      console.error('Error marking single notification as read:', err);
     }
   };
 
@@ -194,6 +242,8 @@ export const VencimientoBell: React.FC<VencimientoBellProps> = ({
       readKeysSet.add(item.id);
       localStorage.setItem('read_notif_keys', JSON.stringify(Array.from(readKeysSet)));
       window.dispatchEvent(new Event('notificaciones_updated'));
+      setNotificationsList(prev => prev.filter(n => n.id !== item.id));
+      setUnreadCount(prev => Math.max(0, prev - 1));
     } catch (e) {
       console.error('Error marking notification as read:', e);
     }
@@ -204,6 +254,8 @@ export const VencimientoBell: React.FC<VencimientoBellProps> = ({
     }
   };
 
+  // Solo mostramos las notificaciones no leídas en la lista de la campanita
+  const visibleNotifications = notificationsList.filter(n => !n.read);
   const displayCount = unreadCountOverride !== undefined ? unreadCountOverride : unreadCount;
 
   return (
@@ -231,21 +283,22 @@ export const VencimientoBell: React.FC<VencimientoBellProps> = ({
         <div className="p-3 border-b flex items-center justify-between bg-orange-50/50 dark:bg-slate-800/50">
           <div className="flex items-center gap-2">
             <Bell className="h-4 w-4 text-orange-600" />
-            <h4 className="font-semibold text-sm text-slate-800 dark:text-slate-100">Notificaciones Recientes</h4>
-            {displayCount > 0 && (
+            <h4 className="font-semibold text-sm text-slate-800 dark:text-slate-100">Notificaciones</h4>
+            {visibleNotifications.length > 0 && (
               <Badge variant="secondary" className="bg-orange-100 text-orange-800 text-[10px]">
-                {displayCount} nuevas
+                {visibleNotifications.length} nuevas
               </Badge>
             )}
           </div>
-          {notificationsList.some(n => !n.read) && (
+          {visibleNotifications.length > 0 && (
             <Button
               variant="ghost"
               size="sm"
               onClick={markAllAsRead}
-              className="text-[11px] h-7 px-2 text-slate-500 hover:text-slate-800 flex items-center gap-1"
+              className="text-[11px] h-7 px-2 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 flex items-center gap-1 hover:bg-orange-100/50"
+              title="Marcar todas como leídas y quitarlas de la lista"
             >
-              <CheckCheck className="h-3 w-3" />
+              <CheckCheck className="h-3.5 w-3.5 text-orange-600" />
               Marcar leídas
             </Button>
           )}
@@ -257,18 +310,18 @@ export const VencimientoBell: React.FC<VencimientoBellProps> = ({
               <Loader2 className="h-6 w-6 animate-spin text-orange-500" />
               <span>Cargando notificaciones...</span>
             </div>
-          ) : notificationsList.length === 0 ? (
-            <div className="p-6 text-center text-slate-500 text-xs">
-              No hay notificaciones registradas.
+          ) : visibleNotifications.length === 0 ? (
+            <div className="p-8 text-center text-slate-500 text-xs flex flex-col items-center justify-center gap-1.5">
+              <span className="text-xl">✨</span>
+              <p className="font-medium text-slate-700 dark:text-slate-300">No tienes notificaciones pendientes</p>
+              <p className="text-[11px] text-slate-400">Todo tu inventario y alertas están al día</p>
             </div>
           ) : (
-            notificationsList.map((item) => (
+            visibleNotifications.map((item) => (
               <div
                 key={item.id}
                 onClick={() => handleNotificationClick(item)}
-                className={`p-3 cursor-pointer transition-colors hover:bg-orange-50/60 dark:hover:bg-slate-800/80 flex items-start gap-2.5 ${
-                  !item.read ? 'bg-amber-50/30 dark:bg-amber-950/20 font-medium' : 'opacity-80'
-                }`}
+                className="group relative p-3 cursor-pointer transition-colors bg-amber-50/20 hover:bg-orange-50/70 dark:hover:bg-slate-800/80 flex items-start gap-2.5"
               >
                 <div className="mt-0.5 shrink-0">
                   {item.type === 'recordatorio' ? (
@@ -279,19 +332,32 @@ export const VencimientoBell: React.FC<VencimientoBellProps> = ({
                     <AlertCircle className="h-4 w-4 text-amber-500" />
                   )}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-slate-800 dark:text-slate-200 leading-snug break-words">
+                <div className="flex-1 min-w-0 pr-6">
+                  <p className="text-xs text-slate-800 dark:text-slate-200 font-semibold leading-snug break-words">
                     {item.text}
                   </p>
                   {item.subtext && (
-                    <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                       {item.subtext}
                     </p>
                   )}
+                  {item.dateLabel && (
+                    <div className="flex items-center gap-1 mt-1 text-[10px] text-orange-700/80 dark:text-orange-400/80 font-medium">
+                      <Calendar className="h-3 w-3 inline shrink-0" />
+                      <span>{item.dateLabel}</span>
+                    </div>
+                  )}
                 </div>
-                {!item.read && (
-                  <span className="h-2 w-2 rounded-full bg-orange-500 shrink-0 mt-1" />
-                )}
+                
+                {/* Botón individual para marcar como leída y borrar de la lista */}
+                <button
+                  type="button"
+                  onClick={(e) => markSingleAsRead(e, item)}
+                  title="Marcar como leída y quitar"
+                  className="absolute right-2.5 top-3 p-1 rounded-md text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors"
+                >
+                  <Check className="h-3.5 w-3.5" />
+                </button>
               </div>
             ))
           )}

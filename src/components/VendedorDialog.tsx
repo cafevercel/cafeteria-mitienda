@@ -102,6 +102,37 @@ interface VentaDia {
   total: number
 }
 
+const renderMetodoPagoBadge = (metodoPago?: string, montoEfectivo?: number, montoTransferencia?: number) => {
+  const m = (metodoPago || 'efectivo').toLowerCase();
+
+  if (m === 'transferencia') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-sky-100 text-sky-800 border border-sky-200">
+        💳 Transferencia
+      </span>
+    );
+  }
+
+  if (m === 'mixto') {
+    const ef = montoEfectivo !== undefined && montoEfectivo !== null ? parseFloat(String(montoEfectivo)) : null;
+    const tr = montoTransferencia !== undefined && montoTransferencia !== null ? parseFloat(String(montoTransferencia)) : null;
+    return (
+      <span
+        className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-purple-100 text-purple-800 border border-purple-200"
+        title={ef !== null && tr !== null ? `Efectivo: $${ef.toFixed(2)} | Transferencia: $${tr.toFixed(2)}` : undefined}
+      >
+        🔄 Mixto {ef !== null && tr !== null ? `(💵 $${ef.toFixed(2)} / 💳 $${tr.toFixed(2)})` : ''}
+      </span>
+    );
+  }
+
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+      💵 Efectivo
+    </span>
+  );
+};
+
 interface VentaDiaDesplegableProps {
   venta: VentaDia;
   onDeleteSale: (saleId: string) => Promise<void>; // Agregar esta prop
@@ -163,8 +194,9 @@ const VentaDiaDesplegable: React.FC<VentaDiaDesplegableProps> = ({ venta, onDele
                     }}
                   >
                     <div className="flex-grow">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <p className="font-medium">{v.producto_nombre}</p>
+                        {renderMetodoPagoBadge(v.metodo_pago, v.monto_efectivo, v.monto_transferencia)}
                         {tieneParametros && (
                           <ChevronDown
                             className={`h-4 w-4 transition-transform ${isVentaExpanded ? 'rotate-180' : ''}`}
@@ -294,8 +326,9 @@ const VentaSemanaDesplegable: React.FC<VentaSemanaDesplegableProps> = ({ venta, 
                     }}
                   >
                     <div className="flex-grow">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <p className="font-medium">{v.producto_nombre}</p>
+                        {renderMetodoPagoBadge(v.metodo_pago, v.monto_efectivo, v.monto_transferencia)}
                         {tieneParametros && (
                           <ChevronDown
                             className={`h-4 w-4 transition-transform ${isVentaExpanded ? 'rotate-180' : ''}`}
@@ -799,7 +832,10 @@ export default function VendorDialog({
         Producto: venta.producto_nombre,
         Cantidad: venta.cantidad,
         'Precio Unitario': venta.precio_unitario,
-        Total: venta.total
+        Total: venta.total,
+        'Método de Pago': venta.metodo_pago || 'efectivo',
+        'Monto Efectivo': venta.monto_efectivo !== undefined && venta.monto_efectivo !== null ? venta.monto_efectivo : (venta.metodo_pago === 'transferencia' ? 0 : venta.total),
+        'Monto Transferencia': venta.monto_transferencia !== undefined && venta.monto_transferencia !== null ? venta.monto_transferencia : (venta.metodo_pago === 'transferencia' ? venta.total : 0)
       }));
       fileName = `ventas_${vendor.nombre}_${format(new Date(), 'yyyy-MM-dd')}.xlsx`;
     } else if (mode === 'transacciones') {

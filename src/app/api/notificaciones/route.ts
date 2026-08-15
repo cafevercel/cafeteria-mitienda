@@ -12,12 +12,36 @@ export async function GET(request: NextRequest) {
     try {
       const resVencimientos = await query(`
         SELECT 
-          id, nombre, foto, cantidad, seccion,
-          tiene_vencimiento, 
-          TO_CHAR(fecha_vencimiento, 'YYYY-MM-DD') as fecha_vencimiento
-        FROM productos 
-        WHERE tiene_vencimiento = true AND fecha_vencimiento IS NOT NULL
-        ORDER BY fecha_vencimiento ASC
+          p.id, p.nombre, p.foto,
+          COALESCE(
+            CASE 
+              WHEN p.tiene_parametros = true THEN (
+                SELECT SUM(pp.cantidad) 
+                FROM producto_parametros pp 
+                WHERE pp.producto_id = p.id
+              )
+              ELSE p.cantidad
+            END, 
+            0
+          ) as cantidad,
+          p.seccion,
+          p.tiene_vencimiento, 
+          TO_CHAR(p.fecha_vencimiento, 'YYYY-MM-DD') as fecha_vencimiento
+        FROM productos p
+        WHERE p.tiene_vencimiento = true 
+          AND p.fecha_vencimiento IS NOT NULL
+          AND COALESCE(
+            CASE 
+              WHEN p.tiene_parametros = true THEN (
+                SELECT SUM(pp.cantidad) 
+                FROM producto_parametros pp 
+                WHERE pp.producto_id = p.id
+              )
+              ELSE p.cantidad
+            END, 
+            0
+          ) > 0
+        ORDER BY p.fecha_vencimiento ASC
       `);
       
       const hoy = new Date();
