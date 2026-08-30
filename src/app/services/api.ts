@@ -1482,3 +1482,33 @@ export const logModeradorAccion = async (moderadorId: string, accion: string, de
     return null; // Silent catch to prevent UI interruption
   }
 };
+
+export const getInventariosModerador = async (moderadorId?: string): Promise<any[]> => {
+  try {
+    const url = moderadorId ? `/inventarios?moderadorId=${moderadorId}` : '/inventarios';
+    const response = await api.get(url);
+    return response.data;
+  } catch (error) {
+    console.error('Error al obtener inventarios:', error);
+    throw new Error('No se pudieron obtener los inventarios auditados');
+  }
+};
+
+export const getInventarioDetalle = async (id: string | number): Promise<any> => {
+  try {
+    const response = await api.get(`/inventarios/${id}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error al obtener detalle de inventario:', error);
+    throw new Error('No se pudo obtener el detalle del inventario');
+  }
+};
+
+export const eliminarInventario = async (id: string | number): Promise<void> => {
+  try {
+    await api.delete(`/inventarios/${id}`);
+  } catch (error) {
+    console.error('Error al eliminar inventario:', error);
+    throw new Error('No se pudo eliminar el inventario');
+  }
+};

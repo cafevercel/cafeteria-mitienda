@@ -18,6 +18,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         p.precio_compra,
         p.porcentaje_ganancia as "porcentajeGanancia",
         p.seccion,
+        p.codigo_barras,
         up.cantidad,
         COALESCE(
           json_agg(
@@ -43,6 +44,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         p.precio_compra,
         p.porcentaje_ganancia,
         p.seccion,
+        p.codigo_barras,
         up.cantidad
       ORDER BY p.nombre ASC
     `;
@@ -62,6 +64,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         precio_compra: row.precio_compra ? parseFloat(row.precio_compra) : null,
         porcentajeGanancia: row.porcentajeGanancia,
         seccion: row.seccion,
+        codigo_barras: row.codigo_barras || '',
         parametros: Array.isArray(row.parametros) ? row.parametros : []
       };
 

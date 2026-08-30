@@ -1,18 +1,22 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import * as XLSX from 'xlsx';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Shield, Plus, Edit, Trash2, Calendar, ClipboardList, Loader2, UserCheck, UserX, Phone } from 'lucide-react';
+import { Shield, Plus, Edit, Trash2, Calendar, ClipboardList, Loader2, UserCheck, UserX, Phone, ClipboardCheck, FileSpreadsheet, Download, AlertTriangle, Eye, CheckCircle2, XCircle } from 'lucide-react';
 import { toast } from "@/hooks/use-toast";
 import {
   getModeradores,
   crearModerador,
   editarModerador,
   eliminarModerador,
-  getBitacoraModerador
+  getBitacoraModerador,
+  getInventariosModerador,
+  getInventarioDetalle,
+  eliminarInventario
 } from '../app/services/api';
 
 interface Moderador {
@@ -39,6 +43,8 @@ export default function ModeradoresSection() {
   const [showAddEditDialog, setShowAddEditDialog] = useState(false);
   const [showOptionsDialog, setShowOptionsDialog] = useState(false);
   const [showBitacoraDialog, setShowBitacoraDialog] = useState(false);
+  const [showInventariosDialog, setShowInventariosDialog] = useState(false);
+  const [showInventarioDetalleDialog, setShowInventarioDetalleDialog] = useState(false);
   
   // Selected state
   const [selectedModerador, setSelectedModerador] = useState<Moderador | null>(null);
@@ -55,6 +61,12 @@ export default function ModeradoresSection() {
   // Bitacora logs
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
+
+  // Inventarios
+  const [inventariosList, setInventariosList] = useState<any[]>([]);
+  const [loadingInventarios, setLoadingInventarios] = useState(false);
+  const [selectedInventarioDetalle, setSelectedInventarioDetalle] = useState<any | null>(null);
+  const [loadingInventarioDetalle, setLoadingInventarioDetalle] = useState(false);
 
   const fetchModeradores = useCallback(async () => {
     try {
@@ -98,6 +110,83 @@ export default function ModeradoresSection() {
     });
     setShowOptionsDialog(false);
     setShowAddEditDialog(true);
+  };
+
+  const handleOpenInventarios = async (mod: Moderador) => {
+    setSelectedModerador(mod);
+    setShowOptionsDialog(false);
+    setShowInventariosDialog(true);
+    try {
+      setLoadingInventarios(true);
+      const data = await getInventariosModerador(mod.id);
+      setInventariosList(data);
+    } catch (error) {
+      toast({ title: "Error", description: "No se pudieron cargar los inventarios", variant: "destructive" });
+    } finally {
+      setLoadingInventarios(false);
+    }
+  };
+
+  const handleVerDetalleInventario = async (invId: number) => {
+    try {
+      setLoadingInventarioDetalle(true);
+      setShowInventarioDetalleDialog(true);
+      const data = await getInventarioDetalle(invId);
+      setSelectedInventarioDetalle(data);
+    } catch (error) {
+      toast({ title: "Error", description: "No se pudo cargar el detalle del inventario", variant: "destructive" });
+    } finally {
+      setLoadingInventarioDetalle(false);
+    }
+  };
+
+  const handleExportarExcel = (inv: any) => {
+    if (!inv || !inv.detalles || inv.detalles.length === 0) {
+      toast({ title: "Atención", description: "No hay detalles para exportar", variant: "default" });
+      return;
+    }
+
+    try {
+      const dataExport = inv.detalles.map((d: any, index: number) => ({
+        'N°': index + 1,
+        'Código de Barras': d.codigo_barras || 'N/A',
+        'Producto': d.nombre_producto,
+        'Variante / Parámetro': d.parametro_nombre || '-',
+        'Cantidad en Sistema': Number(d.cantidad_sistema),
+        'Cantidad Física Real': Number(d.cantidad_fisica),
+        'Diferencia': Number(d.diferencia),
+        'Estado': Number(d.diferencia) === 0 ? 'Exacto' : (Number(d.diferencia) > 0 ? 'Sobrante (+)' : 'Faltante (-)'),
+        'Precio Compra': Number(d.precio_compra || 0),
+        'Precio Venta': Number(d.precio_venta || 0),
+      }));
+
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(dataExport);
+
+      ws['!cols'] = [
+        { wch: 6 },
+        { wch: 20 },
+        { wch: 35 },
+        { wch: 20 },
+        { wch: 18 },
+        { wch: 18 },
+        { wch: 14 },
+        { wch: 16 },
+        { wch: 14 },
+        { wch: 14 }
+      ];
+
+      XLSX.utils.book_append_sheet(wb, ws, "Auditoria");
+
+      const fechaStr = new Date(inv.fecha).toISOString().split('T')[0];
+      const safePunto = (inv.punto_venta_nombre || 'Punto').replace(/[^a-zA-Z0-9_-]/g, '_');
+      XLSX.writeFile(wb, `Inventario_${safePunto}_${fechaStr}.xlsx`);
+
+      toast({ title: "Éxito", description: "Informe exportado a Excel correctamente" });
+    } catch (error) {
+      console.error("Error al exportar inventario a Excel:", error);
+      toast({ title: "Error", description: "No se pudo generar el archivo Excel", variant: "destructive" });
+    }
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -308,6 +397,17 @@ export default function ModeradoresSection() {
               <div>
                 <div className="font-bold text-sm">Ver Bitácora</div>
                 <div className="text-xs text-orange-600 font-normal">Acciones registradas por día</div>
+              </div>
+            </Button>
+
+            <Button
+              onClick={() => selectedModerador && handleOpenInventarios(selectedModerador)}
+              className="bg-emerald-50 border border-emerald-200 text-emerald-950 hover:bg-emerald-100 flex items-center justify-start gap-3 h-12 text-left"
+            >
+              <ClipboardCheck className="w-5 h-5 text-emerald-600" />
+              <div>
+                <div className="font-bold text-sm">Inventarios Realizados</div>
+                <div className="text-xs text-emerald-600 font-normal">Auditorías físicas vs virtual</div>
               </div>
             </Button>
 
@@ -542,6 +642,212 @@ export default function ModeradoresSection() {
 
           <DialogFooter className="border-t pt-4">
             <Button onClick={() => setShowBitacoraDialog(false)}>
+              Cerrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* INVENTARIOS LIST DIALOG */}
+      <Dialog open={showInventariosDialog} onOpenChange={setShowInventariosDialog}>
+        <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-emerald-950 flex items-center gap-2">
+              <ClipboardCheck className="w-6 h-6 text-emerald-600" />
+              Inventarios Físicos: {selectedModerador?.nombre}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto pr-2 py-4 space-y-4">
+            {loadingInventarios ? (
+              <div className="flex justify-center py-12">
+                <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
+              </div>
+            ) : inventariosList.length > 0 ? (
+              <div className="grid grid-cols-1 gap-3">
+                {inventariosList.map(inv => {
+                  const fecha = new Date(inv.fecha).toLocaleDateString('es-ES', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  });
+                  const hasDiscrepancies = Number(inv.total_discrepancias) > 0;
+
+                  return (
+                    <div
+                      key={inv.id}
+                      className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm hover:border-emerald-300 transition-all flex flex-col md:flex-row justify-between items-start md:items-center gap-4"
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-gray-800 text-base">
+                            📍 {inv.punto_venta_nombre}
+                          </span>
+                          <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full font-medium">
+                            {fecha}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3 text-xs text-gray-600 mt-1">
+                          <span>📦 Total auditados: <strong className="text-gray-800">{inv.total_items_auditados}</strong></span>
+                          <span className="text-gray-300">|</span>
+                          <span className={`inline-flex items-center gap-1 font-semibold ${hasDiscrepancies ? 'text-amber-600' : 'text-emerald-600'}`}>
+                            {hasDiscrepancies ? <AlertTriangle className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                            {inv.total_discrepancias} {inv.total_discrepancias === 1 ? 'diferencia' : 'diferencias'}
+                          </span>
+                        </div>
+                        {inv.observaciones ? (
+                          <p className="text-xs text-gray-500 italic mt-1 bg-gray-50 p-1.5 rounded">
+                            &quot;{inv.observaciones}&quot;
+                          </p>
+                        ) : null}
+                      </div>
+
+                      <div className="flex items-center gap-2 self-end md:self-auto">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleVerDetalleInventario(inv.id)}
+                          className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 flex items-center gap-1.5"
+                        >
+                          <Eye className="w-4 h-4" /> Ver Detalle
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-center py-12 text-gray-500">
+                <ClipboardCheck className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                <p className="font-medium text-sm">No hay inventarios registrados por este moderador</p>
+                <p className="text-xs text-gray-400 mt-1">Las auditorías de inventario físico vs virtual se listarán aquí</p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="border-t pt-4">
+            <Button onClick={() => setShowInventariosDialog(false)}>
+              Cerrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* INVENTARIO DETALLE DIALOG */}
+      <Dialog open={showInventarioDetalleDialog} onOpenChange={setShowInventarioDetalleDialog}>
+        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <div className="flex justify-between items-start pr-6">
+              <div>
+                <DialogTitle className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                  <FileSpreadsheet className="w-6 h-6 text-emerald-600" />
+                  Informe de Auditoría: {selectedInventarioDetalle?.punto_venta_nombre}
+                </DialogTitle>
+                <p className="text-xs text-gray-500 mt-1">
+                  Fecha: {selectedInventarioDetalle && new Date(selectedInventarioDetalle.fecha).toLocaleString('es-ES')} | Moderador: {selectedInventarioDetalle?.moderador_nombre || selectedModerador?.nombre}
+                </p>
+              </div>
+              {selectedInventarioDetalle && (
+                <Button
+                  onClick={() => handleExportarExcel(selectedInventarioDetalle)}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-2"
+                  size="sm"
+                >
+                  <Download className="w-4 h-4" /> Descargar Excel
+                </Button>
+              )}
+            </div>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto pr-2 py-4 space-y-4">
+            {loadingInventarioDetalle ? (
+              <div className="flex justify-center py-12">
+                <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
+              </div>
+            ) : selectedInventarioDetalle ? (
+              <div className="space-y-4">
+                {/* Resumen Cards */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="bg-gray-50 p-3 rounded-lg border border-gray-200 text-center">
+                    <span className="text-xs text-gray-500 block">Auditados</span>
+                    <span className="text-xl font-extrabold text-gray-800">{selectedInventarioDetalle.total_items_auditados}</span>
+                  </div>
+                  <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-200 text-center">
+                    <span className="text-xs text-emerald-700 block">Exactos</span>
+                    <span className="text-xl font-extrabold text-emerald-800">
+                      {selectedInventarioDetalle.detalles?.filter((d: any) => Number(d.diferencia) === 0).length || 0}
+                    </span>
+                  </div>
+                  <div className="bg-amber-50 p-3 rounded-lg border border-amber-200 text-center">
+                    <span className="text-xs text-amber-700 block">Con Discrepancia</span>
+                    <span className="text-xl font-extrabold text-amber-800">{selectedInventarioDetalle.total_discrepancias}</span>
+                  </div>
+                </div>
+
+                {/* Tabla de Productos */}
+                <div className="border rounded-lg overflow-hidden">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-gray-100 text-gray-700 font-semibold border-b text-xs uppercase">
+                      <tr>
+                        <th className="p-3">Producto / Variante</th>
+                        <th className="p-3">Código</th>
+                        <th className="p-3 text-center">Sistema</th>
+                        <th className="p-3 text-center">Físico</th>
+                        <th className="p-3 text-center">Diferencia</th>
+                        <th className="p-3 text-right">Estado</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {selectedInventarioDetalle.detalles?.map((d: any) => {
+                        const diff = Number(d.diferencia);
+                        const isExact = diff === 0;
+                        const isSurplus = diff > 0;
+
+                        return (
+                          <tr key={d.id} className={!isExact ? 'bg-amber-50/40' : 'hover:bg-gray-50'}>
+                            <td className="p-3 font-medium text-gray-800">
+                              <div>{d.nombre_producto}</div>
+                              {d.parametro_nombre ? (
+                                <div className="text-xs text-orange-600 font-normal">Variante: {d.parametro_nombre}</div>
+                              ) : null}
+                            </td>
+                            <td className="p-3 text-xs text-gray-500 font-mono">
+                              {d.codigo_barras || 'N/A'}
+                            </td>
+                            <td className="p-3 text-center text-gray-600 font-semibold">
+                              {d.cantidad_sistema}
+                            </td>
+                            <td className="p-3 text-center text-gray-900 font-bold">
+                              {d.cantidad_fisica}
+                            </td>
+                            <td className="p-3 text-center font-extrabold">
+                              <span className={isExact ? 'text-gray-400' : (isSurplus ? 'text-emerald-600' : 'text-red-600')}>
+                                {isSurplus ? `+${diff}` : diff}
+                              </span>
+                            </td>
+                            <td className="p-3 text-right">
+                              <span className={`inline-block text-[11px] font-bold px-2 py-0.5 rounded-full border ${
+                                isExact 
+                                  ? 'bg-gray-50 text-gray-600 border-gray-200' 
+                                  : (isSurplus ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200')
+                              }`}>
+                                {isExact ? 'Exacto' : (isSurplus ? 'Sobrante (+)' : 'Faltante (-)')}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          <DialogFooter className="border-t pt-4">
+            <Button onClick={() => setShowInventarioDetalleDialog(false)}>
               Cerrar
             </Button>
           </DialogFooter>
