@@ -96,25 +96,25 @@ function DatePickerConMeses({ label, value, onChange }: DatePickerConMesesProps)
   }
 
   return (
-    <div>
-      <Label className="text-xs font-semibold text-slate-700">{label}</Label>
+    <div className="w-full">
+      <Label className="text-xs font-semibold text-slate-700 block mb-1">{label}</Label>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
             variant="outline"
             className={cn(
-              "w-full justify-start text-left font-normal text-xs sm:text-sm mt-1 border-slate-300 shadow-sm",
+              "w-full justify-start text-left font-normal text-xs sm:text-sm h-10 border-slate-300 shadow-xs bg-white",
               !value && "text-muted-foreground"
             )}
           >
-            <Calendar className="mr-2 h-4 w-4 text-blue-600" />
-            {value ? format(value, "dd/MM/yyyy") : "Seleccionar fecha"}
+            <Calendar className="mr-2 h-4 w-4 text-blue-600 flex-shrink-0" />
+            <span className="truncate">{value ? format(value, "dd/MM/yyyy") : "Seleccionar fecha"}</span>
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-80 p-3" align="start">
+        <PopoverContent className="w-[calc(100vw-2rem)] max-w-xs sm:w-80 p-2.5 sm:p-3" align="start" collisionPadding={12}>
           {/* Header con Selección de Año */}
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-bold text-slate-700">Seleccionar Mes y Año:</span>
+            <span className="text-xs font-bold text-slate-700">Mes y Año:</span>
             <Select value={currentYear.toString()} onValueChange={handleYearChange}>
               <SelectTrigger className="h-7 w-24 text-xs">
                 <SelectValue />
@@ -130,7 +130,7 @@ function DatePickerConMeses({ label, value, onChange }: DatePickerConMesesProps)
           </div>
 
           {/* Grilla de los 12 Meses del Año */}
-          <div className="grid grid-cols-4 gap-1.5 mb-3 bg-slate-100 p-1.5 rounded-lg">
+          <div className="grid grid-cols-4 gap-1 sm:gap-1.5 mb-2.5 bg-slate-100 p-1.5 rounded-lg">
             {MONTH_SHORT_LABELS.map((m) => {
               const isSelectedMonth = m.value === currentMonthIdx
               return (
@@ -141,8 +141,8 @@ function DatePickerConMeses({ label, value, onChange }: DatePickerConMesesProps)
                   variant={isSelectedMonth ? "default" : "ghost"}
                   onClick={() => handleMonthClick(m.value)}
                   className={cn(
-                    "h-7 text-xs px-1 font-medium transition-all",
-                    isSelectedMonth ? "bg-blue-600 text-white font-bold shadow-sm" : "hover:bg-white text-slate-700"
+                    "h-7 text-xs px-0.5 font-medium transition-all",
+                    isSelectedMonth ? "bg-blue-600 text-white font-bold shadow-xs" : "hover:bg-white text-slate-700"
                   )}
                 >
                   {m.label}
@@ -166,7 +166,7 @@ function DatePickerConMeses({ label, value, onChange }: DatePickerConMesesProps)
                   setOpen(false)
                 }
               }}
-              className="rounded-md border p-2"
+              className="rounded-md border p-1 sm:p-2 w-full"
             />
           </div>
         </PopoverContent>
@@ -325,17 +325,26 @@ export default function ContabilidadVendedoresPage({ vendedores, onRefresh }: Co
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* Tab Navigation */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white p-3 rounded-xl border shadow-sm">
-        <h2 className="text-lg sm:text-2xl font-bold flex items-center gap-2">
-          <FileText className="h-5 w-5 sm:h-6 sm:w-6 text-indigo-600 flex-shrink-0" />
-          <span className="truncate">Contabilidad de Puntos de Venta</span>
-        </h2>
-        <div className="flex gap-2 w-full sm:w-auto">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-xs">
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+          <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600 flex-shrink-0">
+            <FileText className="h-5 w-5 sm:h-6 sm:w-6" />
+          </div>
+          <div className="min-w-0">
+            <h2 className="text-base sm:text-xl md:text-2xl font-bold text-slate-900 truncate">
+              Contabilidad de Puntos de Venta
+            </h2>
+            <p className="text-[11px] sm:text-xs text-slate-500 truncate">
+              Balances financieros, utilidades y comparativas
+            </p>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 sm:flex gap-2 w-full sm:w-auto">
           <Button
             variant={activeTab === 'balance' ? 'default' : 'outline'}
             onClick={() => setActiveTab('balance')}
             size="sm"
-            className="flex-1 sm:flex-initial text-xs sm:text-sm h-8 sm:h-9"
+            className="w-full sm:w-auto text-xs sm:text-sm h-9"
           >
             <Calculator className="mr-1.5 h-3.5 w-3.5 sm:h-4 sm:w-4" />
             Balance
@@ -344,7 +353,7 @@ export default function ContabilidadVendedoresPage({ vendedores, onRefresh }: Co
             variant={activeTab === 'comparativa' ? 'default' : 'outline'}
             onClick={() => setActiveTab('comparativa')}
             size="sm"
-            className="flex-1 sm:flex-initial text-xs sm:text-sm h-8 sm:h-9"
+            className="w-full sm:w-auto text-xs sm:text-sm h-9"
           >
             <ArrowLeftRight className="mr-1.5 h-3.5 w-3.5 sm:h-4 sm:w-4" />
             Comparativa
@@ -357,19 +366,19 @@ export default function ContabilidadVendedoresPage({ vendedores, onRefresh }: Co
       ) : (
         <>
           {/* Selección Rápida de Período / Solo Fecha Inicio y Fecha Fin */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center justify-between">
+          <Card className="border-slate-200 shadow-xs">
+            <CardHeader className="p-3.5 sm:p-5">
+              <CardTitle className="text-base sm:text-lg flex items-center justify-between">
                 <span className="flex items-center gap-2">
-                  <Calendar className="h-5 w-5 text-blue-600" />
+                  <Calendar className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600" />
                   Seleccionar Período
                 </span>
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
+            <CardContent className="p-3.5 sm:p-5 pt-0 sm:pt-0">
+              <div className="space-y-3 sm:space-y-4">
                 {/* Solo Fecha Inicio y Fecha Fin con el Popover de los 12 meses */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 bg-slate-50 p-3 sm:p-4 rounded-xl border border-slate-200">
                   <DatePickerConMeses
                     label="Fecha de Inicio"
                     value={fechaInicio}
@@ -382,7 +391,11 @@ export default function ContabilidadVendedoresPage({ vendedores, onRefresh }: Co
                   />
                 </div>
 
-                <Button onClick={handleCalcular} disabled={isCalculating} className="w-full bg-blue-600 hover:bg-blue-700">
+                <Button
+                  onClick={handleCalcular}
+                  disabled={isCalculating}
+                  className="w-full h-10 sm:h-11 text-xs sm:text-sm font-semibold bg-blue-600 hover:bg-blue-700 shadow-xs"
+                >
                   <Calculator className="mr-2 h-4 w-4" />
                   {isCalculating ? 'Calculando Balance...' : 'Calcular Balance del Período'}
                 </Button>
@@ -392,56 +405,60 @@ export default function ContabilidadVendedoresPage({ vendedores, onRefresh }: Co
 
           {/* NUEVO SISTEMA DE BALANCE */}
           {calculos.length > 0 && (
-            <Card className="border-2 border-indigo-100 shadow-md">
-              <CardHeader className="bg-gradient-to-r from-slate-900 to-indigo-950 text-white rounded-t-lg">
-                <CardTitle className="text-xl flex items-center justify-between">
-                  <span className="flex items-center gap-2">
-                    <Wallet className="h-6 w-6 text-emerald-400" />
+            <Card className="border border-indigo-100 shadow-md overflow-hidden">
+              <CardHeader className="bg-gradient-to-r from-slate-900 to-indigo-950 text-white p-3.5 sm:p-5">
+                <div className="flex flex-col xs:flex-row items-start xs:items-center justify-between gap-2">
+                  <CardTitle className="text-base sm:text-xl font-bold flex items-center gap-2">
+                    <Wallet className="h-5 w-5 sm:h-6 sm:w-6 text-emerald-400 flex-shrink-0" />
                     Balance y Resultados
-                  </span>
-                  <Badge variant="outline" className="text-white border-white/30 text-xs">
+                  </CardTitle>
+                  <Badge variant="outline" className="text-white border-white/30 text-xs px-2 py-0.5 self-start xs:self-auto">
                     {MONTHS.find(m => m.value === selectedMonth)?.label} {selectedYear}
                   </Badge>
-                </CardTitle>
+                </div>
               </CardHeader>
-              <CardContent className="pt-6 space-y-6">
+              <CardContent className="p-3 sm:p-6 space-y-4 sm:space-y-6">
                 
                 {/* 1. VENTAS Y GANANCIAS */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
                   {/* Venta Total */}
-                  <div className="p-4 rounded-xl bg-blue-50/70 border border-blue-200 space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-semibold text-blue-900">Venta Total</span>
-                      <span className="text-xl font-extrabold text-blue-700">{formatCurrency(totalVentaGlobal)}</span>
+                  <div className="p-3.5 sm:p-4 rounded-xl bg-blue-50/80 border border-blue-200 space-y-2.5">
+                    <div className="flex flex-col xs:flex-row xs:items-center justify-between gap-1">
+                      <span className="text-xs sm:text-sm font-semibold text-blue-900">Venta Total</span>
+                      <span className="text-lg sm:text-xl md:text-2xl font-extrabold text-blue-700 tracking-tight break-all">
+                        {formatCurrency(totalVentaGlobal)}
+                      </span>
                     </div>
                     <Separator className="bg-blue-200" />
-                    <div className="grid grid-cols-2 gap-2 text-xs pt-1">
-                      <div className="p-2 bg-white rounded border">
-                        <span className="text-slate-500 block">💵 Venta Efectivo</span>
-                        <span className="font-bold text-slate-800">{formatCurrency(totalVentaEfectivoGlobal)}</span>
+                    <div className="grid grid-cols-1 xs:grid-cols-2 gap-2 text-xs pt-0.5">
+                      <div className="p-2 sm:p-2.5 bg-white rounded-lg border border-blue-100 shadow-xs">
+                        <span className="text-slate-500 block text-[11px] sm:text-xs">💵 Efectivo</span>
+                        <span className="font-bold text-slate-800 text-xs sm:text-sm break-all">{formatCurrency(totalVentaEfectivoGlobal)}</span>
                       </div>
-                      <div className="p-2 bg-white rounded border">
-                        <span className="text-slate-500 block">💳 Venta Transferencia</span>
-                        <span className="font-bold text-slate-800">{formatCurrency(totalVentaTransferenciaGlobal)}</span>
+                      <div className="p-2 sm:p-2.5 bg-white rounded-lg border border-blue-100 shadow-xs">
+                        <span className="text-slate-500 block text-[11px] sm:text-xs">💳 Transferencia</span>
+                        <span className="font-bold text-slate-800 text-xs sm:text-sm break-all">{formatCurrency(totalVentaTransferenciaGlobal)}</span>
                       </div>
                     </div>
                   </div>
 
                   {/* Ganancia Total Bruta */}
-                  <div className="p-4 rounded-xl bg-emerald-50/70 border border-emerald-200 space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-semibold text-emerald-900">Ganancia Total (Bruta)</span>
-                      <span className="text-xl font-extrabold text-emerald-700">{formatCurrency(totalGananciaBrutaGlobal)}</span>
+                  <div className="p-3.5 sm:p-4 rounded-xl bg-emerald-50/80 border border-emerald-200 space-y-2.5">
+                    <div className="flex flex-col xs:flex-row xs:items-center justify-between gap-1">
+                      <span className="text-xs sm:text-sm font-semibold text-emerald-900">Ganancia Total (Bruta)</span>
+                      <span className="text-lg sm:text-xl md:text-2xl font-extrabold text-emerald-700 tracking-tight break-all">
+                        {formatCurrency(totalGananciaBrutaGlobal)}
+                      </span>
                     </div>
                     <Separator className="bg-emerald-200" />
-                    <div className="grid grid-cols-2 gap-2 text-xs pt-1">
-                      <div className="p-2 bg-white rounded border">
-                        <span className="text-slate-500 block">💵 Ganancia Efectivo</span>
-                        <span className="font-bold text-slate-800">{formatCurrency(totalGananciaEfectivoGlobal)}</span>
+                    <div className="grid grid-cols-1 xs:grid-cols-2 gap-2 text-xs pt-0.5">
+                      <div className="p-2 sm:p-2.5 bg-white rounded-lg border border-emerald-100 shadow-xs">
+                        <span className="text-slate-500 block text-[11px] sm:text-xs">💵 Ganancia Efectivo</span>
+                        <span className="font-bold text-slate-800 text-xs sm:text-sm break-all">{formatCurrency(totalGananciaEfectivoGlobal)}</span>
                       </div>
-                      <div className="p-2 bg-white rounded border">
-                        <span className="text-slate-500 block">💳 Ganancia Transferencia</span>
-                        <span className="font-bold text-slate-800">{formatCurrency(totalGananciaTransferenciaGlobal)}</span>
+                      <div className="p-2 sm:p-2.5 bg-white rounded-lg border border-emerald-100 shadow-xs">
+                        <span className="text-slate-500 block text-[11px] sm:text-xs">💳 Ganancia Transf.</span>
+                        <span className="font-bold text-slate-800 text-xs sm:text-sm break-all">{formatCurrency(totalGananciaTransferenciaGlobal)}</span>
                       </div>
                     </div>
                   </div>
@@ -449,113 +466,118 @@ export default function ContabilidadVendedoresPage({ vendedores, onRefresh }: Co
 
                 {/* 2. GASTOS TOTALES INTERACTIVOS */}
                 <div
-                  className="p-4 rounded-xl bg-rose-50 border-2 border-rose-200 cursor-pointer hover:bg-rose-100/70 transition-all shadow-sm"
+                  className="p-3.5 sm:p-4 rounded-xl bg-rose-50 border-2 border-rose-200 cursor-pointer hover:bg-rose-100/80 active:scale-[0.99] transition-all shadow-xs"
                   onClick={() => setShowGastosDetalleModal(true)}
                 >
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <h3 className="font-bold text-rose-950 text-base flex items-center gap-2">
-                        <TrendingDown className="h-5 w-5 text-rose-600" />
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <h3 className="font-bold text-rose-950 text-sm sm:text-base flex items-center gap-2">
+                        <TrendingDown className="h-4 w-4 sm:h-5 sm:w-5 text-rose-600 flex-shrink-0" />
                         Gastos Totales
                       </h3>
-                      <p className="text-xs text-rose-700 mt-0.5">Toca aquí para ver el desglose detallado completo</p>
+                      <p className="text-[11px] sm:text-xs text-rose-700 mt-0.5">Toca aquí para ver el desglose detallado</p>
                     </div>
-                    <span className="text-2xl font-black text-rose-700">{formatCurrency(totalGastosAgrupadosGlobal)}</span>
+                    <span className="text-xl sm:text-2xl font-black text-rose-700 break-all">{formatCurrency(totalGastosAgrupadosGlobal)}</span>
                   </div>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-4 pt-3 border-t border-rose-200 text-xs">
-                    <div className="p-2 bg-white rounded border">
-                      <span className="text-slate-500 block">Gastos Fijos (GF)</span>
-                      <span className="font-bold text-slate-800">{formatCurrency(totalGastosFijosGlobal)}</span>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3 pt-3 border-t border-rose-200/80 text-xs">
+                    <div className="p-2 sm:p-2.5 bg-white rounded-lg border border-rose-100 shadow-xs">
+                      <span className="text-slate-500 block text-[10px] sm:text-xs truncate">Gastos Fijos (GF)</span>
+                      <span className="font-bold text-slate-800 text-xs sm:text-sm break-all">{formatCurrency(totalGastosFijosGlobal)}</span>
                     </div>
-                    <div className="p-2 bg-white rounded border">
-                      <span className="text-slate-500 block">Gastos Variables (GV)</span>
-                      <span className="font-bold text-slate-800">{formatCurrency(totalGastosVariablesGlobal)}</span>
+                    <div className="p-2 sm:p-2.5 bg-white rounded-lg border border-rose-100 shadow-xs">
+                      <span className="text-slate-500 block text-[10px] sm:text-xs truncate">Gastos Var. (GV)</span>
+                      <span className="font-bold text-slate-800 text-xs sm:text-sm break-all">{formatCurrency(totalGastosVariablesGlobal)}</span>
                     </div>
-                    <div className="p-2 bg-white rounded border">
-                      <span className="text-slate-500 block">Gastos Merma (GM)</span>
-                      <span className="font-bold text-slate-800">{formatCurrency(totalGastosMermaGlobal)}</span>
+                    <div className="p-2 sm:p-2.5 bg-white rounded-lg border border-rose-100 shadow-xs">
+                      <span className="text-slate-500 block text-[10px] sm:text-xs truncate">Merma (GM)</span>
+                      <span className="font-bold text-slate-800 text-xs sm:text-sm break-all">{formatCurrency(totalGastosMermaGlobal)}</span>
                     </div>
-                    <div className="p-2 bg-white rounded border">
-                      <span className="text-slate-500 block">Salarios (S)</span>
-                      <span className="font-bold text-slate-800">{formatCurrency(totalSalariosGlobal)}</span>
+                    <div className="p-2 sm:p-2.5 bg-white rounded-lg border border-rose-100 shadow-xs">
+                      <span className="text-slate-500 block text-[10px] sm:text-xs truncate">Salarios (S)</span>
+                      <span className="font-bold text-slate-800 text-xs sm:text-sm break-all">{formatCurrency(totalSalariosGlobal)}</span>
                     </div>
                   </div>
                 </div>
 
                 {/* 3. UTILIDAD FINAL Y MARGEN BRUTO */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="p-4 rounded-xl bg-slate-900 text-white flex justify-between items-center">
-                    <div>
-                      <span className="text-xs text-slate-400 block font-medium">UTILIDAD FINAL</span>
-                      <span className="text-2xl font-black text-emerald-400">{formatCurrency(utilidadFinalGlobal)}</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                  <div className="p-3.5 sm:p-4 rounded-xl bg-slate-900 text-white flex justify-between items-center shadow-xs">
+                    <div className="min-w-0">
+                      <span className="text-[10px] sm:text-xs text-slate-400 block font-medium uppercase tracking-wider">UTILIDAD FINAL</span>
+                      <span className="text-xl sm:text-2xl md:text-3xl font-black text-emerald-400 break-all">{formatCurrency(utilidadFinalGlobal)}</span>
+                    </div>
+                    <div className="p-2 bg-emerald-500/10 rounded-lg text-emerald-400 flex-shrink-0 ml-2">
+                      <TrendingUp className="h-6 w-6 sm:h-7 sm:w-7" />
                     </div>
                   </div>
 
-                  <div className="p-4 rounded-xl bg-slate-100 border flex justify-between items-center">
-                    <div>
-                      <span className="text-xs text-slate-500 block font-medium">MARGEN DE GANANCIA BRUTO</span>
-                      <span className="text-2xl font-black text-slate-800">{margenGananciaBrutoPct.toFixed(1)}%</span>
+                  <div className="p-3.5 sm:p-4 rounded-xl bg-slate-100 border border-slate-200 flex justify-between items-center shadow-xs">
+                    <div className="min-w-0">
+                      <span className="text-[10px] sm:text-xs text-slate-500 block font-medium uppercase tracking-wider">MARGEN DE GANANCIA BRUTO</span>
+                      <span className="text-xl sm:text-2xl md:text-3xl font-black text-slate-800">{margenGananciaBrutoPct.toFixed(1)}%</span>
                     </div>
-                    <PieChart className="h-8 w-8 text-indigo-600" />
+                    <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600 flex-shrink-0 ml-2">
+                      <PieChart className="h-6 w-6 sm:h-7 sm:w-7" />
+                    </div>
                   </div>
                 </div>
 
                 <Separator />
 
                 {/* 4. ANÁLISIS PORCENTUAL (% SOBRE VENTAS) */}
-                <div className="space-y-3">
-                  <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
-                    <PieChart className="h-4 w-4 text-indigo-600" />
+                <div className="space-y-2.5 sm:space-y-3">
+                  <h4 className="font-bold text-slate-800 text-xs sm:text-sm flex items-center gap-2">
+                    <PieChart className="h-4 w-4 text-indigo-600 flex-shrink-0" />
                     Gastos y Métodos de Pago como % de las Ventas
                   </h4>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <div className="p-3 bg-white border rounded-lg">
-                      <span className="text-xs text-slate-500 block">Gastos Fijos %</span>
-                      <span className="font-bold text-sm text-rose-600">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
+                    <div className="p-2.5 sm:p-3 bg-white border border-slate-200 rounded-lg shadow-xs">
+                      <span className="text-[10px] sm:text-xs text-slate-500 block truncate">Gastos Fijos %</span>
+                      <span className="font-bold text-xs sm:text-sm text-rose-600">
                         {totalVentaGlobal > 0 ? `${((totalGastosFijosGlobal / totalVentaGlobal) * 100).toFixed(1)}%` : '0%'}
                       </span>
                     </div>
 
-                    <div className="p-3 bg-white border rounded-lg">
-                      <span className="text-xs text-slate-500 block">Gastos Variables %</span>
-                      <span className="font-bold text-sm text-rose-600">
+                    <div className="p-2.5 sm:p-3 bg-white border border-slate-200 rounded-lg shadow-xs">
+                      <span className="text-[10px] sm:text-xs text-slate-500 block truncate">Gastos Variables %</span>
+                      <span className="font-bold text-xs sm:text-sm text-rose-600">
                         {totalVentaGlobal > 0 ? `${((totalGastosVariablesGlobal / totalVentaGlobal) * 100).toFixed(1)}%` : '0%'}
                       </span>
                     </div>
 
-                    <div className="p-3 bg-white border rounded-lg">
-                      <span className="text-xs text-slate-500 block">Merma %</span>
-                      <span className="font-bold text-sm text-rose-700">
+                    <div className="p-2.5 sm:p-3 bg-white border border-slate-200 rounded-lg shadow-xs">
+                      <span className="text-[10px] sm:text-xs text-slate-500 block truncate">Merma %</span>
+                      <span className="font-bold text-xs sm:text-sm text-rose-700">
                         {totalVentaGlobal > 0 ? `${((totalGastosMermaGlobal / totalVentaGlobal) * 100).toFixed(1)}%` : '0%'}
                       </span>
                     </div>
 
-                    <div className="p-3 bg-white border rounded-lg">
-                      <span className="text-xs text-slate-500 block">Salarios %</span>
-                      <span className="font-bold text-sm text-rose-600">
+                    <div className="p-2.5 sm:p-3 bg-white border border-slate-200 rounded-lg shadow-xs">
+                      <span className="text-[10px] sm:text-xs text-slate-500 block truncate">Salarios %</span>
+                      <span className="font-bold text-xs sm:text-sm text-rose-600">
                         {totalVentaGlobal > 0 ? `${((totalSalariosGlobal / totalVentaGlobal) * 100).toFixed(1)}%` : '0%'}
                       </span>
                     </div>
 
-                    <div className="p-3 bg-white border rounded-lg">
-                      <span className="text-xs text-slate-500 block">Ventas en Efectivo %</span>
-                      <span className="font-bold text-sm text-blue-600">
+                    <div className="p-2.5 sm:p-3 bg-white border border-slate-200 rounded-lg shadow-xs">
+                      <span className="text-[10px] sm:text-xs text-slate-500 block truncate">Ventas Efectivo %</span>
+                      <span className="font-bold text-xs sm:text-sm text-blue-600">
                         {totalVentaGlobal > 0 ? `${((totalVentaEfectivoGlobal / totalVentaGlobal) * 100).toFixed(1)}%` : '0%'}
                       </span>
                     </div>
 
-                    <div className="p-3 bg-white border rounded-lg">
-                      <span className="text-xs text-slate-500 block">Ventas en Transferencia %</span>
-                      <span className="font-bold text-sm text-indigo-600">
+                    <div className="p-2.5 sm:p-3 bg-white border border-slate-200 rounded-lg shadow-xs">
+                      <span className="text-[10px] sm:text-xs text-slate-500 block truncate">Ventas Transf. %</span>
+                      <span className="font-bold text-xs sm:text-sm text-indigo-600">
                         {totalVentaGlobal > 0 ? `${((totalVentaTransferenciaGlobal / totalVentaGlobal) * 100).toFixed(1)}%` : '0%'}
                       </span>
                     </div>
 
-                    <div className="p-3 bg-white border rounded-lg col-span-2">
-                      <span className="text-xs text-slate-500 block">Margen de Ganancia Neto</span>
+                    <div className="p-2.5 sm:p-3 bg-white border border-slate-200 rounded-lg shadow-xs col-span-2 sm:col-span-3 lg:col-span-2">
+                      <span className="text-[10px] sm:text-xs text-slate-500 block truncate">Margen Ganancia Neto</span>
                       <span className={cn(
-                        "font-extrabold text-base",
+                        "font-extrabold text-sm sm:text-base",
                         margenGananciaNetoPct >= 15 ? "text-emerald-600" : margenGananciaNetoPct >= 0 ? "text-yellow-600" : "text-rose-600"
                       )}>
                         {margenGananciaNetoPct.toFixed(1)}%
@@ -569,103 +591,135 @@ export default function ContabilidadVendedoresPage({ vendedores, onRefresh }: Co
           )}
 
           {/* LISTA Y DESGLOSE POR VENDEDOR */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center justify-between">
-                <span className="flex items-center gap-2">
-                  <User className="h-5 w-5 text-indigo-600" />
-                  Lista de Puntos de Venta
-                </span>
-                <Input
-                  placeholder="Filtrar por nombre..."
-                  value={filtroVendedor}
-                  onChange={(e) => setFiltroVendedor(e.target.value)}
-                  className="w-48 text-xs"
-                />
-              </CardTitle>
+          <Card className="border-slate-200 shadow-xs">
+            <CardHeader className="p-3.5 sm:p-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <CardTitle className="text-base sm:text-lg font-bold flex items-center gap-2">
+                  <User className="h-4 w-4 sm:h-5 sm:w-5 text-indigo-600 flex-shrink-0" />
+                  <span>Lista de Puntos de Venta</span>
+                  <Badge variant="secondary" className="text-xs ml-1">
+                    {filteredCalculos.length}
+                  </Badge>
+                </CardTitle>
+                <div className="w-full sm:w-64">
+                  <Input
+                    placeholder="Filtrar por nombre..."
+                    value={filtroVendedor}
+                    onChange={(e) => setFiltroVendedor(e.target.value)}
+                    className="w-full text-xs h-9 bg-slate-50 focus:bg-white"
+                  />
+                </div>
+              </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-3.5 sm:p-5 pt-0 sm:pt-0">
               <div className="space-y-3">
-                {filteredCalculos.map((calculo) => {
-                  const isExpanded = expandedSellers.has(calculo.vendedorId)
-                  return (
-                    <div key={calculo.vendedorId} className="border rounded-xl overflow-hidden bg-white shadow-sm">
-                      <div className="p-4 cursor-pointer hover:bg-slate-50 flex justify-between items-center" onClick={() => toggleSellerExpansion(calculo.vendedorId)}>
-                        <div>
-                          <h3 className="font-bold text-slate-800 text-base">{calculo.vendedorNombre}</h3>
-                          <div className="flex gap-4 text-xs text-slate-500 mt-1">
-                            <span>Venta: <strong className="text-blue-600">{formatCurrency(calculo.ventaTotal)}</strong></span>
-                            <span>Utilidad: <strong className={calculo.utilidadFinal >= 0 ? 'text-emerald-600' : 'text-rose-600'}>{formatCurrency(calculo.utilidadFinal)}</strong></span>
+                {filteredCalculos.length === 0 ? (
+                  <div className="text-center py-8 text-slate-500 text-xs sm:text-sm">
+                    No se encontraron puntos de venta para el filtro aplicado.
+                  </div>
+                ) : (
+                  filteredCalculos.map((calculo) => {
+                    const isExpanded = expandedSellers.has(calculo.vendedorId)
+                    return (
+                      <div key={calculo.vendedorId} className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-xs">
+                        <div
+                          className="p-3.5 sm:p-4 cursor-pointer hover:bg-slate-50 transition-colors"
+                          onClick={() => toggleSellerExpansion(calculo.vendedorId)}
+                        >
+                          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center justify-between md:justify-start gap-2">
+                                <h3 className="font-bold text-slate-800 text-sm sm:text-base truncate">{calculo.vendedorNombre}</h3>
+                                <span className="md:hidden text-slate-400">
+                                  {isExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+                                </span>
+                              </div>
+                              <div className="flex flex-wrap gap-x-2 sm:gap-x-3 gap-y-1 text-xs text-slate-500 mt-1.5">
+                                <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-0.5 rounded-md font-medium text-[11px] sm:text-xs">
+                                  Venta: <strong>{formatCurrency(calculo.ventaTotal)}</strong>
+                                </span>
+                                <span className={cn(
+                                  "inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-medium text-[11px] sm:text-xs",
+                                  calculo.utilidadFinal >= 0 ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"
+                                )}>
+                                  Utilidad: <strong>{formatCurrency(calculo.utilidadFinal)}</strong>
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-1.5 sm:gap-2 self-stretch sm:self-auto justify-end pt-2 md:pt-0 border-t md:border-t-0 border-slate-100">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="flex-1 sm:flex-initial text-xs bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100 hover:text-rose-800 h-8 px-2.5"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  const vendObj = vendedores.find(v => v.id.toString() === calculo.vendedorId.toString()) || ({ id: calculo.vendedorId, nombre: calculo.vendedorNombre } as Vendedor)
+                                  handleGastosClick(vendObj)
+                                }}
+                              >
+                                <Plus className="h-3.5 w-3.5 mr-1" /> Gastos
+                              </Button>
+
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="flex-1 sm:flex-initial text-xs h-8 px-2.5"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleOpenSalarioModal(calculo.vendedorId, calculo.vendedorNombre, calculo.salario)
+                                }}
+                              >
+                                <Edit2 className="h-3.5 w-3.5 mr-1" /> Salario Mes
+                              </Button>
+
+                              <div className="hidden md:block pl-1 text-slate-400">
+                                {isExpanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+                              </div>
+                            </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-1.5 sm:gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="text-xs bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100 hover:text-rose-800 h-8 px-2 sm:px-3"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              const vendObj = vendedores.find(v => v.id.toString() === calculo.vendedorId.toString()) || ({ id: calculo.vendedorId, nombre: calculo.vendedorNombre } as Vendedor)
-                              handleGastosClick(vendObj)
-                            }}
-                          >
-                            <Plus className="h-3.5 w-3.5 mr-1" /> Gastos
-                          </Button>
 
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="text-xs h-8 px-2 sm:px-3"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleOpenSalarioModal(calculo.vendedorId, calculo.vendedorNombre, calculo.salario)
-                            }}
-                          >
-                            <Edit2 className="h-3.5 w-3.5 mr-1" /> Salario Mes
-                          </Button>
-                          {isExpanded ? <ChevronUp className="h-5 w-5 text-slate-400" /> : <ChevronDown className="h-5 w-5 text-slate-400" />}
-                        </div>
+                        {isExpanded && (
+                          <div className="p-3 sm:p-4 bg-slate-50 border-t border-slate-200 space-y-3 text-xs">
+                            <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-2 bg-white p-2.5 sm:p-3 rounded-lg border border-slate-200">
+                              <span className="font-semibold text-slate-700 text-xs sm:text-sm">Gestión de Gastos del Mes:</span>
+                              <Button
+                                size="sm"
+                                className="w-full sm:w-auto bg-rose-600 hover:bg-rose-700 text-white text-xs h-8"
+                                onClick={() => {
+                                  const vendObj = vendedores.find(v => v.id.toString() === calculo.vendedorId.toString()) || ({ id: calculo.vendedorId, nombre: calculo.vendedorNombre } as Vendedor)
+                                  handleGastosClick(vendObj)
+                                }}
+                              >
+                                <Plus className="h-3.5 w-3.5 mr-1" /> Agregar / Gestionar Gastos
+                              </Button>
+                            </div>
+
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                              <div className="p-2 sm:p-2.5 bg-white rounded-lg border border-slate-200 shadow-xs">
+                                <span className="text-slate-400 block text-[10px] sm:text-xs truncate">Venta Efectivo</span>
+                                <span className="font-bold text-xs sm:text-sm text-slate-800 break-all">{formatCurrency(calculo.ventaEfectivo)}</span>
+                              </div>
+                              <div className="p-2 sm:p-2.5 bg-white rounded-lg border border-slate-200 shadow-xs">
+                                <span className="text-slate-400 block text-[10px] sm:text-xs truncate">Venta Transferencia</span>
+                                <span className="font-bold text-xs sm:text-sm text-slate-800 break-all">{formatCurrency(calculo.ventaTransferencia)}</span>
+                              </div>
+                              <div className="p-2 sm:p-2.5 bg-white rounded-lg border border-slate-200 shadow-xs">
+                                <span className="text-slate-400 block text-[10px] sm:text-xs truncate">Gastos Fijos</span>
+                                <span className="font-bold text-xs sm:text-sm text-rose-600 break-all">{formatCurrency(calculo.gastosFijos)}</span>
+                              </div>
+                              <div className="p-2 sm:p-2.5 bg-white rounded-lg border border-slate-200 shadow-xs">
+                                <span className="text-slate-400 block text-[10px] sm:text-xs truncate">Gastos Variables</span>
+                                <span className="font-bold text-xs sm:text-sm text-rose-600 break-all">{formatCurrency(calculo.gastosVariables)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
-
-                      {isExpanded && (
-                        <div className="p-4 bg-slate-50 border-t space-y-4 text-xs">
-                          <div className="flex justify-between items-center bg-white p-2.5 rounded-lg border">
-                            <span className="font-semibold text-slate-700">Registrar Gastos del Mes:</span>
-                            <Button
-                              size="sm"
-                              className="bg-rose-600 hover:bg-rose-700 text-white text-xs h-8"
-                              onClick={() => {
-                                const vendObj = vendedores.find(v => v.id.toString() === calculo.vendedorId.toString()) || ({ id: calculo.vendedorId, nombre: calculo.vendedorNombre } as Vendedor)
-                                handleGastosClick(vendObj)
-                              }}
-                            >
-                              <Plus className="h-3.5 w-3.5 mr-1" /> Agregar / Gestionar Gastos
-                            </Button>
-                          </div>
-
-                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                            <div className="p-2 bg-white rounded border">
-                              <span className="text-slate-400 block">Venta Efectivo</span>
-                              <span className="font-bold">{formatCurrency(calculo.ventaEfectivo)}</span>
-                            </div>
-                            <div className="p-2 bg-white rounded border">
-                              <span className="text-slate-400 block">Venta Transferencia</span>
-                              <span className="font-bold">{formatCurrency(calculo.ventaTransferencia)}</span>
-                            </div>
-                            <div className="p-2 bg-white rounded border">
-                              <span className="text-slate-400 block">Gastos Fijos</span>
-                              <span className="font-bold text-rose-600">{formatCurrency(calculo.gastosFijos)}</span>
-                            </div>
-                            <div className="p-2 bg-white rounded border">
-                              <span className="text-slate-400 block">Gastos Variables</span>
-                              <span className="font-bold text-rose-600">{formatCurrency(calculo.gastosVariables)}</span>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
+                    )
+                  })
+                )}
               </div>
             </CardContent>
           </Card>
@@ -674,7 +728,7 @@ export default function ContabilidadVendedoresPage({ vendedores, onRefresh }: Co
 
       {/* MODAL DETALLE DE GASTOS TOTALES */}
       <Dialog open={showGastosDetalleModal} onOpenChange={setShowGastosDetalleModal}>
-        <DialogContent className="w-[95vw] max-w-xl max-h-[85dvh] overflow-y-auto p-4 sm:p-6">
+        <DialogContent className="w-[95vw] max-w-lg max-h-[85dvh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle className="text-base sm:text-lg font-bold flex items-center gap-2">
               <TrendingDown className="h-5 w-5 text-rose-600 flex-shrink-0" />
@@ -685,25 +739,25 @@ export default function ContabilidadVendedoresPage({ vendedores, onRefresh }: Co
           <div className="space-y-3 pt-2">
             <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex justify-between items-center font-bold text-xs sm:text-sm">
               <span>Suma Total Gastos:</span>
-              <span className="text-rose-700 text-base sm:text-lg font-extrabold">{formatCurrency(totalGastosAgrupadosGlobal)}</span>
+              <span className="text-rose-700 text-base sm:text-lg font-extrabold break-all">{formatCurrency(totalGastosAgrupadosGlobal)}</span>
             </div>
 
             <div className="grid grid-cols-1 gap-2 pt-1">
               <div className="p-2.5 bg-slate-50 border rounded-lg flex justify-between items-center text-xs sm:text-sm">
                 <span className="font-semibold text-slate-700">1. Gastos Fijos (GF)</span>
-                <span className="font-bold text-slate-900">{formatCurrency(totalGastosFijosGlobal)}</span>
+                <span className="font-bold text-slate-900 break-all">{formatCurrency(totalGastosFijosGlobal)}</span>
               </div>
               <div className="p-2.5 bg-slate-50 border rounded-lg flex justify-between items-center text-xs sm:text-sm">
                 <span className="font-semibold text-slate-700">2. Gastos Variables (GV)</span>
-                <span className="font-bold text-slate-900">{formatCurrency(totalGastosVariablesGlobal)}</span>
+                <span className="font-bold text-slate-900 break-all">{formatCurrency(totalGastosVariablesGlobal)}</span>
               </div>
               <div className="p-2.5 bg-slate-50 border rounded-lg flex justify-between items-center text-xs sm:text-sm">
                 <span className="font-semibold text-slate-700">3. Merma (GM)</span>
-                <span className="font-bold text-slate-900">{formatCurrency(totalGastosMermaGlobal)}</span>
+                <span className="font-bold text-slate-900 break-all">{formatCurrency(totalGastosMermaGlobal)}</span>
               </div>
               <div className="p-2.5 bg-slate-50 border rounded-lg flex justify-between items-center text-xs sm:text-sm">
                 <span className="font-semibold text-slate-700">4. Salarios (S)</span>
-                <span className="font-bold text-slate-900">{formatCurrency(totalSalariosGlobal)}</span>
+                <span className="font-bold text-slate-900 break-all">{formatCurrency(totalSalariosGlobal)}</span>
               </div>
             </div>
           </div>

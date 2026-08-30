@@ -735,24 +735,25 @@ export default function ModeradoresSection() {
         </DialogContent>
       </Dialog>
 
-      {/* INVENTARIO DETALLE DIALOG */}
+      {/* INVENTARIO DETALLE DIALOG (RESPONSIVE MOBILE FIRST) */}
       <Dialog open={showInventarioDetalleDialog} onOpenChange={setShowInventarioDetalleDialog}>
-        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
-          <DialogHeader>
-            <div className="flex justify-between items-start pr-6">
+        <DialogContent className="w-[95vw] sm:max-w-4xl max-h-[92vh] flex flex-col p-4 sm:p-6 overflow-hidden">
+          <DialogHeader className="space-y-2 pb-2 border-b">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pr-6 sm:pr-0">
               <div>
-                <DialogTitle className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                  <FileSpreadsheet className="w-6 h-6 text-emerald-600" />
-                  Informe de Auditoría: {selectedInventarioDetalle?.punto_venta_nombre}
+                <DialogTitle className="text-lg sm:text-xl font-bold text-gray-900 flex items-center gap-2">
+                  <FileSpreadsheet className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-600 shrink-0" />
+                  <span>Auditoría: {selectedInventarioDetalle?.punto_venta_nombre}</span>
                 </DialogTitle>
                 <p className="text-xs text-gray-500 mt-1">
-                  Fecha: {selectedInventarioDetalle && new Date(selectedInventarioDetalle.fecha).toLocaleString('es-ES')} | Moderador: {selectedInventarioDetalle?.moderador_nombre || selectedModerador?.nombre}
+                  📅 {selectedInventarioDetalle && new Date(selectedInventarioDetalle.fecha).toLocaleString('es-ES')} 
+                  <span className="hidden sm:inline"> | 👤 Moderador: {selectedInventarioDetalle?.moderador_nombre || selectedModerador?.nombre}</span>
                 </p>
               </div>
               {selectedInventarioDetalle && (
                 <Button
                   onClick={() => handleExportarExcel(selectedInventarioDetalle)}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-2"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-2 w-full sm:w-auto justify-center text-xs sm:text-sm py-2 h-auto"
                   size="sm"
                 >
                   <Download className="w-4 h-4" /> Descargar Excel
@@ -761,93 +762,162 @@ export default function ModeradoresSection() {
             </div>
           </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto pr-2 py-4 space-y-4">
+          <div className="flex-1 overflow-y-auto pr-1 sm:pr-2 py-3 space-y-4">
             {loadingInventarioDetalle ? (
               <div className="flex justify-center py-12">
                 <Loader2 className="w-8 h-8 animate-spin text-emerald-600" />
               </div>
             ) : selectedInventarioDetalle ? (
               <div className="space-y-4">
-                {/* Resumen Cards */}
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="bg-gray-50 p-3 rounded-lg border border-gray-200 text-center">
-                    <span className="text-xs text-gray-500 block">Auditados</span>
-                    <span className="text-xl font-extrabold text-gray-800">{selectedInventarioDetalle.total_items_auditados}</span>
+                {/* Resumen Cards (Mobile first grid) */}
+                <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                  <div className="bg-gray-50 p-2.5 sm:p-3 rounded-lg border border-gray-200 text-center">
+                    <span className="text-[10px] sm:text-xs text-gray-500 block font-medium">Auditados</span>
+                    <span className="text-base sm:text-xl font-extrabold text-gray-800">{selectedInventarioDetalle.total_items_auditados}</span>
                   </div>
-                  <div className="bg-emerald-50 p-3 rounded-lg border border-emerald-200 text-center">
-                    <span className="text-xs text-emerald-700 block">Exactos</span>
-                    <span className="text-xl font-extrabold text-emerald-800">
+                  <div className="bg-emerald-50 p-2.5 sm:p-3 rounded-lg border border-emerald-200 text-center">
+                    <span className="text-[10px] sm:text-xs text-emerald-700 block font-medium">Exactos</span>
+                    <span className="text-base sm:text-xl font-extrabold text-emerald-800">
                       {selectedInventarioDetalle.detalles?.filter((d: any) => Number(d.diferencia) === 0).length || 0}
                     </span>
                   </div>
-                  <div className="bg-amber-50 p-3 rounded-lg border border-amber-200 text-center">
-                    <span className="text-xs text-amber-700 block">Con Discrepancia</span>
-                    <span className="text-xl font-extrabold text-amber-800">{selectedInventarioDetalle.total_discrepancias}</span>
+                  <div className="bg-amber-50 p-2.5 sm:p-3 rounded-lg border border-amber-200 text-center">
+                    <span className="text-[10px] sm:text-xs text-amber-700 block font-medium">Discrepancias</span>
+                    <span className="text-base sm:text-xl font-extrabold text-amber-800">{selectedInventarioDetalle.total_discrepancias}</span>
                   </div>
                 </div>
 
-                {/* Tabla de Productos */}
-                <div className="border rounded-lg overflow-hidden">
-                  <table className="w-full text-left text-sm">
-                    <thead className="bg-gray-100 text-gray-700 font-semibold border-b text-xs uppercase">
-                      <tr>
-                        <th className="p-3">Producto / Variante</th>
-                        <th className="p-3">Código</th>
-                        <th className="p-3 text-center">Sistema</th>
-                        <th className="p-3 text-center">Físico</th>
-                        <th className="p-3 text-center">Diferencia</th>
-                        <th className="p-3 text-right">Estado</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200">
-                      {selectedInventarioDetalle.detalles?.map((d: any) => {
-                        const diff = Number(d.diferencia);
-                        const isExact = diff === 0;
-                        const isSurplus = diff > 0;
+                {selectedInventarioDetalle.observaciones ? (
+                  <div className="bg-amber-50/70 border border-amber-200 rounded-lg p-2.5 sm:p-3 text-xs text-amber-900">
+                    <strong className="block mb-0.5 text-amber-950 font-semibold">Notas / Observaciones:</strong>
+                    &quot;{selectedInventarioDetalle.observaciones}&quot;
+                  </div>
+                ) : null}
 
-                        return (
-                          <tr key={d.id} className={!isExact ? 'bg-amber-50/40' : 'hover:bg-gray-50'}>
-                            <td className="p-3 font-medium text-gray-800">
-                              <div>{d.nombre_producto}</div>
-                              {d.parametro_nombre ? (
-                                <div className="text-xs text-orange-600 font-normal">Variante: {d.parametro_nombre}</div>
-                              ) : null}
-                            </td>
-                            <td className="p-3 text-xs text-gray-500 font-mono">
-                              {d.codigo_barras || 'N/A'}
-                            </td>
-                            <td className="p-3 text-center text-gray-600 font-semibold">
-                              {d.cantidad_sistema}
-                            </td>
-                            <td className="p-3 text-center text-gray-900 font-bold">
-                              {d.cantidad_fisica}
-                            </td>
-                            <td className="p-3 text-center font-extrabold">
-                              <span className={isExact ? 'text-gray-400' : (isSurplus ? 'text-emerald-600' : 'text-red-600')}>
-                                {isSurplus ? `+${diff}` : diff}
+                {/* Vista Móvil: Tarjetas compactas (visible solo en pantallas pequeñas < md) */}
+                <div className="space-y-2.5 md:hidden">
+                  {selectedInventarioDetalle.detalles?.map((d: any) => {
+                    const diff = Number(d.diferencia);
+                    const isExact = diff === 0;
+                    const isSurplus = diff > 0;
+
+                    return (
+                      <div 
+                        key={d.id} 
+                        className={`p-3 rounded-lg border ${
+                          !isExact 
+                            ? 'bg-amber-50/30 border-amber-300' 
+                            : 'bg-white border-gray-200'
+                        } space-y-2`}
+                      >
+                        <div className="flex justify-between items-start gap-2">
+                          <div>
+                            <span className="font-bold text-gray-900 text-sm block">
+                              {d.nombre_producto}
+                            </span>
+                            {d.parametro_nombre ? (
+                              <span className="text-xs text-orange-600 font-medium">
+                                Variante: {d.parametro_nombre}
                               </span>
-                            </td>
-                            <td className="p-3 text-right">
-                              <span className={`inline-block text-[11px] font-bold px-2 py-0.5 rounded-full border ${
-                                isExact 
-                                  ? 'bg-gray-50 text-gray-600 border-gray-200' 
-                                  : (isSurplus ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200')
-                              }`}>
-                                {isExact ? 'Exacto' : (isSurplus ? 'Sobrante (+)' : 'Faltante (-)')}
-                              </span>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                            ) : null}
+                            <span className="text-[11px] text-gray-400 font-mono block">
+                              Cód: {d.codigo_barras || 'N/A'}
+                            </span>
+                          </div>
+                          <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${
+                            isExact 
+                              ? 'bg-gray-50 text-gray-600 border-gray-200' 
+                              : (isSurplus ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200')
+                          }`}>
+                            {isExact ? 'Exacto' : (isSurplus ? `Sobrante (+${diff})` : `Faltante (${diff})`)}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-2 bg-gray-50/80 p-2 rounded border border-gray-150 text-center text-xs">
+                          <div>
+                            <span className="text-[10px] text-gray-400 block">Sistema</span>
+                            <span className="font-semibold text-gray-700">{d.cantidad_sistema}</span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-gray-400 block">Físico</span>
+                            <span className="font-bold text-gray-900">{d.cantidad_fisica}</span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-gray-400 block">Diferencia</span>
+                            <span className={`font-extrabold ${isExact ? 'text-gray-400' : isSurplus ? 'text-emerald-600' : 'text-red-600'}`}>
+                              {isSurplus ? `+${diff}` : diff}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Vista Escritorio / Tablet: Tabla completa (oculta en mobile, visible en >= md) */}
+                <div className="hidden md:block border rounded-lg overflow-hidden bg-white shadow-sm">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                      <thead className="bg-gray-100 text-gray-700 font-semibold border-b text-xs uppercase">
+                        <tr>
+                          <th className="p-3">Producto / Variante</th>
+                          <th className="p-3">Código</th>
+                          <th className="p-3 text-center">Sistema</th>
+                          <th className="p-3 text-center">Físico</th>
+                          <th className="p-3 text-center">Diferencia</th>
+                          <th className="p-3 text-right">Estado</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {selectedInventarioDetalle.detalles?.map((d: any) => {
+                          const diff = Number(d.diferencia);
+                          const isExact = diff === 0;
+                          const isSurplus = diff > 0;
+
+                          return (
+                            <tr key={d.id} className={!isExact ? 'bg-amber-50/40' : 'hover:bg-gray-50'}>
+                              <td className="p-3 font-medium text-gray-800">
+                                <div>{d.nombre_producto}</div>
+                                {d.parametro_nombre ? (
+                                  <div className="text-xs text-orange-600 font-normal">Variante: {d.parametro_nombre}</div>
+                                ) : null}
+                              </td>
+                              <td className="p-3 text-xs text-gray-500 font-mono">
+                                {d.codigo_barras || 'N/A'}
+                              </td>
+                              <td className="p-3 text-center text-gray-600 font-semibold">
+                                {d.cantidad_sistema}
+                              </td>
+                              <td className="p-3 text-center text-gray-900 font-bold">
+                                {d.cantidad_fisica}
+                              </td>
+                              <td className="p-3 text-center font-extrabold">
+                                <span className={isExact ? 'text-gray-400' : (isSurplus ? 'text-emerald-600' : 'text-red-600')}>
+                                  {isSurplus ? `+${diff}` : diff}
+                                </span>
+                              </td>
+                              <td className="p-3 text-right">
+                                <span className={`inline-block text-[11px] font-bold px-2 py-0.5 rounded-full border ${
+                                  isExact 
+                                    ? 'bg-gray-50 text-gray-600 border-gray-200' 
+                                    : (isSurplus ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200')
+                                }`}>
+                                  {isExact ? 'Exacto' : (isSurplus ? 'Sobrante (+)' : 'Faltante (-)')}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
             ) : null}
           </div>
 
-          <DialogFooter className="border-t pt-4">
-            <Button onClick={() => setShowInventarioDetalleDialog(false)}>
+          <DialogFooter className="border-t pt-3 sm:pt-4">
+            <Button className="w-full sm:w-auto" onClick={() => setShowInventarioDetalleDialog(false)}>
               Cerrar
             </Button>
           </DialogFooter>

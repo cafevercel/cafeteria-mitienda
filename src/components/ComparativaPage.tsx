@@ -114,40 +114,40 @@ export default function ComparativaPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <ArrowLeftRight className="h-5 w-5 text-indigo-600" />
-            Comparativa de Rendimiento Financiero
+    <div className="space-y-4 sm:space-y-6">
+      <Card className="border-slate-200 shadow-xs">
+        <CardHeader className="p-3.5 sm:p-5">
+          <CardTitle className="text-base sm:text-lg font-bold flex items-center gap-2">
+            <ArrowLeftRight className="h-5 w-5 text-indigo-600 flex-shrink-0" />
+            <span>Comparativa de Rendimiento Financiero</span>
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <CardContent className="p-3.5 sm:p-5 pt-0 sm:pt-0">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
             {/* Período A */}
-            <div className="p-4 border rounded-xl bg-slate-50 space-y-3">
-              <h3 className="font-semibold text-slate-700 flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-blue-500" /> Período A (Base)
+            <div className="p-3.5 sm:p-4 border border-slate-200 rounded-xl bg-slate-50 space-y-2.5">
+              <h3 className="font-semibold text-xs sm:text-sm text-slate-800 flex items-center gap-1.5">
+                <Calendar className="h-4 w-4 text-blue-500 flex-shrink-0" /> Período A (Base)
               </h3>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-xs text-slate-500 font-medium">Mes</label>
+                  <label className="text-[11px] sm:text-xs text-slate-500 font-medium block mb-1">Mes</label>
                   <Select value={mesA.toString()} onValueChange={v => setMesA(parseInt(v))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-9 text-xs bg-white"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {MONTHS.map(m => (
-                        <SelectItem key={m.value} value={m.value.toString()}>{m.label}</SelectItem>
+                        <SelectItem key={m.value} value={m.value.toString()} className="text-xs">{m.label}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
                 <div>
-                  <label className="text-xs text-slate-500 font-medium">Año</label>
+                  <label className="text-[11px] sm:text-xs text-slate-500 font-medium block mb-1">Año</label>
                   <Select value={anioA.toString()} onValueChange={v => setAnioA(parseInt(v))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-9 text-xs bg-white"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {[2024, 2025, 2026, 2027, 2028, 2029, 2030].map(y => (
-                        <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
+                        <SelectItem key={y} value={y.toString()} className="text-xs">{y}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -156,29 +156,29 @@ export default function ComparativaPage() {
             </div>
 
             {/* Período B */}
-            <div className="p-4 border rounded-xl bg-slate-50 space-y-3">
-              <h3 className="font-semibold text-slate-700 flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-emerald-500" /> Período B (Comparar)
+            <div className="p-3.5 sm:p-4 border border-slate-200 rounded-xl bg-slate-50 space-y-2.5">
+              <h3 className="font-semibold text-xs sm:text-sm text-slate-800 flex items-center gap-1.5">
+                <Calendar className="h-4 w-4 text-emerald-500 flex-shrink-0" /> Período B (Comparar)
               </h3>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-xs text-slate-500 font-medium">Mes</label>
+                  <label className="text-[11px] sm:text-xs text-slate-500 font-medium block mb-1">Mes</label>
                   <Select value={mesB.toString()} onValueChange={v => setMesB(parseInt(v))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-9 text-xs bg-white"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {MONTHS.map(m => (
-                        <SelectItem key={m.value} value={m.value.toString()}>{m.label}</SelectItem>
+                        <SelectItem key={m.value} value={m.value.toString()} className="text-xs">{m.label}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
                 <div>
-                  <label className="text-xs text-slate-500 font-medium">Año</label>
+                  <label className="text-[11px] sm:text-xs text-slate-500 font-medium block mb-1">Año</label>
                   <Select value={anioB.toString()} onValueChange={v => setAnioB(parseInt(v))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-9 text-xs bg-white"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {[2024, 2025, 2026, 2027, 2028, 2029, 2030].map(y => (
-                        <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
+                        <SelectItem key={y} value={y.toString()} className="text-xs">{y}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -187,25 +187,29 @@ export default function ComparativaPage() {
             </div>
           </div>
 
-          <Button onClick={handleComparar} disabled={isLoading} className="w-full mt-4 bg-indigo-600 hover:bg-indigo-700">
+          <Button
+            onClick={handleComparar}
+            disabled={isLoading}
+            className="w-full mt-3 sm:mt-4 h-10 sm:h-11 font-semibold text-xs sm:text-sm bg-indigo-600 hover:bg-indigo-700 shadow-xs"
+          >
             {isLoading ? 'Generando Comparativa...' : 'Generar Comparativa'}
           </Button>
         </CardContent>
       </Card>
 
       {hasCompared && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center justify-between">
-              <span>Resultados de la Comparativa</span>
-              <span className="text-sm font-normal text-slate-500">
+        <Card className="border-slate-200 shadow-xs overflow-hidden">
+          <CardHeader className="p-3.5 sm:p-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+              <CardTitle className="text-base sm:text-lg font-bold">Resultados de la Comparativa</CardTitle>
+              <span className="text-xs font-medium text-slate-500">
                 {MONTHS.find(m => m.value === mesA)?.label} {anioA} vs {MONTHS.find(m => m.value === mesB)?.label} {anioB}
               </span>
-            </CardTitle>
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto -mx-2 px-2">
-              <div className="min-w-[550px] space-y-2">
+          <CardContent className="p-3 sm:p-5 pt-0 sm:pt-0">
+            <div className="overflow-x-auto -mx-3 sm:mx-0 px-3 sm:px-0">
+              <div className="min-w-[480px] space-y-1.5">
                 <div className="grid grid-cols-4 gap-2 font-bold text-xs sm:text-sm bg-slate-100 p-2.5 sm:p-3 rounded-lg text-slate-700">
                   <div>Métrica</div>
                   <div className="text-right">{MONTHS.find(m => m.value === mesA)?.label} {anioA}</div>
@@ -228,12 +232,12 @@ export default function ComparativaPage() {
                   const diffPct = getDiffPct(row.valA, row.valB)
                   const isPositive = row.valB >= row.valA
                   return (
-                    <div key={idx} className={`grid grid-cols-4 gap-2 items-center p-2 rounded-md ${row.isProfit ? 'bg-emerald-50 font-bold border border-emerald-200' : row.highlight ? 'bg-slate-50 font-semibold' : 'hover:bg-slate-50'}`}>
+                    <div key={idx} className={`grid grid-cols-4 gap-2 items-center p-2 sm:p-2.5 rounded-lg ${row.isProfit ? 'bg-emerald-50 font-bold border border-emerald-200' : row.highlight ? 'bg-slate-50 font-semibold' : 'hover:bg-slate-50/80'}`}>
                       <div className="text-xs sm:text-sm text-slate-800 truncate">{row.label}</div>
-                      <div className="text-right text-xs sm:text-sm">{formatCurrency(row.valA)}</div>
-                      <div className="text-right text-xs sm:text-sm">{formatCurrency(row.valB)}</div>
+                      <div className="text-right text-xs sm:text-sm break-all">{formatCurrency(row.valA)}</div>
+                      <div className="text-right text-xs sm:text-sm break-all">{formatCurrency(row.valB)}</div>
                       <div className="text-center text-[10px] sm:text-xs font-semibold">
-                        <span className={`px-2 py-0.5 sm:py-1 rounded-full ${isPositive ? (row.label.includes('Gastos') ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700') : (row.label.includes('Gastos') ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700')}`}>
+                        <span className={`inline-block px-1.5 sm:px-2 py-0.5 rounded-full ${isPositive ? (row.label.includes('Gastos') ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700') : (row.label.includes('Gastos') ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700')}`}>
                           {diffPct}
                         </span>
                       </div>
