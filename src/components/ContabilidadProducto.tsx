@@ -10,7 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar as CalendarComponent } from "@/components/ui/calendar"
 import { cn } from "@/lib/utils"
 import { FileSpreadsheet, ArrowUpDown, CalendarDays, X, Calendar, ChevronDown } from "lucide-react"
-import { getVendedores, getVentasVendedor } from '@/app/services/api'
+import { getVendedores, getVentasVendedor, getAllVentas } from '@/app/services/api'
 import { toast } from "@/hooks/use-toast"
 import { Vendedor, Venta, Producto } from '@/types'
 import React from 'react'
@@ -48,21 +48,15 @@ export default function ContabilidadProducto({ inventario }: ContabilidadProduct
   const fetchAllSales = useCallback(async () => {
     setIsLoadingContabilidad(true)
     try {
-      const allSales: Venta[] = []
+      const startStr = fechaInicio ? format(fechaInicio, 'yyyy-MM-dd') : undefined
+      const endStr = fechaFin ? format(fechaFin, 'yyyy-MM-dd') : undefined
+      const rawSales = await getAllVentas(startStr, endStr)
 
-      for (const vendedor of vendedores) {
-        try {
-          const ventasVendedor = await getVentasVendedor(vendedor.id)
-          const ventasConVendedor = ventasVendedor.map(venta => ({
-            ...venta,
-            vendedor_nombre: vendedor.nombre,
-            vendedor_id: vendedor.id
-          }))
-          allSales.push(...ventasConVendedor)
-        } catch (error) {
-          console.error(`Error al obtener ventas del vendedor ${vendedor.nombre}:`, error)
-        }
-      }
+      const allSales: Venta[] = rawSales.map(venta => ({
+        ...venta,
+        vendedor_nombre: (venta as any).vendedor_nombre || 'Vendedor',
+        vendedor_id: (venta as any).vendedor || (venta as any).vendedor_id
+      }))
 
       allSales.sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime())
       setVentasGlobales(allSales)
@@ -76,17 +70,15 @@ export default function ContabilidadProducto({ inventario }: ContabilidadProduct
     } finally {
       setIsLoadingContabilidad(false)
     }
-  }, [vendedores])
+  }, [fechaInicio, fechaFin])
 
   useEffect(() => {
     fetchVendedores()
   }, [fetchVendedores])
 
   useEffect(() => {
-    if (vendedores.length > 0) {
-      fetchAllSales()
-    }
-  }, [vendedores, fetchAllSales])
+    fetchAllSales()
+  }, [fetchAllSales])
 
   const toggleExpandContabilidad = useCallback((productName: string) => {
     setExpandedContabilidadProducts(prev => ({

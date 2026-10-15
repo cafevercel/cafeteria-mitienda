@@ -69,7 +69,7 @@ export const VencimientoBell: React.FC<VencimientoBellProps> = ({
     setIsLoading(true);
 
     try {
-      const res = await fetch('/api/notificaciones');
+      const res = await fetch('/api/notificaciones?mode=bell');
       if (!res.ok) return;
       const data = await res.json();
 
@@ -189,13 +189,11 @@ export const VencimientoBell: React.FC<VencimientoBellProps> = ({
 
     const handleUpdate = () => fetchAndCalculate();
     window.addEventListener('notificaciones_updated', handleUpdate);
-    window.addEventListener('focus', handleUpdate);
 
     const interval = setInterval(fetchAndCalculate, 300000);
 
     return () => {
       window.removeEventListener('notificaciones_updated', handleUpdate);
-      window.removeEventListener('focus', handleUpdate);
       clearInterval(interval);
     };
   }, [fetchAndCalculate]);

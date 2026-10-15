@@ -4,8 +4,57 @@ import { query } from '@/lib/db';
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
+    const idParam = searchParams.get('id');
     const moderadorId = searchParams.get('moderadorId');
     const vendedorId = searchParams.get('vendedorId');
+
+    // Si se pasa id directo por query param, devolver detalle completo
+    if (idParam && !isNaN(Number(idParam))) {
+      const headerResult = await query(
+        `SELECT 
+          i.id,
+          i.moderador_id,
+          u.nombre as moderador_nombre,
+          i.vendedor_id,
+          i.punto_venta_nombre,
+          i.fecha,
+          i.total_items_auditados,
+          i.total_discrepancias,
+          i.observaciones
+        FROM inventarios_fisicos i
+        LEFT JOIN usuarios u ON i.moderador_id = u.id
+        WHERE i.id = $1`,
+        [Number(idParam)]
+      );
+
+      if (headerResult.rows.length === 0) {
+        return NextResponse.json({ error: 'Inventario no encontrado' }, { status: 404 });
+      }
+
+      const detailsResult = await query(
+        `SELECT 
+          id,
+          inventario_id,
+          producto_id,
+          nombre_producto,
+          codigo_barras,
+          parametro_nombre,
+          cantidad_sistema,
+          cantidad_fisica,
+          diferencia,
+          precio_compra,
+          precio_venta
+        FROM inventario_fisico_detalles
+        WHERE inventario_id = $1
+        ORDER BY ABS(diferencia) DESC, nombre_producto ASC`,
+        [Number(idParam)]
+      );
+
+      return NextResponse.json({
+        ...headerResult.rows[0],
+        detalles: detailsResult.rows
+      });
+    }
 
     let sql = `
       SELECT 

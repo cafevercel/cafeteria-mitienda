@@ -479,8 +479,17 @@ export const editarVenta = async (
 };
 
 
-export const getVentasMes = async (vendedorId: string): Promise<Venta[]> => {
-  const response = await api.get(`/ventas?vendedorId=${vendedorId}`);
+export const getVentasMes = async (vendedorId: string, startDate?: string): Promise<Venta[]> => {
+  let url = `/ventas?vendedorId=${vendedorId}`;
+  if (startDate) {
+    url += `&startDate=${startDate}`;
+  } else {
+    // Por defecto, limitar al inicio del mes actual para no descargar años de ventas acumuladas
+    const now = new Date();
+    const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+    url += `&startDate=${firstDayOfMonth}`;
+  }
+  const response = await api.get(url);
   return response.data;
 };
 
@@ -547,11 +556,12 @@ export const reducirProductoInventario = async (
 };
 
 
-export const getVentasVendedor = async (vendedorId: string): Promise<Venta[]> => {
+export const getVentasVendedor = async (vendedorId: string, startDate?: string, endDate?: string): Promise<Venta[]> => {
   try {
-    const response = await api.get<Venta[]>(`/ventas`, {
-      params: { vendedorId }
-    });
+    const params: Record<string, string> = { vendedorId };
+    if (startDate) params.startDate = startDate;
+    if (endDate) params.endDate = endDate;
+    const response = await api.get<Venta[]>(`/ventas`, { params });
     return response.data;
   } catch (error) {
     console.error('Error al obtener ventas:', error);
@@ -892,11 +902,12 @@ export const getVendedorTransacciones = async (vendedorId: string): Promise<Tran
   }
 };
 
-export const getAllVentas = async (): Promise<Venta[]> => {
+export const getAllVentas = async (startDate?: string, endDate?: string): Promise<Venta[]> => {
   try {
-    const response = await api.get(`/ventas`, {
-      params: { all: true }
-    });
+    const params: Record<string, any> = { all: true };
+    if (startDate) params.startDate = startDate;
+    if (endDate) params.endDate = endDate;
+    const response = await api.get(`/ventas`, { params });
     return response.data;
   } catch (error) {
     console.error('Error al obtener todas las ventas:', error);

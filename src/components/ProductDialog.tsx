@@ -7,16 +7,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import Image from 'next/image';
 import { toast } from "@/hooks/use-toast";
 import { Producto, Vendedor, Parametro } from '@/types';
-import { Plus, Minus } from 'lucide-react';
+import { Plus, Minus, Scan, Truck, AlertTriangle } from 'lucide-react';
 import { ImageUpload } from '@/components/ImageUpload';
 import { formatearPorcentajeGanancia } from "@/lib/formatters";
-import { Scan } from 'lucide-react';
 import BarcodeScanner from './BarcodeScanner';
 import BarcodeDisplay from './BarcodeDisplay';
 
-type DeliveryStep = 'location' | 'quantities';
-// type DeliveryLocation = 'cafeteria' | 'cocina'; // Removed in favor of user selection
-
+type DeliveryStep = 'destination' | 'location' | 'quantities';
 
 interface ProductDialogProps {
   product: Producto;
@@ -29,6 +26,11 @@ interface ProductDialogProps {
     cantidadTotal: number,
     parametros: Array<{ nombre: string; cantidad: number }> | undefined,
     userId?: number
+  ) => Promise<void>;
+  onMerma?: (
+    productId: string,
+    cantidad: number,
+    parametros?: Array<{ nombre: string; cantidad: number }>
   ) => Promise<void>;
   seccionesExistentes: string[];
 }
@@ -116,7 +118,64 @@ SeccionAutocomplete.displayName = 'SeccionAutocomplete';
 
 type ModeType = 'view' | 'edit' | 'deliver';
 
-// Componente de selección de ubicación - MOVIDO FUERA
+// Componente para elegir destino: Punto de Venta o Merma
+const DestinationChoiceMode = React.memo(({
+  onChooseVendor,
+  onChooseMerma,
+  onCancel,
+}: {
+  onChooseVendor: () => void;
+  onChooseMerma: () => void;
+  onCancel: () => void;
+}) => (
+  <div className="space-y-4">
+    <div className="text-center space-y-1">
+      <h3 className="text-base sm:text-lg font-bold text-slate-800">¿Qué destino deseas para el producto?</h3>
+      <p className="text-xs text-slate-500">Selecciona si deseas entregarlo a un punto de venta o reportarlo a merma directamente.</p>
+    </div>
+
+    <div className="grid grid-cols-1 gap-3 pt-2">
+      <Button
+        type="button"
+        variant="outline"
+        className="w-full h-auto p-3.5 text-left flex items-start space-x-3.5 border-2 border-slate-200 hover:border-blue-500 hover:bg-blue-50/50 transition-all rounded-xl"
+        onClick={onChooseVendor}
+      >
+        <div className="p-2.5 bg-blue-100 text-blue-700 rounded-lg shrink-0 mt-0.5">
+          <Truck className="h-5 w-5" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="font-bold text-slate-900 text-sm">Entregar a un Punto de Venta</div>
+          <div className="text-xs text-slate-500 mt-0.5">Despachar existencias a un vendedor asignado</div>
+        </div>
+      </Button>
+
+      <Button
+        type="button"
+        variant="outline"
+        className="w-full h-auto p-3.5 text-left flex items-start space-x-3.5 border-2 border-slate-200 hover:border-amber-500 hover:bg-amber-50/50 transition-all rounded-xl"
+        onClick={onChooseMerma}
+      >
+        <div className="p-2.5 bg-amber-100 text-amber-800 rounded-lg shrink-0 mt-0.5">
+          <AlertTriangle className="h-5 w-5 text-amber-700" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="font-bold text-amber-900 text-sm">Reportar a Merma (Baja de Almacén)</div>
+          <div className="text-xs text-slate-500 mt-0.5">Registrar producto dañado, vencido o defectuoso</div>
+        </div>
+      </Button>
+    </div>
+
+    <div className="flex justify-end pt-2">
+      <Button variant="outline" size="sm" onClick={onCancel}>
+        Cancelar
+      </Button>
+    </div>
+  </div>
+));
+
+DestinationChoiceMode.displayName = 'DestinationChoiceMode';
+
 // Componente de selección de ubicación - MOVIDO FUERA
 const LocationSelectionMode = React.memo(({
   onVendorSelect,
@@ -426,13 +485,14 @@ const EditMode = React.memo(({
 
 EditMode.displayName = 'EditMode';
 
-// Subcomponente para el modo de entrega - MOVIDO FUERA
+// Subcomponente para el modo de entrega / merma - MOVIDO FUERA
 const DeliverMode = React.memo(({
   product,
   parameterQuantities,
   simpleDeliveryQuantity,
   totalDeliveryQuantity,
   selectedVendor,
+  isMerma = false,
   onParameterQuantityChange,
   onSimpleDeliveryChange,
   onBack,
@@ -444,6 +504,7 @@ const DeliverMode = React.memo(({
   simpleDeliveryQuantity: number;
   totalDeliveryQuantity: number;
   selectedVendor: Vendedor | null;
+  isMerma?: boolean;
   onParameterQuantityChange: (paramName: string, value: number) => void;
   onSimpleDeliveryChange: (value: number) => void;
   onBack: () => void;
@@ -451,7 +512,19 @@ const DeliverMode = React.memo(({
   getTotalCantidad: () => number;
 }) => (
   <div className="space-y-4">
-    {selectedVendor && (
+    {isMerma ? (
+      <div className="mb-4 p-3 bg-amber-50 rounded-lg border border-amber-200">
+        <div className="flex items-center space-x-2">
+          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+          <span className="font-semibold text-amber-900 text-sm">
+            Destino: Merma directa desde Almacén
+          </span>
+        </div>
+        <p className="text-xs text-amber-700 mt-1">
+          La cantidad seleccionada se descontará directamente del stock del almacén y quedará registrada en el historial de mermas.
+        </p>
+      </div>
+    ) : selectedVendor ? (
       <div className="mb-4 p-3 bg-gray-50 rounded-md border">
         <div className="flex items-center space-x-2">
           <div className="w-3 h-3 rounded-full bg-blue-500"></div>
@@ -460,10 +533,12 @@ const DeliverMode = React.memo(({
           </span>
         </div>
       </div>
-    )}
+    ) : null}
 
     <div className="space-y-4">
-      <h3 className="text-lg font-semibold">Seleccionar cantidad a entregar</h3>
+      <h3 className="text-lg font-semibold">
+        {isMerma ? 'Seleccionar cantidad a registrar como merma' : 'Seleccionar cantidad a entregar'}
+      </h3>
 
       {product.tiene_parametros && product.parametros ? (
         <div className="space-y-2">
@@ -484,7 +559,7 @@ const DeliverMode = React.memo(({
           ))}
 
           <div className="flex justify-between items-center font-semibold">
-            <span>Total a entregar:</span>
+            <span>Total {isMerma ? 'merma' : 'a entregar'}:</span>
             <span>{totalDeliveryQuantity}</span>
           </div>
         </div>
@@ -512,12 +587,20 @@ const DeliverMode = React.memo(({
       </Button>
       <Button
         onClick={onDeliver}
+        className={isMerma ? "bg-amber-600 hover:bg-amber-700 text-white" : ""}
         disabled={
           (product.tiene_parametros ? totalDeliveryQuantity === 0 : simpleDeliveryQuantity === 0) ||
           (product.tiene_parametros ? totalDeliveryQuantity > getTotalCantidad() : simpleDeliveryQuantity > product.cantidad)
         }
       >
-        Confirmar Entrega
+        {isMerma ? (
+          <>
+            <AlertTriangle className="w-4 h-4 mr-1.5" />
+            Confirmar Merma
+          </>
+        ) : (
+          'Confirmar Entrega'
+        )}
       </Button>
     </div>
   </div>
@@ -610,6 +693,7 @@ export default function ProductDialog({
   onEdit,
   onDelete,
   onDeliver,
+  onMerma,
   seccionesExistentes,
 }: ProductDialogProps) {
   const [mode, setMode] = useState<ModeType>('view');
@@ -638,7 +722,8 @@ export default function ProductDialog({
   const [totalDeliveryQuantity, setTotalDeliveryQuantity] = useState(0);
   const [simpleDeliveryQuantity, setSimpleDeliveryQuantity] = useState<number>(0);
   const [selectedVendor, setSelectedVendor] = useState<Vendedor | null>(null);
-  const [deliveryStep, setDeliveryStep] = useState<DeliveryStep>('location');
+  const [deliveryStep, setDeliveryStep] = useState<DeliveryStep>('destination');
+  const [deliveryTarget, setDeliveryTarget] = useState<'vendor' | 'merma'>('vendor');
 
   const [verificandoBarcode, setVerificandoBarcode] = useState(false);
   const [barcodeExiste, setBarcodeExiste] = useState(false);
@@ -712,11 +797,24 @@ export default function ProductDialog({
     setMostrarPorcentajeGanancia(tienePorcentajeGanancia);
   }, [product]);
 
-  // Función para iniciar el modo de entrega
+  // Función para iniciar el modo de entrega con diálogo de elección
   const handleDeliverMode = useCallback(() => {
     setSelectedVendor(null);
-    setDeliveryStep('location');
+    setDeliveryTarget('vendor');
+    setDeliveryStep('destination');
     setMode('deliver');
+  }, []);
+
+  const handleChooseVendor = useCallback(() => {
+    setDeliveryTarget('vendor');
+    setSelectedVendor(null);
+    setDeliveryStep('location');
+  }, []);
+
+  const handleChooseMerma = useCallback(() => {
+    setDeliveryTarget('merma');
+    setSelectedVendor(null);
+    setDeliveryStep('quantities');
   }, []);
 
   // Función para seleccionar ubicación de entrega
@@ -726,7 +824,7 @@ export default function ProductDialog({
   }, []);
 
   const handleDelivery = async () => {
-    if (!selectedVendor) {
+    if (deliveryTarget === 'vendor' && !selectedVendor) {
       toast({
         title: "Error",
         description: "Debe seleccionar un lugar de entrega",
@@ -740,7 +838,7 @@ export default function ProductDialog({
     if (cantidadAEntregar === 0) {
       toast({
         title: "Advertencia",
-        description: "Por favor ingrese las cantidades a entregar.",
+        description: `Por favor ingrese las cantidades a ${deliveryTarget === 'merma' ? 'reportar como merma' : 'entregar'}.`,
         variant: "default",
       });
       return;
@@ -749,9 +847,37 @@ export default function ProductDialog({
     if (cantidadAEntregar > getTotalCantidad()) {
       toast({
         title: "Error",
-        description: "La cantidad total excede el stock disponible.",
+        description: "La cantidad total excede el stock disponible en almacén.",
         variant: "destructive",
       });
+      return;
+    }
+
+    if (deliveryTarget === 'merma') {
+      try {
+        const parametrosMerma = product.tiene_parametros && product.parametros ?
+          product.parametros.map((param) => ({
+            nombre: param.nombre,
+            cantidad: parameterQuantities[param.nombre] || 0,
+          })).filter(p => p.cantidad > 0) :
+          undefined;
+
+        if (onMerma) {
+          await onMerma(
+            product.id,
+            cantidadAEntregar,
+            parametrosMerma
+          );
+        }
+        onClose();
+      } catch (error) {
+        console.error('Error reportando merma:', error);
+        toast({
+          title: "Error",
+          description: error instanceof Error ? error.message : "No se pudo registrar la merma",
+          variant: "destructive",
+        });
+      }
       return;
     }
 
@@ -767,12 +893,12 @@ export default function ProductDialog({
         product.id,
         cantidadAEntregar,
         parametrosEntrega.length > 0 ? parametrosEntrega : undefined,
-        Number(selectedVendor.id)
+        Number(selectedVendor!.id)
       );
 
       toast({
         title: "Éxito",
-        description: `Productos entregados a ${selectedVendor.nombre}`,
+        description: `Productos entregados a ${selectedVendor!.nombre}`,
       });
       onClose();
     } catch (error) {
@@ -786,7 +912,8 @@ export default function ProductDialog({
   };
 
   const resetDeliveryState = useCallback(() => {
-    setDeliveryStep('location');
+    setDeliveryStep('destination');
+    setDeliveryTarget('vendor');
     setSelectedVendor(null);
     setParameterQuantities({});
     setSimpleDeliveryQuantity(0);
@@ -922,67 +1049,8 @@ export default function ProductDialog({
     }
   }, [editedProduct, imageUrl, product.foto, mostrarPorcentajeGanancia, onEdit]);
 
-  // Manejo de la entrega del producto
-  const handleDeliver = useCallback(async () => {
-    if (!selectedVendor) {
-      toast({
-        title: "Error",
-        description: "Debe seleccionar un lugar de entrega",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const cantidadAEntregar = product.tiene_parametros ? totalDeliveryQuantity : simpleDeliveryQuantity;
-
-    if (cantidadAEntregar === 0) {
-      toast({
-        title: "Advertencia",
-        description: "Por favor ingrese las cantidades a entregar.",
-        variant: "default",
-      });
-      return;
-    }
-
-    if (cantidadAEntregar > getTotalCantidad()) {
-      toast({
-        title: "Error",
-        description: "La cantidad total excede el stock disponible.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      const parametrosEntrega = product.tiene_parametros && product.parametros ?
-        product.parametros.map((param) => ({
-          nombre: param.nombre,
-          cantidad: parameterQuantities[param.nombre] || 0,
-        })) :
-        [];
-
-      await onDeliver(
-        product.id,
-        cantidadAEntregar,
-        parametrosEntrega,
-        Number(selectedVendor.id)
-      );
-
-      toast({
-        title: "Éxito",
-        description: `Producto entregado a ${selectedVendor.nombre} correctamente`,
-      });
-
-      onClose();
-    } catch (error) {
-      console.error('Error en entrega:', error);
-      toast({
-        title: "Error",
-        description: "Error al entregar el producto",
-        variant: "destructive",
-      });
-    }
-  }, [selectedVendor, product, totalDeliveryQuantity, simpleDeliveryQuantity, getTotalCantidad, parameterQuantities, onDeliver, onClose]);
+  // Manejo de la entrega / merma del producto
+  const handleDeliver = handleDelivery;
 
   // Función para eliminar producto
   const handleDelete = useCallback(async () => {
@@ -1068,10 +1136,16 @@ export default function ProductDialog({
               verificandoBarcode={verificandoBarcode}
               barcodeExiste={barcodeExiste}
             />
+          ) : mode === 'deliver' && deliveryStep === 'destination' ? (
+            <DestinationChoiceMode
+              onChooseVendor={handleChooseVendor}
+              onChooseMerma={handleChooseMerma}
+              onCancel={() => handleSetMode('view')}
+            />
           ) : mode === 'deliver' && deliveryStep === 'location' ? (
             <LocationSelectionMode
               onVendorSelect={handleVendorSelect}
-              onBack={() => handleSetMode('view')}
+              onBack={() => setDeliveryStep('destination')}
               vendedores={vendedores}
             />
           ) : mode === 'deliver' && deliveryStep === 'quantities' ? (
@@ -1081,9 +1155,10 @@ export default function ProductDialog({
               simpleDeliveryQuantity={simpleDeliveryQuantity}
               totalDeliveryQuantity={totalDeliveryQuantity}
               selectedVendor={selectedVendor}
+              isMerma={deliveryTarget === 'merma'}
               onParameterQuantityChange={handleParameterQuantityChange}
               onSimpleDeliveryChange={handleSimpleDeliveryChange}
-              onBack={() => handleSetDeliveryStep('location')}
+              onBack={() => setDeliveryStep(deliveryTarget === 'merma' ? 'destination' : 'location')}
               onDeliver={handleDeliver}
               getTotalCantidad={getTotalCantidad}
             />

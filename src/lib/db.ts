@@ -28,10 +28,10 @@ export async function ensureDbSchema() {
 
 export async function query(text: string, params?: any[]) {
   try {
-    await ensureDbSchema();
-    console.log('Executing query:', text, 'with params:', params);
+    if (process.env.RUN_DB_MIGRATIONS === 'true') {
+      await ensureDbSchema();
+    }
     const result = await sql.query(text, params);
-    console.log('Query result:', result);
     return result;
   } catch (error) {
     console.error('Database query error:', error);

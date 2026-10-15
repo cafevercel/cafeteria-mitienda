@@ -3,13 +3,18 @@ import { query } from '@/lib/db';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: { id: string } | Promise<{ id: string }> }
 ) {
   try {
-    const inventarioId = params.id;
+    const rawParams = context?.params ? await Promise.resolve(context.params) : null;
+    let inventarioId = rawParams?.id;
+    if (!inventarioId || isNaN(Number(inventarioId))) {
+      const parts = request.nextUrl.pathname.split('/').filter(Boolean);
+      inventarioId = parts[parts.length - 1];
+    }
 
-    if (!inventarioId) {
-      return NextResponse.json({ error: 'ID de inventario requerido' }, { status: 400 });
+    if (!inventarioId || isNaN(Number(inventarioId))) {
+      return NextResponse.json({ error: 'ID de inventario inválido o no proporcionado' }, { status: 400 });
     }
 
     // 1. Obtener cabecera
@@ -70,13 +75,18 @@ export async function GET(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: { id: string } | Promise<{ id: string }> }
 ) {
   try {
-    const inventarioId = params.id;
+    const rawParams = context?.params ? await Promise.resolve(context.params) : null;
+    let inventarioId = rawParams?.id;
+    if (!inventarioId || isNaN(Number(inventarioId))) {
+      const parts = request.nextUrl.pathname.split('/').filter(Boolean);
+      inventarioId = parts[parts.length - 1];
+    }
 
-    if (!inventarioId) {
-      return NextResponse.json({ error: 'ID de inventario requerido' }, { status: 400 });
+    if (!inventarioId || isNaN(Number(inventarioId))) {
+      return NextResponse.json({ error: 'ID de inventario inválido o no requerido' }, { status: 400 });
     }
 
     await query('DELETE FROM inventarios_fisicos WHERE id = $1', [Number(inventarioId)]);

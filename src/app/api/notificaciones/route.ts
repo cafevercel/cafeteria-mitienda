@@ -7,12 +7,14 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
 
+    const isBellMode = searchParams.get('mode') === 'bell';
+
     // 1. VENCIMIENTOS
     let vencimientos: any[] = [];
     try {
       const resVencimientos = await query(`
         SELECT 
-          p.id, p.nombre, p.foto,
+          p.id, p.nombre,
           COALESCE(
             CASE 
               WHEN p.tiene_parametros = true THEN (
@@ -77,7 +79,6 @@ export async function GET(request: NextRequest) {
           up.id as usuario_producto_id,
           p.id as producto_id,
           p.nombre,
-          p.foto,
           u.id as usuario_id,
           u.nombre as usuario_nombre,
           COALESCE(
@@ -93,16 +94,9 @@ export async function GET(request: NextRequest) {
           ) as cantidad,
           COALESCE(p.stock_minimo, 0) as stock_minimo
         FROM usuarios u
-        JOIN productos p ON true
-        LEFT JOIN usuario_productos up ON up.producto_id = p.id AND up.usuario_id = u.id
+        JOIN usuario_productos up ON up.usuario_id = u.id
+        JOIN productos p ON p.id = up.producto_id
         WHERE u.rol = 'Vendedor' AND u.activo = true
-          AND (
-            up.id IS NOT NULL 
-            OR EXISTS (
-              SELECT 1 FROM usuario_producto_parametros upp 
-              WHERE upp.producto_id = p.id AND upp.usuario_id = u.id
-            )
-          )
       `);
 
       alertasAlmacen = resAlmacen.rows.map((row) => {
@@ -158,70 +152,101 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      // NUEVA LÓGICA: Sistema de valoración por Índice de Rotación (Ventas vs Tiempo de Vigencia)
-      // Aplica únicamente a Vendedores / Puntos de venta (excluye Almacenes)
-      try {
-        const resRotacion = await query(`
+      // Si es modo campana, no calculamos la rotación pesada ni rankings históricos
+      if (!isBellMode) {
+        try {
+          const resRotacion = await query(`
+          WITH vigencias_resumen AS (
+            SELECT 
+              vp.usuario_id,
+              vp.producto_id,
+              SUM(vp.cantidad_inicial) AS total_entregado,
+              MIN(vp.fecha_inicio) AS primera_entrega,
+              MAX(vp.fecha_inicio) AS ultima_entrega,
+              SUM(
+                GREATEST(
+                  EXTRACT(EPOCH FROM (COALESCE(vp.fecha_fin, NOW()) - vp.fecha_inicio)) / 86400.0,
+                  0.05
+                )
+              ) AS total_dias_vigencia,
+              bool_or(vp.estado = 'activa') AS tiene_vigencia_activa
+            FROM vigencias_productos vp
+            GROUP BY vp.usuario_id, vp.producto_id
+          ),
+          ventas_resumen AS (
+            SELECT 
+              COALESCE(v.vendedor_id, v.vendedor) AS usuario_id,
+              v.producto AS producto_id,
+              SUM(v.cantidad) AS total_vendido
+            FROM ventas v
+            JOIN vigencias_productos vp ON vp.usuario_id = COALESCE(v.vendedor_id, v.vendedor)
+                                       AND vp.producto_id = v.producto
+                                       AND v.fecha >= vp.fecha_inicio
+                                       AND v.fecha <= COALESCE(vp.fecha_fin, NOW())
+            GROUP BY COALESCE(v.vendedor_id, v.vendedor), v.producto
+          )
           SELECT 
             u.id AS vendedor_id,
             u.nombre AS vendedor_nombre,
             p.id AS producto_id,
             p.nombre AS producto_nombre,
             p.foto AS producto_foto,
-            vp.cantidad_inicial AS unidades_entregadas,
+            p.seccion AS producto_seccion,
+            vr.total_entregado AS unidades_entregadas,
             COALESCE(up.cantidad, 0) AS stock_actual,
-            vp.fecha_inicio,
-            vp.fecha_fin,
-            vp.estado AS estado_vigencia,
-            ROUND(
-              GREATEST(
-                EXTRACT(EPOCH FROM (COALESCE(vp.fecha_fin, NOW()) - vp.fecha_inicio)) / 86400.0,
-                0.01
-              )::numeric, 2
-            ) AS dias_vigencia,
-            COALESCE(SUM(v.cantidad), 0) AS unidades_vendidas,
+            ROUND(vr.total_dias_vigencia::numeric, 1) AS dias_vigencia,
+            COALESCE(vnt.total_vendido, 0) AS unidades_vendidas,
             ROUND(
               (
-                COALESCE(SUM(v.cantidad), 0) / 
-                GREATEST(
-                  EXTRACT(EPOCH FROM (COALESCE(vp.fecha_fin, NOW()) - vp.fecha_inicio)) / 86400.0,
-                  0.01
-                )
-              )::numeric, 3
-            ) AS indice_rotacion_diaria
-          FROM vigencias_productos vp
-          JOIN usuarios u ON u.id = vp.usuario_id AND u.rol = 'Vendedor'
-          JOIN productos p ON p.id = vp.producto_id
-          LEFT JOIN usuario_productos up ON up.usuario_id = vp.usuario_id AND up.producto_id = vp.producto_id
-          LEFT JOIN ventas v ON (CAST(v.vendedor AS VARCHAR) = CAST(vp.usuario_id AS VARCHAR) OR v.vendedor = u.nombre)
-                            AND (CAST(v.producto AS VARCHAR) = CAST(vp.producto_id AS VARCHAR))
-                            AND v.fecha >= vp.fecha_inicio 
-                            AND v.fecha <= COALESCE(vp.fecha_fin, NOW())
-          GROUP BY u.id, u.nombre, p.id, p.nombre, p.foto, vp.id, vp.cantidad_inicial, up.cantidad, vp.fecha_inicio, vp.fecha_fin, vp.estado
+                COALESCE(vnt.total_vendido, 0) / 
+                GREATEST(vr.total_dias_vigencia, 0.05)
+              )::numeric, 2
+            ) AS indice_rotacion_diaria,
+            CASE 
+              WHEN COALESCE(up.cantidad, 0) > 0 THEN 'en_existencia'
+              ELSE 'agotado'
+            END AS estado_stock,
+            vr.tiene_vigencia_activa
+          FROM vigencias_resumen vr
+          JOIN usuarios u ON u.id = vr.usuario_id AND u.rol = 'Vendedor'
+          JOIN productos p ON p.id = vr.producto_id
+          LEFT JOIN usuario_productos up ON up.usuario_id = vr.usuario_id AND up.producto_id = vr.producto_id
+          LEFT JOIN ventas_resumen vnt ON vnt.usuario_id = vr.usuario_id AND vnt.producto_id = vr.producto_id
           ORDER BY indice_rotacion_diaria DESC
         `);
 
-        rotacionProductos = resRotacion.rows.map((row) => ({
-          vendedor_id: String(row.vendedor_id),
-          vendedor_nombre: row.vendedor_nombre,
-          producto_id: row.producto_id,
-          producto_nombre: row.producto_nombre,
-          producto_foto: row.producto_foto,
-          unidades_entregadas: Number(row.unidades_entregadas),
-          stock_actual: Number(row.stock_actual),
-          dias_vigencia: Number(row.dias_vigencia),
-          unidades_vendidas: Number(row.unidades_vendidas),
-          indice_rotacion_diaria: Number(row.indice_rotacion_diaria),
-          estado_vigencia: row.estado_vigencia,
-          evaluacion: Number(row.indice_rotacion_diaria) >= 1.0 ? 'Alta Rotación' : Number(row.indice_rotacion_diaria) >= 0.3 ? 'Rotación Media' : 'Baja Rotación'
-        }));
+        rotacionProductos = resRotacion.rows.map((row) => {
+          const indice = Number(row.indice_rotacion_diaria) || 0;
+          let evaluacion = 'Baja Rotación';
+          if (indice >= 10.0) evaluacion = 'Excelente Rotación';
+          else if (indice >= 3.0) evaluacion = 'Alta Rotación';
+          else if (indice >= 0.5) evaluacion = 'Rotación Media';
+
+          return {
+            vendedor_id: String(row.vendedor_id),
+            vendedor_nombre: row.vendedor_nombre,
+            producto_id: row.producto_id,
+            producto_nombre: row.producto_nombre,
+            producto_foto: row.producto_foto || '',
+            producto_seccion: row.producto_seccion || '',
+            unidades_entregadas: Number(row.unidades_entregadas),
+            stock_actual: Number(row.stock_actual),
+            dias_vigencia: Number(row.dias_vigencia),
+            unidades_vendidas: Number(row.unidades_vendidas),
+            indice_rotacion_diaria: indice,
+            estado_stock: row.estado_stock,
+            tiene_vigencia_activa: row.tiene_vigencia_activa,
+            estado_vigencia: row.tiene_vigencia_activa ? 'activa' : 'agotada',
+            evaluacion
+          };
+        });
       } catch (err) {
         console.warn('Error al obtener índice de rotación:', err);
       }
 
       // Compatibilidad con la respuesta anterior
-      productosEstrella = rotacionProductos.filter(r => r.evaluacion === 'Alta Rotación').slice(0, 10);
-      productosEstancados = rotacionProductos.filter(r => r.evaluacion === 'Baja Rotación');
+      productosEstrella = rotacionProductos.filter(r => r.evaluacion === 'Excelente Rotación' || r.evaluacion === 'Alta Rotación').slice(0, 10);
+      productosEstancados = rotacionProductos.filter(r => r.evaluacion === 'Baja Rotación' && r.dias_vigencia > 10);
 
       // Ranking mejores vendedores
       const resRankVendedores = await query(`
@@ -231,7 +256,7 @@ export async function GET(request: NextRequest) {
           COALESCE(SUM(v.cantidad), 0) as unidades_vendidas,
           COALESCE(SUM(v.total), 0) as monto_total
         FROM usuarios u
-        LEFT JOIN ventas v ON (CAST(v.vendedor AS VARCHAR) = CAST(u.id AS VARCHAR) OR v.vendedor = u.nombre)
+        LEFT JOIN ventas v ON (v.vendedor = u.id OR v.vendedor_id = u.id)
         WHERE u.rol = 'Vendedor' AND u.activo = true
         GROUP BY u.id, u.nombre
         ORDER BY monto_total DESC
@@ -244,7 +269,7 @@ export async function GET(request: NextRequest) {
         monto_total: Number(row.monto_total),
         rank: idx + 1
       }));
-
+      }
     } catch (err) {
       console.warn('DB notification query warning (vendedores):', err);
     }

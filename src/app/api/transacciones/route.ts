@@ -149,7 +149,7 @@ export async function GET(request: NextRequest) {
   const productoId = searchParams.get('productoId');
 
   try {
-    let transacciones;
+    const limit = searchParams.get('limit') || '200';
     const baseQuery = `
       SELECT 
         t.id, 
@@ -162,48 +162,56 @@ export async function GET(request: NextRequest) {
         p.precio,
         p.tiene_parametros,
         t.es_cocina,
-        t.producto as producto_id
+        t.producto as producto_id,
+        COALESCE(
+          json_agg(
+            json_build_object(
+              'nombre', tp.nombre,
+              'cantidad', tp.cantidad
+            )
+          ) FILTER (WHERE tp.id IS NOT NULL),
+          '[]'::json
+        ) as parametros
       FROM transacciones t 
       JOIN productos p ON t.producto = p.id 
+      LEFT JOIN transaccion_parametros tp ON t.id = tp.transaccion_id
     `;
 
+    const whereClauses: string[] = [];
+    const params: any[] = [];
+
     if (productoId) {
-      // ✅ CAMBIO: Sin filtro de es_cocina
-      transacciones = await query(
-        baseQuery + ' WHERE t.producto = $1 ORDER BY t.fecha DESC',
-        [productoId]
-      );
+      params.push(productoId);
+      whereClauses.push(`t.producto = $${params.length}`);
     } else if (vendedorId) {
-      // ✅ CAMBIO: Sin filtro de es_cocina
-      transacciones = await query(
-        baseQuery + ' WHERE (t.hacia = $1 OR t.desde = $1) ORDER BY t.fecha DESC',
-        [vendedorId]
-      );
-    } else {
-      // ✅ CAMBIO PRINCIPAL: Devolver TODAS las transacciones
-      transacciones = await query(
-        baseQuery + ' ORDER BY t.fecha DESC'
-      );
+      params.push(vendedorId);
+      whereClauses.push(`(t.hacia = $${params.length} OR t.desde = $${params.length})`);
     }
 
-    // Obtener los parámetros para cada transacción
-    const transaccionesConParametros = await Promise.all(
-      transacciones.rows.map(async (transaccion) => {
-        if (transaccion.tiene_parametros) {
-          const parametrosResult = await query(
-            `SELECT nombre, cantidad 
-             FROM transaccion_parametros 
-             WHERE transaccion_id = $1`,
-            [transaccion.id]
-          );
-          return {
-            ...transaccion,
-            parametros: parametrosResult.rows
-          };
-        }
-        return transaccion;
-      })
-    );
+    const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+    params.push(parseInt(limit));
+    const limitParamIndex = params.length;
+
+    const fullQuery = `
+      ${baseQuery}
+      ${whereSql}
+      GROUP BY t.id, p.nombre, t.cantidad, t.tipo, t.desde, t.hacia, t.fecha, p.precio, p.tiene_parametros, t.es_cocina, t.producto
+      ORDER BY t.fecha DESC
+      LIMIT $${limitParamIndex}
+    `;
+
+    const transacciones = await query(fullQuery, params);
+
+    const transaccionesConParametros = transacciones.rows.map((transaccion) => {
+      if (transaccion.tiene_parametros) {
+        return {
+          ...transaccion,
+          parametros: Array.isArray(transaccion.parametros) ? transaccion.parametros : []
+        };
+      }
+      const { parametros, ...rest } = transaccion;
+      return rest;
+    });
 
     return NextResponse.json(transaccionesConParametros);
   } catch (error) {

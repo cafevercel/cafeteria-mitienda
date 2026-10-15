@@ -9,6 +9,8 @@ export const revalidate = 0
 const databaseUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL
 const sql = databaseUrl ? neon(databaseUrl) : null
 
+let cachedTableExists: boolean | null = null;
+
 export async function GET() {
     if (!sql) {
         return NextResponse.json(
@@ -18,19 +20,20 @@ export async function GET() {
     }
 
     try {
-        console.log("🔍 Fetching sections from productos table...")
+        if (cachedTableExists === null) {
+            const check = await sql`
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_name = 'orden_seccion'
+                )
+            `
+            cachedTableExists = check[0]?.exists ?? false;
+        }
 
-        // Verificar si la tabla orden_seccion existe
-        const tableExists = await sql`
-            SELECT EXISTS (
-                SELECT FROM information_schema.tables 
-                WHERE table_name = 'orden_seccion'
-            )
-        `
-
+        const tableExists = cachedTableExists;
         let secciones;
 
-        if (tableExists[0].exists) {
+        if (tableExists) {
             console.log("✅ Table orden_seccion exists, fetching with order...")
 
             // Obtener secciones con orden, usando ROW_NUMBER para las que no tienen orden
@@ -81,15 +84,12 @@ export async function GET() {
                 sample_image: s.sample_image,
                 orden: Number.parseInt(s.orden)
             })),
-            table_exists: tableExists[0].exists,
-            timestamp: Date.now() // Para debugging y evitar caché
+            table_exists: tableExists,
+            timestamp: Date.now()
         })
 
-        // Headers anti-caché - ESTO PREVIENE EL CACHÉ DEL NAVEGADOR
-        response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
-        response.headers.set('Pragma', 'no-cache')
-        response.headers.set('Expires', '0')
-        response.headers.set('Surrogate-Control', 'no-store')
+        // Permitir caché por 60s en CDN/Edge para evitar consultas continuas a Neon
+        response.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300')
 
         return response
 

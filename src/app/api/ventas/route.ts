@@ -160,6 +160,7 @@ export async function GET(request: NextRequest) {
   const getAllVentas = searchParams.get('all') === 'true';
 
   const startDate = searchParams.get('startDate') || searchParams.get('fechaInicio');
+  const endDate = searchParams.get('endDate') || searchParams.get('fechaFin');
 
   try {
     let result;
@@ -209,45 +210,43 @@ export async function GET(request: NextRequest) {
       LEFT JOIN venta_parametros vp ON v.id = vp.venta_id
     `;
 
-    if (productoId) {
-      const vendedorFilter = vendedorId ? 'AND v.vendedor = $2' : '';
-      const params = vendedorId ? [productoId, vendedorId] : [productoId];
+    const whereClauses: string[] = [];
+    const params: any[] = [];
 
-      result = await query(
-        `${baseQuery}
-         WHERE v.producto = $1 ${vendedorFilter}
-         GROUP BY v.id, p.nombre, p.foto, u.nombre
-         ORDER BY v.fecha DESC`,
-        params
-      );
-    } else if (vendedorId) {
-      if (startDate) {
-        result = await query(
-          `${baseQuery}
-           WHERE v.vendedor = $1 AND v.fecha >= $2
-           GROUP BY v.id, p.nombre, p.foto, u.nombre
-           ORDER BY v.fecha DESC`,
-          [vendedorId, startDate]
-        );
-      } else {
-        result = await query(
-          `${baseQuery}
-           WHERE v.vendedor = $1
-           GROUP BY v.id, p.nombre, p.foto, u.nombre
-           ORDER BY v.fecha DESC`,
-          [vendedorId]
-        );
+    if (productoId) {
+      params.push(productoId);
+      whereClauses.push(`v.producto = $${params.length}`);
+      if (vendedorId) {
+        params.push(vendedorId);
+        whereClauses.push(`v.vendedor = $${params.length}`);
       }
-    } else if (getAllVentas) {
-      // Si se solicitan todas las ventas
-      result = await query(
-        `${baseQuery}
-         GROUP BY v.id, p.nombre, p.foto, u.nombre
-         ORDER BY v.fecha DESC`
-      );
-    } else {
+    } else if (vendedorId) {
+      params.push(vendedorId);
+      whereClauses.push(`v.vendedor = $${params.length}`);
+    } else if (!getAllVentas) {
       return NextResponse.json({ error: 'Se requiere vendedorId, productoId, id o all=true' }, { status: 400 });
     }
+
+    if (startDate) {
+      params.push(startDate);
+      whereClauses.push(`v.fecha >= $${params.length}`);
+    }
+
+    if (endDate) {
+      const endFormatted = endDate.includes(' ') || endDate.includes('T') ? endDate : `${endDate} 23:59:59`;
+      params.push(endFormatted);
+      whereClauses.push(`v.fecha <= $${params.length}`);
+    }
+
+    const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+
+    result = await query(
+      `${baseQuery}
+       ${whereSql}
+       GROUP BY v.id, p.nombre, p.foto, u.nombre
+       ORDER BY v.fecha DESC`,
+      params
+    );
 
     // Crear respuesta con encabezados anti-caché
     const response = NextResponse.json(result.rows);

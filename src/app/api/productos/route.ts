@@ -203,7 +203,9 @@ export async function GET(request: NextRequest) {
             ORDER BY p.id
         `);
 
-        return NextResponse.json(result.rows);
+        const response = NextResponse.json(result.rows);
+        response.headers.set('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=120');
+        return response;
     } catch (error) {
         console.error('Error fetching products:', error);
         return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });

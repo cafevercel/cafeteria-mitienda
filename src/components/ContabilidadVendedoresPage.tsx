@@ -362,7 +362,7 @@ export default function ContabilidadVendedoresPage({ vendedores, onRefresh }: Co
       </div>
 
       {activeTab === 'comparativa' ? (
-        <ComparativaPage />
+        <ComparativaPage vendedores={vendedores} />
       ) : (
         <>
           {/* Selección Rápida de Período / Solo Fecha Inicio y Fecha Fin */}

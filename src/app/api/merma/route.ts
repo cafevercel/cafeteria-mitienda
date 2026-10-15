@@ -39,13 +39,14 @@ export async function POST(request: Request) {
 
     // Verificar si es merma de cafetería específicamente
     const esCafeteria = usuario_id === 'cafeteria';
+    const esAlmacen = !usuario_id || usuario_id.trim() === '' || usuario_id === 'almacen';
 
-    // Verificar si es una merma directa (sin usuario) o desde cafetería
-    const esMermaDirecta = !usuario_id || usuario_id.trim() === '' || esCafeteria;
+    // Verificar si es una merma directa (sin vendedor específico o desde almacén/cafetería)
+    const esMermaDirecta = esAlmacen || esCafeteria;
 
-    // Buscar un usuario administrador para asociar con la merma en caso de cafetería
+    // Buscar un usuario administrador para asociar con la merma en caso de almacén o cafetería
     let idUsuarioMerma: string;
-    let nombreUsuario = 'Cafetería';
+    let nombreUsuario = esCafeteria ? 'Cafetería' : 'Almacén';
 
     if (esMermaDirecta) {
       // Buscar un usuario con rol 'Almacen' para asociar con la merma
@@ -55,6 +56,9 @@ export async function POST(request: Request) {
 
       if (adminUser.rows.length > 0) {
         idUsuarioMerma = adminUser.rows[0].id;
+        if (!esCafeteria && adminUser.rows[0].nombre) {
+          nombreUsuario = adminUser.rows[0].nombre;
+        }
       } else {
         // Si no hay usuarios de almacén, buscar cualquier usuario
         const anyUser = await sql`

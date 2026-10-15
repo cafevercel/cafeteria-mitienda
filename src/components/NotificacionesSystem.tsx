@@ -1,6 +1,4 @@
-'use client';
-
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -8,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "@/hooks/use-toast";
 import { 
   Bell, 
@@ -24,10 +23,16 @@ import {
   AlertOctagon, 
   RefreshCw,
   Search,
-  Loader2
+  Loader2,
+  Award,
+  Zap,
+  Filter,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { Producto, Vendedor, AlertaVendedorStock } from '@/types';
 import { getNotificationKey } from './VencimientoBell';
+import { cn } from '@/lib/utils';
 
 interface NotificacionesSystemProps {
   isOpen?: boolean;
@@ -64,6 +69,65 @@ export const NotificacionesSystem: React.FC<NotificacionesSystemProps> = ({
   const [productosEstrella, setProductosEstrella] = useState<any[]>([]);
   const [productosEstancados, setProductosEstancados] = useState<any[]>([]);
   const [rankingVendedores, setRankingVendedores] = useState<any[]>([]);
+  
+  // Filtros tabla de valoración por rotación
+  const [vendedorRotacionFiltro, setVendedorRotacionFiltro] = useState<string>('todos');
+  const [searchRotacion, setSearchRotacion] = useState<string>('');
+  const [filtroEstadoRotacion, setFiltroEstadoRotacion] = useState<'todos' | 'en_existencia' | 'agotado'>('todos');
+  const [paginaRotacion, setPaginaRotacion] = useState<number>(1);
+
+  // Vendedores disponibles en rotación
+  const vendedoresConRotacion = useMemo(() => {
+    const map = new Map<string, string>();
+    if (vendedores && vendedores.length > 0) {
+      vendedores.forEach(v => map.set(v.id.toString(), v.nombre));
+    }
+    rotacionProductos.forEach(item => {
+      if (item.vendedor_id) {
+        map.set(String(item.vendedor_id), item.vendedor_nombre);
+      }
+    });
+    return Array.from(map.entries()).map(([id, nombre]) => ({ id, nombre }));
+  }, [vendedores, rotacionProductos]);
+
+  // Filtrado y ranking de productos por índice de rotación
+  const filteredRotacion = useMemo(() => {
+    let list = rotacionProductos.filter((item) => {
+      if (vendedorRotacionFiltro !== 'todos' && String(item.vendedor_id) !== vendedorRotacionFiltro) {
+        return false;
+      }
+      if (searchRotacion.trim() !== '') {
+        const query = searchRotacion.toLowerCase();
+        const matchesNombre = item.producto_nombre?.toLowerCase().includes(query);
+        const matchesVendedor = item.vendedor_nombre?.toLowerCase().includes(query);
+        const matchesSeccion = item.producto_seccion?.toLowerCase().includes(query);
+        if (!matchesNombre && !matchesVendedor && !matchesSeccion) return false;
+      }
+      if (filtroEstadoRotacion === 'en_existencia' && item.estado_stock !== 'en_existencia') {
+        return false;
+      }
+      if (filtroEstadoRotacion === 'agotado' && item.estado_stock !== 'agotado') {
+        return false;
+      }
+      return true;
+    });
+
+    // Ordenar de mayor a menor índice de rotación
+    list.sort((a, b) => (Number(b.indice_rotacion_diaria) || 0) - (Number(a.indice_rotacion_diaria) || 0));
+    return list;
+  }, [rotacionProductos, vendedorRotacionFiltro, searchRotacion, filtroEstadoRotacion]);
+
+  // Reiniciar página al cambiar filtros
+  useEffect(() => {
+    setPaginaRotacion(1);
+  }, [vendedorRotacionFiltro, searchRotacion, filtroEstadoRotacion]);
+
+  const itemsPorPagina = 12;
+  const totalPaginasRotacion = Math.max(1, Math.ceil(filteredRotacion.length / itemsPorPagina));
+  const rotacionPaginada = useMemo(() => {
+    const inicio = (paginaRotacion - 1) * itemsPorPagina;
+    return filteredRotacion.slice(inicio, inicio + itemsPorPagina);
+  }, [filteredRotacion, paginaRotacion]);
   
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -481,79 +545,291 @@ export const NotificacionesSystem: React.FC<NotificacionesSystemProps> = ({
           {subTabVendedores === 'rendimiento' && (
             <div className="space-y-4 sm:space-y-6">
               {/* ÍNDICE DE ROTACIÓN DE PRODUCTOS */}
-              <div>
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-3">
+              <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                   <div>
                     <h4 className="font-bold text-sm sm:text-base text-slate-800 dark:text-slate-100 flex items-center gap-2">
                       <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 shrink-0" />
                       Sistema de Valoración por Índice de Rotación
                     </h4>
                     <p className="text-xs text-slate-500">
-                      Promedio de ventas ÷ Días de vigencia (cerrada al agotar o activa en curso). Exclusivo Puntos de Venta.
+                      Calificación de productos por vendedor según unidades vendidas ÷ días en existencia (vigencia activa o cerrada al agotarse).
                     </p>
                   </div>
                 </div>
 
-                {rotacionProductos.length === 0 ? (
-                  <p className="text-xs sm:text-sm text-slate-500 italic p-4 bg-slate-50 rounded-xl text-center">
-                    No hay suficientes datos de rotación o entregas registradas aún.
-                  </p>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {rotacionProductos.map((item, idx) => (
-                      <Card 
-                        key={idx} 
-                        className={`p-3 border-l-4 ${
-                          item.evaluacion === 'Alta Rotación' 
-                            ? 'border-l-emerald-500 bg-emerald-50/20 dark:bg-emerald-950/20' 
-                            : item.evaluacion === 'Rotación Media' 
-                              ? 'border-l-blue-500 bg-blue-50/20 dark:bg-blue-950/20' 
-                              : 'border-l-red-500 bg-red-50/20 dark:bg-red-950/20'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0 flex-1">
-                            <h5 className="font-bold text-xs sm:text-sm text-slate-800 dark:text-slate-100 truncate">{item.producto_nombre}</h5>
-                            <p className="text-[11px] font-semibold text-blue-600 truncate">Punto de Venta: {item.vendedor_nombre}</p>
-                          </div>
-                          {item.evaluacion === 'Alta Rotación' ? (
-                            <Badge className="bg-emerald-600 text-white text-[9px] sm:text-[10px] shrink-0">🚀 Alta Rotación</Badge>
-                          ) : item.evaluacion === 'Rotación Media' ? (
-                            <Badge className="bg-blue-600 text-white text-[9px] sm:text-[10px] shrink-0">⚡ Rotación Media</Badge>
-                          ) : (
-                            <Badge variant="destructive" className="bg-red-600 text-[9px] sm:text-[10px] shrink-0">🐢 Mala Rotación</Badge>
-                          )}
-                        </div>
+                {/* BARRA DE FILTROS Y RESUMEN */}
+                <div className="bg-slate-50 dark:bg-slate-900/60 p-3 sm:p-4 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {/* Filtro Punto de Venta / Vendedor */}
+                    <div>
+                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1">
+                        Punto de Venta / Vendedor:
+                      </label>
+                      <Select value={vendedorRotacionFiltro} onValueChange={setVendedorRotacionFiltro}>
+                        <SelectTrigger className="w-full text-xs h-9 bg-white dark:bg-slate-800">
+                          <SelectValue placeholder="Todos los vendedores" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="todos">Todos los Puntos de Venta</SelectItem>
+                          {vendedoresConRotacion.map((v) => (
+                            <SelectItem key={v.id} value={v.id}>
+                              {v.nombre}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-                        <div className="grid grid-cols-3 gap-1.5 mt-3 pt-2 border-t text-center">
-                          <div>
-                            <p className="text-[9px] sm:text-[10px] text-slate-400 uppercase font-semibold">Vendido/Entregado</p>
-                            <p className="text-xs font-bold text-slate-700 dark:text-slate-200">
-                              {item.unidades_vendidas}/{item.unidades_entregadas}u
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-[9px] sm:text-[10px] text-slate-400 uppercase font-semibold">Vigencia</p>
-                            <p className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center justify-center gap-0.5">
-                              {item.dias_vigencia}d
-                              {item.estado_vigencia === 'activa' ? (
-                                <span title="Vigencia activa (en curso)">&nbsp;🟢</span>
-                              ) : (
-                                <span title="Vigencia cerrada (agotado)">&nbsp;🔴</span>
-                              )}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-[9px] sm:text-[10px] text-slate-400 uppercase font-semibold">Rotación/día</p>
-                            <p className={`text-xs font-extrabold ${
-                              item.evaluacion === 'Alta Rotación' ? 'text-emerald-600' : item.evaluacion === 'Rotación Media' ? 'text-blue-600' : 'text-red-600'
-                            }`}>
-                              {item.indice_rotacion_diaria} u/d
-                            </p>
-                          </div>
+                    {/* Buscador de Producto */}
+                    <div>
+                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1">
+                        Buscar producto:
+                      </label>
+                      <div className="relative">
+                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+                        <Input
+                          placeholder="Nombre o sección..."
+                          value={searchRotacion}
+                          onChange={(e) => setSearchRotacion(e.target.value)}
+                          className="pl-8 text-xs h-9 bg-white dark:bg-slate-800"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Filtro Estado de Vigencia / Stock */}
+                    <div>
+                      <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1">
+                        Estado de Stock / Vigencia:
+                      </label>
+                      <Select value={filtroEstadoRotacion} onValueChange={(val: any) => setFiltroEstadoRotacion(val)}>
+                        <SelectTrigger className="w-full text-xs h-9 bg-white dark:bg-slate-800">
+                          <SelectValue placeholder="Estado de stock" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="todos">Todos los estados</SelectItem>
+                          <SelectItem value="en_existencia">🟢 En Existencia (Vigencia activa)</SelectItem>
+                          <SelectItem value="agotado">🔴 Agotados (Vigencia cerrada)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Resumen rápido de calificaciones */}
+                  <div className="flex flex-wrap items-center justify-between text-xs text-slate-500 pt-2 border-t border-slate-200 dark:border-slate-800 gap-2">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="font-semibold text-slate-700 dark:text-slate-300">
+                        {filteredRotacion.length} producto(s) en ranking
+                      </span>
+                      {vendedorRotacionFiltro !== 'todos' && (
+                        <Badge variant="outline" className="text-blue-600 border-blue-200 bg-blue-50/50 text-[11px]">
+                          {vendedoresConRotacion.find(v => v.id === vendedorRotacionFiltro)?.nombre || 'Vendedor'}
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap text-[11px]">
+                      <span className="flex items-center gap-1 text-emerald-700 dark:text-emerald-400 font-semibold">
+                        🚀 {filteredRotacion.filter(p => p.evaluacion === 'Excelente Rotación').length} Exc.
+                      </span>
+                      <span className="flex items-center gap-1 text-teal-700 dark:text-teal-400 font-semibold">
+                        ⚡ {filteredRotacion.filter(p => p.evaluacion === 'Alta Rotación').length} Altas
+                      </span>
+                      <span className="flex items-center gap-1 text-blue-700 dark:text-blue-400 font-semibold">
+                        🔄 {filteredRotacion.filter(p => p.evaluacion === 'Rotación Media').length} Medias
+                      </span>
+                      <span className="flex items-center gap-1 text-rose-700 dark:text-rose-400 font-semibold">
+                        🐢 {filteredRotacion.filter(p => p.evaluacion === 'Baja Rotación').length} Bajas
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* TABLA DE VALORACIÓN POR ROTACIÓN */}
+                {rotacionProductos.length === 0 ? (
+                  <div className="text-center p-8 bg-slate-50 dark:bg-slate-900 rounded-xl border border-dashed">
+                    <Package className="h-10 w-10 text-slate-300 mx-auto mb-2" />
+                    <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">No hay datos de vigencia o rotación</p>
+                    <p className="text-xs text-slate-500 mt-1">Los datos se generan conforme los productos se entregan a los vendedores y se registran ventas.</p>
+                  </div>
+                ) : filteredRotacion.length === 0 ? (
+                  <div className="text-center p-8 bg-slate-50 dark:bg-slate-900 rounded-xl border border-dashed">
+                    <Filter className="h-8 w-8 text-slate-300 mx-auto mb-2" />
+                    <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">Sin resultados para los filtros seleccionados</p>
+                    <p className="text-xs text-slate-500 mt-1">Prueba seleccionando otro vendedor o borrando el texto de búsqueda.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+                      <Table>
+                        <TableHeader className="bg-slate-50 dark:bg-slate-800/60">
+                          <TableRow>
+                            <TableHead className="w-16 text-center text-xs font-bold text-slate-700 dark:text-slate-200"># Rank</TableHead>
+                            <TableHead className="text-xs font-bold text-slate-700 dark:text-slate-200">Producto</TableHead>
+                            <TableHead className="text-xs font-bold text-slate-700 dark:text-slate-200">Punto de Venta</TableHead>
+                            <TableHead className="text-xs font-bold text-slate-700 dark:text-slate-200">Días Vigencia</TableHead>
+                            <TableHead className="text-xs font-bold text-slate-700 dark:text-slate-200">Ventas / Stock</TableHead>
+                            <TableHead className="text-right text-xs font-bold text-slate-700 dark:text-slate-200">Índice Rotación</TableHead>
+                            <TableHead className="text-center text-xs font-bold text-slate-700 dark:text-slate-200">Calificación</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {rotacionPaginada.map((item, idx) => {
+                            const rankGlobal = (paginaRotacion - 1) * itemsPorPagina + idx + 1;
+                            return (
+                              <TableRow key={`${item.vendedor_id}-${item.producto_id}-${idx}`} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+                                {/* Rank */}
+                                <TableCell className="text-center">
+                                  {rankGlobal === 1 ? (
+                                    <span className="inline-flex items-center justify-center h-7 w-7 rounded-full bg-amber-100 text-amber-800 font-extrabold text-xs shadow-sm border border-amber-300">🥇</span>
+                                  ) : rankGlobal === 2 ? (
+                                    <span className="inline-flex items-center justify-center h-7 w-7 rounded-full bg-slate-200 text-slate-800 font-extrabold text-xs shadow-sm border border-slate-300">🥈</span>
+                                  ) : rankGlobal === 3 ? (
+                                    <span className="inline-flex items-center justify-center h-7 w-7 rounded-full bg-orange-100 text-orange-800 font-extrabold text-xs shadow-sm border border-orange-300">🥉</span>
+                                  ) : (
+                                    <span className="text-xs font-bold text-slate-500">#{rankGlobal}</span>
+                                  )}
+                                </TableCell>
+
+                                {/* Producto */}
+                                <TableCell>
+                                  <div className="flex items-center gap-2.5 min-w-[160px]">
+                                    {item.producto_foto ? (
+                                      <img
+                                        src={item.producto_foto}
+                                        alt={item.producto_nombre}
+                                        className="h-8 w-8 rounded-lg object-cover border shrink-0 bg-slate-100"
+                                      />
+                                    ) : (
+                                      <div className="h-8 w-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0 border">
+                                        <Package className="h-4 w-4 text-slate-400" />
+                                      </div>
+                                    )}
+                                    <div className="min-w-0">
+                                      <div className="font-semibold text-xs sm:text-sm text-slate-900 dark:text-slate-100 truncate" title={item.producto_nombre}>
+                                        {item.producto_nombre}
+                                      </div>
+                                      {item.producto_seccion && (
+                                        <div className="text-[10px] text-slate-400 truncate">
+                                          {item.producto_seccion}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </TableCell>
+
+                                {/* Punto de Venta */}
+                                <TableCell>
+                                  <Badge variant="outline" className="bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium text-xs truncate max-w-[140px]">
+                                    👤 {item.vendedor_nombre}
+                                  </Badge>
+                                </TableCell>
+
+                                {/* Días Vigencia */}
+                                <TableCell>
+                                  <div className="space-y-0.5">
+                                    <div className="font-bold text-xs text-slate-800 dark:text-slate-200">
+                                      {item.dias_vigencia} {item.dias_vigencia === 1 ? 'día' : 'días'}
+                                    </div>
+                                    {item.estado_stock === 'en_existencia' ? (
+                                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                        En existencia
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-400 dark:text-slate-500">
+                                        <span className="h-1.5 w-1.5 rounded-full bg-slate-400"></span>
+                                        Agotado (cerrada)
+                                      </span>
+                                    )}
+                                  </div>
+                                </TableCell>
+
+                                {/* Ventas / Stock */}
+                                <TableCell>
+                                  <div className="text-xs space-y-0.5">
+                                    <div className="font-bold text-slate-800 dark:text-slate-200">
+                                      {item.unidades_vendidas} vendidas
+                                    </div>
+                                    <div className="text-[11px] text-slate-500">
+                                      Stock: <span className="font-semibold text-slate-700 dark:text-slate-300">{item.stock_actual}</span> (de {item.unidades_entregadas} ent.)
+                                    </div>
+                                  </div>
+                                </TableCell>
+
+                                {/* Índice de Rotación */}
+                                <TableCell className="text-right">
+                                  <div className="inline-flex items-baseline gap-1">
+                                    <span className={`text-sm font-extrabold ${
+                                      item.evaluacion === 'Excelente Rotación' 
+                                        ? 'text-emerald-600 dark:text-emerald-400' 
+                                        : item.evaluacion === 'Alta Rotación'
+                                          ? 'text-teal-600 dark:text-teal-400'
+                                          : item.evaluacion === 'Rotación Media'
+                                            ? 'text-blue-600 dark:text-blue-400'
+                                            : 'text-rose-600 dark:text-rose-400'
+                                    }`}>
+                                      {item.indice_rotacion_diaria}
+                                    </span>
+                                    <span className="text-[10px] text-slate-400 font-normal">u/día</span>
+                                  </div>
+                                </TableCell>
+
+                                {/* Calificación */}
+                                <TableCell className="text-center">
+                                  {item.evaluacion === 'Excelente Rotación' ? (
+                                    <Badge className="bg-emerald-600 hover:bg-emerald-600 text-white text-[10px] font-bold shadow-sm whitespace-nowrap">
+                                      🚀 Excelente
+                                    </Badge>
+                                  ) : item.evaluacion === 'Alta Rotación' ? (
+                                    <Badge className="bg-teal-600 hover:bg-teal-600 text-white text-[10px] font-semibold shadow-sm whitespace-nowrap">
+                                      ⚡ Alta
+                                    </Badge>
+                                  ) : item.evaluacion === 'Rotación Media' ? (
+                                    <Badge className="bg-blue-600 hover:bg-blue-600 text-white text-[10px] font-medium shadow-sm whitespace-nowrap">
+                                      🔄 Media
+                                    </Badge>
+                                  ) : (
+                                    <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-300 dark:bg-rose-950/40 dark:text-rose-300 text-[10px] font-medium whitespace-nowrap">
+                                      🐢 Baja
+                                    </Badge>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+
+                    {/* Controles de paginación */}
+                    {totalPaginasRotacion > 1 && (
+                      <div className="flex flex-col sm:flex-row items-center justify-between pt-2 px-1 gap-2">
+                        <div className="text-xs text-slate-500">
+                          Página <span className="font-semibold text-slate-800 dark:text-slate-200">{paginaRotacion}</span> de <span className="font-semibold text-slate-800 dark:text-slate-200">{totalPaginasRotacion}</span>
+                          <span className="ml-1 text-slate-400">({filteredRotacion.length} productos totales)</span>
                         </div>
-                      </Card>
-                    ))}
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={paginaRotacion <= 1}
+                            onClick={() => setPaginaRotacion(p => Math.max(1, p - 1))}
+                            className="h-8 px-2.5 text-xs"
+                          >
+                            <ChevronLeft className="h-4 w-4 mr-1" /> Anterior
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={paginaRotacion >= totalPaginasRotacion}
+                            onClick={() => setPaginaRotacion(p => Math.min(totalPaginasRotacion, p + 1))}
+                            className="h-8 px-2.5 text-xs"
+                          >
+                            Siguiente <ChevronRight className="h-4 w-4 ml-1" />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

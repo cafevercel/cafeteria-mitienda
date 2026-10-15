@@ -5,6 +5,8 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const role = searchParams.get('role');
   const userId = searchParams.get('userId');
+  const startDate = searchParams.get('startDate') || searchParams.get('fechaInicio');
+  const endDate = searchParams.get('endDate') || searchParams.get('fechaFin');
 
   if (!role || (role !== 'Almacen' && role !== 'Vendedor')) {
     return NextResponse.json({ error: 'Rol inválido' }, { status: 400 });
@@ -16,6 +18,8 @@ export async function GET(request: NextRequest) {
 
   try {
     let result;
+    const endParam = endDate ? (endDate.includes(' ') || endDate.includes('T') ? endDate : `${endDate} 23:59:59`) : null;
+
     if (role === 'Almacen') {
       result = await query(
         `WITH weeks AS (
@@ -23,7 +27,11 @@ export async function GET(request: NextRequest) {
              (DATE_TRUNC('week', fecha))::date as week_start,
              (DATE_TRUNC('week', fecha) + INTERVAL '6 days' + INTERVAL '23 hours 59 minutes 59 seconds')::timestamp as week_end
            FROM ventas
+           WHERE ($1::date IS NULL OR fecha >= $1::date)
+             AND ($2::timestamp IS NULL OR fecha <= $2::timestamp)
            GROUP BY DATE_TRUNC('week', fecha)
+           ORDER BY week_start DESC
+           LIMIT 12
          )
          SELECT 
            w.week_start,
@@ -72,9 +80,10 @@ export async function GET(request: NextRequest) {
          LEFT JOIN ventas v ON v.vendedor = u.id 
            AND v.fecha >= w.week_start 
            AND v.fecha <= w.week_end
-         WHERE u.rol = 'Vendedor'
+         WHERE u.rol = 'Vendedor' AND u.activo = true
          GROUP BY w.week_start, w.week_end, u.id, u.nombre
-         ORDER BY w.week_start DESC, total_ventas DESC`
+         ORDER BY w.week_start DESC, total_ventas DESC`,
+        [startDate || null, endParam]
       );
     } else {
       result = await query(
@@ -84,7 +93,11 @@ export async function GET(request: NextRequest) {
              (DATE_TRUNC('week', fecha) + INTERVAL '6 days' + INTERVAL '23 hours 59 minutes 59 seconds')::timestamp as week_end
            FROM ventas
            WHERE vendedor = $1
+             AND ($2::date IS NULL OR fecha >= $2::date)
+             AND ($3::timestamp IS NULL OR fecha <= $3::timestamp)
            GROUP BY DATE_TRUNC('week', fecha)
+           ORDER BY week_start DESC
+           LIMIT 12
          )
          SELECT 
            w.week_start,
@@ -134,7 +147,7 @@ export async function GET(request: NextRequest) {
            AND v.fecha <= w.week_end
          GROUP BY w.week_start, w.week_end
          ORDER BY w.week_start DESC`,
-        [userId]
+        [userId, startDate || null, endParam]
       );
     }
 

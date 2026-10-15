@@ -2583,6 +2583,9 @@ export default function AlmacenPage() {
           onDeliver={(productId, cantidadTotal, parametros, userId) =>
             handleProductDelivery(productId, cantidadTotal, parametros, userId)
           }
+          onMerma={(productId, cantidad, parametros) =>
+            handleProductMerma(productId, 'almacen', cantidad, parametros as any)
+          }
           seccionesExistentes={seccionesExistentes}
         />
       )}
