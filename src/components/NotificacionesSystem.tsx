@@ -60,6 +60,8 @@ export const NotificacionesSystem: React.FC<NotificacionesSystemProps> = ({
   
   // Data states
   const [vencimientos, setVencimientos] = useState<any[]>([]);
+  const [filtroVencimiento, setFiltroVencimiento] = useState<'todos' | 'vencidos' | 'vence_pronto' | 'vigentes' | 'con_stock'>('todos');
+  const [paginaVencimientos, setPaginaVencimientos] = useState<number>(1);
   const [alertasAlmacen, setAlertasAlmacen] = useState<any[]>([]);
   const [filtroAlmacen, setFiltroAlmacen] = useState<'todos' | 'agotados' | 'bajo_stock'>('todos');
   
@@ -220,10 +222,36 @@ export const NotificacionesSystem: React.FC<NotificacionesSystemProps> = ({
     }
   };
 
+  useEffect(() => {
+    setPaginaVencimientos(1);
+  }, [searchTerm, filtroVencimiento]);
+
   // Filtered Vencimientos
-  const vencimientosFiltrados = vencimientos.filter(p => 
-    p.nombre.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const vencimientosFiltrados = useMemo(() => {
+    return vencimientos.filter(p => {
+      const matchSearch = p.nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          (p.seccion && p.seccion.toLowerCase().includes(searchTerm.toLowerCase()));
+      if (!matchSearch) return false;
+
+      if (filtroVencimiento === 'vencidos') return p.estado === 'vencido';
+      if (filtroVencimiento === 'vence_pronto') return p.estado === 'vence_pronto';
+      if (filtroVencimiento === 'vigentes') return p.estado === 'vigente';
+      if (filtroVencimiento === 'con_stock') return Number(p.cantidad) > 0;
+      return true;
+    });
+  }, [vencimientos, searchTerm, filtroVencimiento]);
+
+  const totalVencidos = useMemo(() => vencimientos.filter(v => v.estado === 'vencido').length, [vencimientos]);
+  const totalVencePronto = useMemo(() => vencimientos.filter(v => v.estado === 'vence_pronto').length, [vencimientos]);
+  const totalVigentes = useMemo(() => vencimientos.filter(v => v.estado === 'vigente').length, [vencimientos]);
+  const totalConStock = useMemo(() => vencimientos.filter(v => Number(v.cantidad) > 0).length, [vencimientos]);
+
+  const itemsPorPaginaVenc = 20;
+  const totalPaginasVencimientos = Math.max(1, Math.ceil(vencimientosFiltrados.length / itemsPorPaginaVenc));
+  const vencimientosPaginados = useMemo(() => {
+    const inicio = (paginaVencimientos - 1) * itemsPorPaginaVenc;
+    return vencimientosFiltrados.slice(inicio, inicio + itemsPorPaginaVenc);
+  }, [vencimientosFiltrados, paginaVencimientos]);
 
   // Filtered Almacen Alertas
   const almacenFiltrado = alertasAlmacen.filter(item => {
@@ -284,10 +312,12 @@ export const NotificacionesSystem: React.FC<NotificacionesSystemProps> = ({
         <TabsList className="grid grid-cols-3 w-full bg-slate-100 dark:bg-slate-800 p-1 rounded-xl h-auto">
           <TabsTrigger value="vencimientos" className="flex items-center justify-center gap-1 sm:gap-2 py-2 text-[11px] sm:text-sm font-medium">
             <Calendar className="h-3.5 w-3.5 text-red-500 shrink-0" />
-            <span className="truncate">Vencidos</span>
-            <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full font-bold">
-              {vencimientos.filter(v => v.estado !== 'vigente').length}
-            </span>
+            <span className="truncate">Fechas de Vencimiento</span>
+            {vencimientos.filter(v => v.estado !== 'vigente').length > 0 && (
+              <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full font-bold">
+                {vencimientos.filter(v => v.estado !== 'vigente').length}
+              </span>
+            )}
           </TabsTrigger>
           <TabsTrigger value="almacen" className="flex items-center justify-center gap-1 sm:gap-2 py-2 text-[11px] sm:text-sm font-medium">
             <Package className="h-3.5 w-3.5 text-orange-500 shrink-0" />
@@ -316,6 +346,55 @@ export const NotificacionesSystem: React.FC<NotificacionesSystemProps> = ({
             </div>
           </div>
 
+          {/* Filtros de Vencimiento */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-50 dark:bg-slate-900 p-3 rounded-xl border">
+            <span className="text-xs sm:text-sm font-medium text-slate-700 dark:text-slate-300">
+              Filtrar por estado:
+            </span>
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 w-full sm:w-auto">
+              <Button
+                size="sm"
+                variant={filtroVencimiento === 'todos' ? 'default' : 'outline'}
+                onClick={() => setFiltroVencimiento('todos')}
+                className="h-8 text-xs flex-1 sm:flex-none"
+              >
+                Todos ({vencimientos.length})
+              </Button>
+              <Button
+                size="sm"
+                variant={filtroVencimiento === 'vencidos' ? 'destructive' : 'outline'}
+                onClick={() => setFiltroVencimiento('vencidos')}
+                className={`h-8 text-xs flex-1 sm:flex-none ${filtroVencimiento === 'vencidos' ? 'bg-red-600' : ''}`}
+              >
+                🔴 Vencidos ({totalVencidos})
+              </Button>
+              <Button
+                size="sm"
+                variant={filtroVencimiento === 'vence_pronto' ? 'default' : 'outline'}
+                onClick={() => setFiltroVencimiento('vence_pronto')}
+                className={`h-8 text-xs flex-1 sm:flex-none ${filtroVencimiento === 'vence_pronto' ? 'bg-amber-600 text-white' : ''}`}
+              >
+                🟡 Vence pronto ({totalVencePronto})
+              </Button>
+              <Button
+                size="sm"
+                variant={filtroVencimiento === 'vigentes' ? 'default' : 'outline'}
+                onClick={() => setFiltroVencimiento('vigentes')}
+                className={`h-8 text-xs flex-1 sm:flex-none ${filtroVencimiento === 'vigentes' ? 'bg-emerald-600 text-white' : ''}`}
+              >
+                🟢 Vigentes ({totalVigentes})
+              </Button>
+              <Button
+                size="sm"
+                variant={filtroVencimiento === 'con_stock' ? 'default' : 'outline'}
+                onClick={() => setFiltroVencimiento('con_stock')}
+                className={`h-8 text-xs flex-1 sm:flex-none ${filtroVencimiento === 'con_stock' ? 'bg-blue-600 text-white' : ''}`}
+              >
+                📦 Con Stock ({totalConStock})
+              </Button>
+            </div>
+          </div>
+
           {isLoading ? (
             <div className="text-center py-12 sm:py-16 border rounded-xl bg-slate-50 dark:bg-slate-900 flex flex-col items-center justify-center gap-3">
               <Loader2 className="h-8 w-8 sm:h-10 sm:w-10 animate-spin text-orange-500 mx-auto" />
@@ -325,49 +404,95 @@ export const NotificacionesSystem: React.FC<NotificacionesSystemProps> = ({
             <div className="text-center py-8 sm:py-10 border rounded-xl bg-slate-50 dark:bg-slate-900">
               <CheckCircle2 className="h-10 w-10 sm:h-12 sm:w-12 text-emerald-500 mx-auto mb-2" />
               <p className="font-semibold text-xs sm:text-sm text-slate-700 dark:text-slate-300">No hay productos con alertas de vencimiento</p>
-              <p className="text-xs text-slate-500">Todos los artículos marcados están al día.</p>
+              <p className="text-xs text-slate-500">Prueba cambiando los filtros o el término de búsqueda.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {vencimientosFiltrados.map((item) => (
-                <Card 
-                  key={item.id} 
-                  className={`border-l-4 ${
-                    item.estado === 'vencido' 
-                      ? 'border-l-red-600 bg-red-50/30 dark:bg-red-950/20' 
-                      : item.estado === 'vence_pronto' 
-                        ? 'border-l-amber-500 bg-amber-50/30 dark:bg-amber-950/20' 
-                        : 'border-l-emerald-500'
-                  }`}
-                >
-                  <CardContent className="p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                    <div>
-                      <h4 className="font-bold text-sm sm:text-base text-slate-800 dark:text-slate-100">{item.nombre}</h4>
-                      <p className="text-xs text-slate-500">Sección: {item.seccion || 'General'} | Stock: {item.cantidad}</p>
-                      <p className="text-xs sm:text-sm font-medium mt-1">
-                        Vencimiento: <span className="underline">{item.fecha_vencimiento}</span>
-                      </p>
-                    </div>
-                    <div className="self-start sm:self-auto sm:text-right">
-                      {item.estado === 'vencido' && (
-                        <Badge variant="destructive" className="bg-red-600 text-[10px] sm:text-xs">
-                          Hace {item.dias_diferencia} día(s)
-                        </Badge>
-                      )}
-                      {item.estado === 'vence_pronto' && (
-                        <Badge className="bg-amber-500 text-white text-[10px] sm:text-xs">
-                          Faltan {item.dias_diferencia} día(s)
-                        </Badge>
-                      )}
-                      {item.estado === 'vigente' && (
-                        <Badge className="bg-emerald-600 text-white text-[10px] sm:text-xs">
-                          Vigente ({item.dias_diferencia} días)
-                        </Badge>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {vencimientosPaginados.map((item) => (
+                  <Card 
+                    key={item.id} 
+                    className={`border-l-4 ${
+                      item.estado === 'vencido' 
+                        ? 'border-l-red-600 bg-red-50/30 dark:bg-red-950/20' 
+                        : item.estado === 'vence_pronto' 
+                          ? 'border-l-amber-500 bg-amber-50/30 dark:bg-amber-950/20' 
+                          : 'border-l-emerald-500'
+                    }`}
+                  >
+                    <CardContent className="p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                      <div className="flex items-center gap-3 min-w-0">
+                        {item.foto ? (
+                          <img 
+                            src={item.foto} 
+                            alt={item.nombre} 
+                            className="h-10 w-10 rounded-lg object-cover border shrink-0 bg-slate-100" 
+                          />
+                        ) : (
+                          <div className="h-10 w-10 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0 border">
+                            <Package className="h-5 w-5 text-slate-400" />
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <h4 className="font-bold text-sm sm:text-base text-slate-800 dark:text-slate-100 truncate" title={item.nombre}>{item.nombre}</h4>
+                          <p className="text-xs text-slate-500">
+                            Sección: {item.seccion || 'General'} | Stock: <span className="font-semibold text-slate-700 dark:text-slate-300">{item.cantidad}</span>
+                          </p>
+                          <p className="text-xs sm:text-sm font-medium mt-1">
+                            Vencimiento: <span className="underline">{item.fecha_vencimiento}</span>
+                          </p>
+                        </div>
+                      </div>
+                      <div className="self-start sm:self-auto sm:text-right shrink-0">
+                        {item.estado === 'vencido' && (
+                          <Badge variant="destructive" className="bg-red-600 text-[10px] sm:text-xs">
+                            Venció hace {item.dias_diferencia} día(s)
+                          </Badge>
+                        )}
+                        {item.estado === 'vence_pronto' && (
+                          <Badge className="bg-amber-500 text-white text-[10px] sm:text-xs">
+                            {item.dias_diferencia === 0 ? 'Vence hoy' : `Faltan ${item.dias_diferencia} día(s)`}
+                          </Badge>
+                        )}
+                        {item.estado === 'vigente' && (
+                          <Badge className="bg-emerald-600 text-white text-[10px] sm:text-xs">
+                            Vigente ({item.dias_diferencia} días)
+                          </Badge>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+
+              {totalPaginasVencimientos > 1 && (
+                <div className="flex flex-col sm:flex-row items-center justify-between pt-2 px-1 gap-2">
+                  <div className="text-xs text-slate-500">
+                    Página <span className="font-semibold text-slate-800 dark:text-slate-200">{paginaVencimientos}</span> de <span className="font-semibold text-slate-800 dark:text-slate-200">{totalPaginasVencimientos}</span>
+                    <span className="ml-1 text-slate-400">({vencimientosFiltrados.length} productos totales)</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={paginaVencimientos <= 1}
+                      onClick={() => setPaginaVencimientos(p => Math.max(1, p - 1))}
+                      className="h-8 px-2.5 text-xs"
+                    >
+                      <ChevronLeft className="h-4 w-4 mr-1" /> Anterior
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={paginaVencimientos >= totalPaginasVencimientos}
+                      onClick={() => setPaginaVencimientos(p => Math.min(totalPaginasVencimientos, p + 1))}
+                      className="h-8 px-2.5 text-xs"
+                    >
+                      Siguiente <ChevronRight className="h-4 w-4 ml-1" />
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </TabsContent>

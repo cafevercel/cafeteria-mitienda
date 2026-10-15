@@ -13,36 +13,39 @@ export async function GET(request: NextRequest) {
     let vencimientos: any[] = [];
     try {
       const resVencimientos = await query(`
+        WITH up_stock AS (
+          SELECT producto_id, SUM(cantidad) AS up_total
+          FROM usuario_productos
+          GROUP BY producto_id
+        ),
+        upp_stock AS (
+          SELECT producto_id, SUM(cantidad) AS upp_total
+          FROM usuario_producto_parametros
+          GROUP BY producto_id
+        ),
+        pp_stock AS (
+          SELECT producto_id, SUM(cantidad) AS pp_total
+          FROM producto_parametros
+          GROUP BY producto_id
+        )
         SELECT 
-          p.id, p.nombre,
-          COALESCE(
-            CASE 
-              WHEN p.tiene_parametros = true THEN (
-                SELECT SUM(pp.cantidad) 
-                FROM producto_parametros pp 
-                WHERE pp.producto_id = p.id
-              )
-              ELSE p.cantidad
-            END, 
-            0
-          ) as cantidad,
+          p.id, 
+          p.nombre,
+          p.foto,
           p.seccion,
-          p.tiene_vencimiento, 
-          TO_CHAR(p.fecha_vencimiento, 'YYYY-MM-DD') as fecha_vencimiento
-        FROM productos p
-        WHERE p.tiene_vencimiento = true 
-          AND p.fecha_vencimiento IS NOT NULL
-          AND COALESCE(
+          COALESCE(p.tiene_vencimiento, false) as tiene_vencimiento, 
+          TO_CHAR(p.fecha_vencimiento, 'YYYY-MM-DD') as fecha_vencimiento,
+          (
             CASE 
-              WHEN p.tiene_parametros = true THEN (
-                SELECT SUM(pp.cantidad) 
-                FROM producto_parametros pp 
-                WHERE pp.producto_id = p.id
-              )
-              ELSE p.cantidad
-            END, 
-            0
-          ) > 0
+              WHEN p.tiene_parametros = true THEN COALESCE(pp.pp_total, 0) + COALESCE(upp.upp_total, 0)
+              ELSE COALESCE(p.cantidad, 0) + COALESCE(up.up_total, 0)
+            END
+          ) as cantidad
+        FROM productos p
+        LEFT JOIN up_stock up ON up.producto_id = p.id
+        LEFT JOIN upp_stock upp ON upp.producto_id = p.id
+        LEFT JOIN pp_stock pp ON pp.producto_id = p.id
+        WHERE p.fecha_vencimiento IS NOT NULL
         ORDER BY p.fecha_vencimiento ASC
       `);
       
@@ -63,6 +66,7 @@ export async function GET(request: NextRequest) {
 
         return {
           ...p,
+          cantidad: Number(p.cantidad) || 0,
           dias_diferencia: Math.abs(diffDias),
           estado
         };
