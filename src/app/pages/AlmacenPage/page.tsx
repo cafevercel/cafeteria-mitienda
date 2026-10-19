@@ -57,6 +57,7 @@ import ExportacionComparacion from '@/components/ExportacionComparacion'
 import NotificacionesSystem from '@/components/NotificacionesSystem'
 import VencimientoBell from '@/components/VencimientoBell'
 import RecordatoriosSection from '@/components/RecordatoriosSection'
+import RegistroTransferenciasSection from '@/components/RegistroTransferenciasSection'
 import React from 'react'
 
 
@@ -292,7 +293,7 @@ export default function AlmacenPage() {
   const [selectedProduct, setSelectedProduct] = useState<Producto | null>(null)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   // En AlmacenPage.tsx, actualizar el estado:
-  const [activeSection, setActiveSection] = useState<'productos' | 'puntos-venta' | 'moderadores' | 'ventas' | 'menu' | 'contabilidad' | 'contabilidad-vendedores' | 'exportacion-comparacion' | 'notificaciones' | 'recordatorios'>('productos')
+  const [activeSection, setActiveSection] = useState<'productos' | 'puntos-venta' | 'moderadores' | 'ventas' | 'menu' | 'contabilidad' | 'contabilidad-vendedores' | 'exportacion-comparacion' | 'notificaciones' | 'recordatorios' | 'registro-transferencia'>('productos')
   const [initialNotifTab, setInitialNotifTab] = useState<'vencimientos' | 'almacen' | 'vendedores'>('vencimientos')
   const [showMassDeliveryDialog, setShowMassDeliveryDialog] = useState(false)
   const [selectedVendorForMassDelivery, setSelectedVendorForMassDelivery] = useState<number | null>(null)
@@ -1621,6 +1622,17 @@ export default function AlmacenPage() {
 
               <Button
                 variant="ghost"
+                className={activeSection === 'registro-transferencia' ? 'bg-orange-100 text-orange-800 font-semibold' : 'text-orange-700 hover:bg-orange-50 hover:text-orange-800'}
+                onClick={() => {
+                  setActiveSection('registro-transferencia')
+                  setIsMenuOpen(false)
+                }}
+              >
+                Registro Transferencia
+              </Button>
+
+              <Button
+                variant="ghost"
                 className={activeSection === 'contabilidad' ? 'bg-orange-100 text-orange-800' : 'text-orange-700 hover:bg-orange-50 hover:text-orange-800'}
                 onClick={() => {
                   setActiveSection('contabilidad')
@@ -2042,6 +2054,10 @@ export default function AlmacenPage() {
 
       {activeSection === 'ventas' && (
         <SalesSection userRole="Almacen" />
+      )}
+
+      {activeSection === 'registro-transferencia' && (
+        <RegistroTransferenciasSection />
       )}
 
       {activeSection === 'contabilidad' && (

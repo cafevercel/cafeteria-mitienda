@@ -1523,3 +1523,59 @@ export const eliminarInventario = async (id: string | number): Promise<void> => 
     throw new Error('No se pudo eliminar el inventario');
   }
 };
+
+export interface RegistroTransferenciaItem {
+  id: number;
+  vendedor_id: number;
+  vendedor_nombre: string;
+  cliente_nombre: string;
+  cliente_telefono: string;
+  numero_transaccion: string;
+  banco: string;
+  monto: number;
+  fecha: string;
+  detalles: any;
+  creado_en: string;
+}
+
+export interface RegistroTransferenciasResponse {
+  transferencias: RegistroTransferenciaItem[];
+  pagination: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
+  summary: {
+    totalRegistros: number;
+    totalMonto: number;
+  };
+  tableNotCreated?: boolean;
+}
+
+export const getRegistroTransferencias = async (params: {
+  search?: string;
+  vendedorId?: string;
+  banco?: string;
+  fechaInicio?: string;
+  fechaFin?: string;
+  page?: number;
+  limit?: number;
+} = {}): Promise<RegistroTransferenciasResponse> => {
+  try {
+    const queryParams = new URLSearchParams();
+    if (params.search) queryParams.append('search', params.search);
+    if (params.vendedorId && params.vendedorId !== 'todos') queryParams.append('vendedorId', params.vendedorId);
+    if (params.banco && params.banco !== 'todos') queryParams.append('banco', params.banco);
+    if (params.fechaInicio) queryParams.append('fechaInicio', params.fechaInicio);
+    if (params.fechaFin) queryParams.append('fechaFin', params.fechaFin);
+    if (params.page) queryParams.append('page', params.page.toString());
+    if (params.limit) queryParams.append('limit', params.limit.toString());
+
+    const response = await api.get(`/registro-transferencias?${queryParams.toString()}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error al obtener registro de transferencias:', error);
+    throw new Error('No se pudo obtener el registro de transferencias');
+  }
+};

@@ -13,14 +13,17 @@ const LogoImage = () => {
   }
   
   return (
-    <Image 
-      src="/logo-placeholder.png" 
-      alt="Logo" 
-      width={400} 
-      height={400}
-      className="mb-6"
-      onError={() => setImageError(true)}
-    />
+    <div className="relative w-full max-w-[400px] aspect-[3514/966] mb-6 flex items-center justify-center">
+      <Image 
+        src="/logo-placeholder.png" 
+        alt="Logo" 
+        width={400} 
+        height={110}
+        priority
+        className="w-full h-auto object-contain transition-opacity duration-300"
+        onError={() => setImageError(true)}
+      />
+    </div>
   );
 };
 

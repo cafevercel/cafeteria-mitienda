@@ -69,13 +69,14 @@ export default function LoginPage() {
     <div className="flex items-center justify-center min-h-screen bg-orange-50">
       <Card className="w-full max-w-md shadow-lg border-orange-200">
         <CardHeader className="space-y-2 text-center">
-          <div className="mx-auto mb-2">
+          <div className="mx-auto mb-2 relative w-[200px] h-[131px] max-w-full flex items-center justify-center">
             <Image 
               src="/logo.png" 
               alt="Logo" 
               width={200} 
-              height={200}
-              className="mx-auto"
+              height={131}
+              priority
+              className="w-full h-auto object-contain transition-opacity duration-300"
               onError={(e) => {
                 // Si la imagen da error, usar un fallback
                 (e.target as HTMLImageElement).style.display = 'none'

@@ -133,9 +133,56 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const syncedTransfers = [];
+    if (body.transfers && Array.isArray(body.transfers)) {
+      for (const t of body.transfers) {
+        try {
+          const { id_local, clienteNombre, clienteTelefono, numeroTransaccion, banco, monto, fecha, detalles, vendedorNombre } = t;
+          if (!clienteNombre || !numeroTransaccion || !banco) continue;
+
+          const existing = await query(
+            'SELECT id FROM registro_transferencias WHERE numero_transaccion = $1 AND vendedor_id = $2 LIMIT 1',
+            [numeroTransaccion, vendedorId ? parseInt(vendedorId, 10) : null]
+          );
+
+          if (existing.rows.length > 0) {
+            syncedTransfers.push({ id_local, server_id: existing.rows[0].id, status: 'already_exists' });
+            continue;
+          }
+
+          const fechaFinal = fecha ? new Date(fecha) : new Date();
+          const detallesJson = typeof detalles === 'string' ? detalles : JSON.stringify(detalles || []);
+
+          const res = await query(
+            `INSERT INTO registro_transferencias 
+             (vendedor_id, vendedor_nombre, cliente_nombre, cliente_telefono, numero_transaccion, banco, monto, fecha, detalles) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
+             RETURNING id`,
+            [
+              vendedorId ? parseInt(vendedorId, 10) : null,
+              vendedorNombre || null,
+              clienteNombre,
+              clienteTelefono || '',
+              numeroTransaccion,
+              banco,
+              parseFloat(monto) || 0,
+              fechaFinal,
+              detallesJson
+            ]
+          );
+          if (res.rows.length > 0) {
+            syncedTransfers.push({ id_local, server_id: res.rows[0].id, status: 'synced' });
+          }
+        } catch (tErr) {
+          console.error('Error insertando transfer en bulk sync:', tErr);
+        }
+      }
+    }
+
     return NextResponse.json({ 
       success: errors.length === 0,
       synced: results,
+      synced_transfers: syncedTransfers,
       errors: errors 
     });
 
