@@ -52,25 +52,27 @@ export async function GET(request: NextRequest) {
       const hoy = new Date();
       hoy.setHours(0, 0, 0, 0);
 
-      vencimientos = resVencimientos.rows.map((p) => {
-        const fVenc = new Date(p.fecha_vencimiento + 'T00:00:00');
-        const diffMs = fVenc.getTime() - hoy.getTime();
-        const diffDias = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+      vencimientos = resVencimientos.rows
+        .map((p) => {
+          const fVenc = new Date(p.fecha_vencimiento + 'T00:00:00');
+          const diffMs = fVenc.getTime() - hoy.getTime();
+          const diffDias = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 
-        let estado: 'vencido' | 'vence_pronto' | 'vigente' = 'vigente';
-        if (diffDias < 0) {
-          estado = 'vencido';
-        } else if (diffDias <= 7) {
-          estado = 'vence_pronto';
-        }
+          let estado: 'vencido' | 'vence_pronto' | 'vigente' = 'vigente';
+          if (diffDias < 0) {
+            estado = 'vencido';
+          } else if (diffDias <= 7) {
+            estado = 'vence_pronto';
+          }
 
-        return {
-          ...p,
-          cantidad: Number(p.cantidad) || 0,
-          dias_diferencia: Math.abs(diffDias),
-          estado
-        };
-      });
+          return {
+            ...p,
+            cantidad: Number(p.cantidad) || 0,
+            dias_diferencia: Math.abs(diffDias),
+            estado
+          };
+        })
+        .filter((p) => (Number(p.cantidad) || 0) > 0);
     } catch (err) {
       console.warn('DB notification columns warning (vencimientos):', err);
     }

@@ -137,7 +137,7 @@ export async function POST(request: NextRequest) {
     if (body.transfers && Array.isArray(body.transfers)) {
       for (const t of body.transfers) {
         try {
-          const { id_local, clienteNombre, clienteTelefono, numeroTransaccion, banco, monto, fecha, detalles, vendedorNombre } = t;
+          const { id_local, clienteNombre, clienteTelefono, clienteCarnet, numeroTransaccion, banco, cuentaBancoId, cuentaNombre, cuentaNumero, monto, fecha, detalles, vendedorNombre } = t;
           if (!clienteNombre || !numeroTransaccion || !banco) continue;
 
           const existing = await query(
@@ -155,16 +155,20 @@ export async function POST(request: NextRequest) {
 
           const res = await query(
             `INSERT INTO registro_transferencias 
-             (vendedor_id, vendedor_nombre, cliente_nombre, cliente_telefono, numero_transaccion, banco, monto, fecha, detalles) 
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
+             (vendedor_id, vendedor_nombre, cliente_nombre, cliente_telefono, cliente_carnet, numero_transaccion, banco, cuenta_banco_id, cuenta_nombre, cuenta_numero, monto, fecha, detalles) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) 
              RETURNING id`,
             [
               vendedorId ? parseInt(vendedorId, 10) : null,
               vendedorNombre || null,
               clienteNombre,
               clienteTelefono || '',
+              clienteCarnet || null,
               numeroTransaccion,
               banco,
+              cuentaBancoId ? parseInt(cuentaBancoId, 10) : null,
+              cuentaNombre || null,
+              cuentaNumero || null,
               parseFloat(monto) || 0,
               fechaFinal,
               detallesJson

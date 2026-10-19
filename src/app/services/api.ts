@@ -1530,8 +1530,12 @@ export interface RegistroTransferenciaItem {
   vendedor_nombre: string;
   cliente_nombre: string;
   cliente_telefono: string;
+  cliente_carnet?: string;
   numero_transaccion: string;
   banco: string;
+  cuenta_banco_id?: number | null;
+  cuenta_nombre?: string | null;
+  cuenta_numero?: string | null;
   monto: number;
   fecha: string;
   detalles: any;
@@ -1579,3 +1583,60 @@ export const getRegistroTransferencias = async (params: {
     throw new Error('No se pudo obtener el registro de transferencias');
   }
 };
+
+export interface CuentaBanco {
+  id: number;
+  nombre: string;
+  banco: string;
+  numero_cuenta: string;
+  activa: boolean;
+  creado_en?: string;
+}
+
+export const getCuentasBanco = async (): Promise<CuentaBanco[]> => {
+  try {
+    const response = await api.get('/cuentas-banco');
+    return response.data;
+  } catch (error) {
+    console.error('Error al obtener cuentas bancarias:', error);
+    throw new Error('No se pudieron obtener las cuentas bancarias');
+  }
+};
+
+export const createCuentaBanco = async (cuenta: {
+  nombre: string;
+  banco: string;
+  numero_cuenta: string;
+  activa?: boolean;
+}): Promise<CuentaBanco> => {
+  try {
+    const response = await api.post('/cuentas-banco', cuenta);
+    return response.data;
+  } catch (error: any) {
+    console.error('Error al crear cuenta bancaria:', error);
+    throw new Error(error.response?.data?.error || 'No se pudo crear la cuenta bancaria');
+  }
+};
+
+export const updateCuentaBanco = async (
+  idOrCuenta: number | { id: number; nombre: string; banco: string; numero_cuenta: string; activa?: boolean },
+  data?: Partial<{ nombre: string; banco: string; numero_cuenta: string; activa: boolean }>
+): Promise<CuentaBanco> => {
+  try {
+    const payload = typeof idOrCuenta === 'number' ? { id: idOrCuenta, ...data } : idOrCuenta;
+    const response = await api.put('/cuentas-banco', payload);
+    return response.data;
+  } catch (error: any) {
+    console.error('Error al actualizar cuenta bancaria:', error);
+    throw new Error(error.response?.data?.error || 'No se pudo actualizar la cuenta bancaria');
+  }
+};
+
+export const deleteCuentaBanco = async (id: number): Promise<void> => {
+  try {
+    await api.delete(`/cuentas-banco?id=${id}`);
+  } catch (error: any) {
+    console.error('Error al eliminar cuenta bancaria:', error);
+    throw new Error(error.response?.data?.error || 'No se pudo eliminar la cuenta bancaria');
+  }
+};

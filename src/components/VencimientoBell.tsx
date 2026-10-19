@@ -95,7 +95,7 @@ export const VencimientoBell: React.FC<VencimientoBellProps> = ({
 
       // 1. Notificaciones de Vencimientos
       vencimientos.forEach((v: any) => {
-        if (v.estado === 'vigente') return;
+        if (v.estado === 'vigente' || (Number(v.cantidad) || 0) <= 0) return;
         const key = getNotificationKey('vencimiento', v);
         const isRead = readKeysSet.has(key);
         if (!isRead) {

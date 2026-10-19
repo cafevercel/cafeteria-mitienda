@@ -226,9 +226,11 @@ export const NotificacionesSystem: React.FC<NotificacionesSystemProps> = ({
     setPaginaVencimientos(1);
   }, [searchTerm, filtroVencimiento]);
 
-  // Filtered Vencimientos
+  // Filtered Vencimientos (excluyendo productos sin existencia / stock 0)
   const vencimientosFiltrados = useMemo(() => {
     return vencimientos.filter(p => {
+      if ((Number(p.cantidad) || 0) <= 0) return false;
+
       const matchSearch = p.nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           (p.seccion && p.seccion.toLowerCase().includes(searchTerm.toLowerCase()));
       if (!matchSearch) return false;
@@ -241,10 +243,14 @@ export const NotificacionesSystem: React.FC<NotificacionesSystemProps> = ({
     });
   }, [vencimientos, searchTerm, filtroVencimiento]);
 
-  const totalVencidos = useMemo(() => vencimientos.filter(v => v.estado === 'vencido').length, [vencimientos]);
-  const totalVencePronto = useMemo(() => vencimientos.filter(v => v.estado === 'vence_pronto').length, [vencimientos]);
-  const totalVigentes = useMemo(() => vencimientos.filter(v => v.estado === 'vigente').length, [vencimientos]);
-  const totalConStock = useMemo(() => vencimientos.filter(v => Number(v.cantidad) > 0).length, [vencimientos]);
+  const vencimientosConExistencia = useMemo(() => {
+    return vencimientos.filter(v => (Number(v.cantidad) || 0) > 0);
+  }, [vencimientos]);
+
+  const totalVencidos = useMemo(() => vencimientosConExistencia.filter(v => v.estado === 'vencido').length, [vencimientosConExistencia]);
+  const totalVencePronto = useMemo(() => vencimientosConExistencia.filter(v => v.estado === 'vence_pronto').length, [vencimientosConExistencia]);
+  const totalVigentes = useMemo(() => vencimientosConExistencia.filter(v => v.estado === 'vigente').length, [vencimientosConExistencia]);
+  const totalConStock = useMemo(() => vencimientosConExistencia.length, [vencimientosConExistencia]);
 
   const itemsPorPaginaVenc = 20;
   const totalPaginasVencimientos = Math.max(1, Math.ceil(vencimientosFiltrados.length / itemsPorPaginaVenc));
@@ -313,9 +319,9 @@ export const NotificacionesSystem: React.FC<NotificacionesSystemProps> = ({
           <TabsTrigger value="vencimientos" className="flex items-center justify-center gap-1 sm:gap-2 py-2 text-[11px] sm:text-sm font-medium">
             <Calendar className="h-3.5 w-3.5 text-red-500 shrink-0" />
             <span className="truncate">Fechas de Vencimiento</span>
-            {vencimientos.filter(v => v.estado !== 'vigente').length > 0 && (
+            {vencimientosConExistencia.filter(v => v.estado !== 'vigente').length > 0 && (
               <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full font-bold">
-                {vencimientos.filter(v => v.estado !== 'vigente').length}
+                {vencimientosConExistencia.filter(v => v.estado !== 'vigente').length}
               </span>
             )}
           </TabsTrigger>
@@ -358,7 +364,7 @@ export const NotificacionesSystem: React.FC<NotificacionesSystemProps> = ({
                 onClick={() => setFiltroVencimiento('todos')}
                 className="h-8 text-xs flex-1 sm:flex-none"
               >
-                Todos ({vencimientos.length})
+                Todos ({vencimientosConExistencia.length})
               </Button>
               <Button
                 size="sm"

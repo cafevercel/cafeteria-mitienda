@@ -21,8 +21,11 @@ export async function GET(request: NextRequest) {
       conditions.push(`(
         rt.cliente_nombre ILIKE $${paramIndex} OR 
         rt.cliente_telefono ILIKE $${paramIndex} OR 
+        COALESCE(rt.cliente_carnet, '') ILIKE $${paramIndex} OR 
         rt.numero_transaccion ILIKE $${paramIndex} OR 
         rt.banco ILIKE $${paramIndex} OR 
+        COALESCE(rt.cuenta_nombre, '') ILIKE $${paramIndex} OR 
+        COALESCE(rt.cuenta_numero, '') ILIKE $${paramIndex} OR 
         COALESCE(u.nombre, rt.vendedor_nombre, '') ILIKE $${paramIndex}
       )`);
       params.push(`%${search}%`);
@@ -63,8 +66,12 @@ export async function GET(request: NextRequest) {
         COALESCE(u.nombre, rt.vendedor_nombre, 'Punto de Venta') as vendedor_nombre,
         rt.cliente_nombre,
         rt.cliente_telefono,
+        rt.cliente_carnet,
         rt.numero_transaccion,
         rt.banco,
+        rt.cuenta_banco_id,
+        rt.cuenta_nombre,
+        rt.cuenta_numero,
         rt.monto,
         rt.fecha,
         rt.detalles,
@@ -139,8 +146,12 @@ export async function POST(request: NextRequest) {
         vendedorNombre,
         clienteNombre,
         clienteTelefono,
+        clienteCarnet,
         numeroTransaccion,
         banco,
+        cuentaBancoId,
+        cuentaNombre,
+        cuentaNumero,
         monto,
         fecha,
         detalles
@@ -166,16 +177,20 @@ export async function POST(request: NextRequest) {
 
       const result = await query(
         `INSERT INTO registro_transferencias 
-         (vendedor_id, vendedor_nombre, cliente_nombre, cliente_telefono, numero_transaccion, banco, monto, fecha, detalles) 
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
+         (vendedor_id, vendedor_nombre, cliente_nombre, cliente_telefono, cliente_carnet, numero_transaccion, banco, cuenta_banco_id, cuenta_nombre, cuenta_numero, monto, fecha, detalles) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) 
          RETURNING id, numero_transaccion`,
         [
           vendedorId ? parseInt(vendedorId, 10) : null,
           vendedorNombre || null,
           clienteNombre,
           clienteTelefono || '',
+          clienteCarnet || null,
           numeroTransaccion,
           banco,
+          cuentaBancoId ? parseInt(cuentaBancoId, 10) : null,
+          cuentaNombre || null,
+          cuentaNumero || null,
           parseFloat(monto) || 0,
           fechaFinal,
           detallesJson
