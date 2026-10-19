@@ -46,21 +46,29 @@ export async function PUT(request: NextRequest) {
     const body = await request.json();
     const { id, nombre, banco, numero_cuenta, activa } = body;
 
-    if (!id || !nombre || !banco || !numero_cuenta) {
-      return NextResponse.json({ error: 'ID, nombre, banco y número de cuenta son obligatorios' }, { status: 400 });
+    if (!id) {
+      return NextResponse.json({ error: 'El ID de la cuenta es obligatorio' }, { status: 400 });
     }
+
+    // Permitir actualización parcial (por ejemplo, solo cambiar 'activa')
+    const existingRes = await query('SELECT * FROM cuentas_banco WHERE id = $1', [id]);
+    if (existingRes.rows.length === 0) {
+      return NextResponse.json({ error: 'Cuenta no encontrada' }, { status: 404 });
+    }
+
+    const current = existingRes.rows[0];
+    const newNombre = nombre !== undefined ? String(nombre).trim() : current.nombre;
+    const newBanco = banco !== undefined ? String(banco).trim() : current.banco;
+    const newNumeroCuenta = numero_cuenta !== undefined ? String(numero_cuenta).trim() : current.numero_cuenta;
+    const newActiva = activa !== undefined ? Boolean(activa) : current.activa;
 
     const res = await query(
       `UPDATE cuentas_banco 
        SET nombre = $1, banco = $2, numero_cuenta = $3, activa = $4 
        WHERE id = $5 
        RETURNING id, nombre, banco, numero_cuenta, activa, creado_en`,
-      [nombre.trim(), banco.trim(), numero_cuenta.trim(), activa !== false, id]
+      [newNombre, newBanco, newNumeroCuenta, newActiva, id]
     );
-
-    if (res.rows.length === 0) {
-      return NextResponse.json({ error: 'Cuenta no encontrada' }, { status: 404 });
-    }
 
     return NextResponse.json(res.rows[0]);
   } catch (error: any) {

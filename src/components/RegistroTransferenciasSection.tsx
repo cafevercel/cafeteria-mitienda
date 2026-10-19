@@ -187,7 +187,12 @@ export default function RegistroTransferenciasSection() {
   // Alternar estado activo de la cuenta
   const handleToggleActiva = async (cuenta: CuentaBanco) => {
     try {
-      const updated = await updateCuentaBanco(cuenta.id, { activa: !cuenta.activa })
+      const updated = await updateCuentaBanco(cuenta.id, {
+        nombre: cuenta.nombre,
+        banco: cuenta.banco,
+        numero_cuenta: cuenta.numero_cuenta,
+        activa: !cuenta.activa
+      })
       setCuentas(prev => prev.map(c => c.id === updated.id ? updated : c))
       toast({
         title: updated.activa ? "Cuenta activada" : "Cuenta desactivada",
