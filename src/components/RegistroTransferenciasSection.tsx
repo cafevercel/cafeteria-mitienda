@@ -72,7 +72,7 @@ export default function RegistroTransferenciasSection() {
   const [editingCuenta, setEditingCuenta] = useState<CuentaBanco | null>(null)
   const [cuentaForm, setCuentaForm] = useState({
     nombre: '',
-    banco: '',
+    banco: 'BPA',
     numero_cuenta: '',
     activa: true
   })
@@ -151,7 +151,7 @@ export default function RegistroTransferenciasSection() {
       }
       setIsCuentaModalOpen(false)
       setEditingCuenta(null)
-      setCuentaForm({ nombre: '', banco: '', numero_cuenta: '', activa: true })
+      setCuentaForm({ nombre: '', banco: 'BPA', numero_cuenta: '', activa: true })
     } catch (err: any) {
       toast({
         title: "Error al guardar",
@@ -204,7 +204,7 @@ export default function RegistroTransferenciasSection() {
 
   const openNewCuentaModal = () => {
     setEditingCuenta(null)
-    setCuentaForm({ nombre: '', banco: '', numero_cuenta: '', activa: true })
+    setCuentaForm({ nombre: '', banco: 'BPA', numero_cuenta: '', activa: true })
     setIsCuentaModalOpen(true)
   }
 
@@ -263,12 +263,10 @@ export default function RegistroTransferenciasSection() {
     return () => clearTimeout(timer)
   }, [search, selectedVendedor, selectedBanco, fechaInicio, fechaFin])
 
-  // Lista de bancos únicos para el filtro
+  // Lista de bancos disponibles para el filtro
   const bancosDisponibles = useMemo(() => {
-    const defaultBancos = ['Transfermóvil', 'EnZona', 'BANDEC', 'BPA', 'Metropolitano']
-    const fromData = transferencias.map(t => t.banco).filter(Boolean)
-    return Array.from(new Set([...defaultBancos, ...fromData]))
-  }, [transferencias])
+    return ['BPA', 'Metropolitano', 'BANDEC']
+  }, [])
 
   // Desglose por banco para KPI
   const bancoBreakdown = useMemo(() => {
@@ -937,15 +935,21 @@ export default function RegistroTransferenciasSection() {
 
             <div>
               <label className="text-xs font-semibold text-gray-700 block mb-1">
-                Banco o Plataforma *
+                Banco *
               </label>
-              <Input
-                placeholder="Ej: BANDEC, BPA, Metropolitano, Transfermóvil, EnZona"
+              <Select
                 value={cuentaForm.banco}
-                onChange={(e) => setCuentaForm({ ...cuentaForm, banco: e.target.value })}
-                className="border-orange-200 focus:border-orange-500"
-                required
-              />
+                onValueChange={(val) => setCuentaForm({ ...cuentaForm, banco: val })}
+              >
+                <SelectTrigger className="border-orange-200 bg-white">
+                  <SelectValue placeholder="Seleccione el banco" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="BPA">BPA</SelectItem>
+                  <SelectItem value="Metropolitano">Metropolitano</SelectItem>
+                  <SelectItem value="BANDEC">BANDEC</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div>
