@@ -13,9 +13,77 @@ export async function POST(request: NextRequest) {
 
     const results = [];
     const errors = [];
+    const syncedTransfers = [];
+    const transferMap = new Map<string, number>();
 
+    // 1. Sincronizar transferencias primero para asociar su ID a las ventas
+    if (body.transfers && Array.isArray(body.transfers)) {
+      for (const t of body.transfers) {
+        try {
+          const { id_local, clienteNombre, clienteTelefono, clienteCarnet, numeroTransaccion, banco, cuentaBancoId, cuentaNombre, cuentaNumero, monto, fecha, detalles, vendedorNombre } = t;
+          if (!clienteNombre || !numeroTransaccion || !banco) continue;
+
+          const existing = await query(
+            'SELECT id FROM registro_transferencias WHERE numero_transaccion = $1 AND vendedor_id = $2 LIMIT 1',
+            [numeroTransaccion, vendedorId ? parseInt(vendedorId, 10) : null]
+          );
+
+          if (existing.rows.length > 0) {
+            const trId = existing.rows[0].id;
+            transferMap.set(numeroTransaccion, trId);
+            syncedTransfers.push({ id_local, server_id: trId, status: 'already_exists' });
+            continue;
+          }
+
+          const fechaFinal = fecha ? new Date(fecha) : new Date();
+          const detallesJson = typeof detalles === 'string' ? detalles : JSON.stringify(detalles || []);
+
+          const res = await query(
+            `INSERT INTO registro_transferencias 
+             (vendedor_id, vendedor_nombre, cliente_nombre, cliente_telefono, cliente_carnet, numero_transaccion, banco, cuenta_banco_id, cuenta_nombre, cuenta_numero, monto, fecha, detalles) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) 
+             RETURNING id`,
+            [
+              vendedorId ? parseInt(vendedorId, 10) : null,
+              vendedorNombre || null,
+              clienteNombre,
+              clienteTelefono || '',
+              clienteCarnet || null,
+              numeroTransaccion,
+              banco,
+              cuentaBancoId ? parseInt(cuentaBancoId, 10) : null,
+              cuentaNombre || null,
+              cuentaNumero || null,
+              parseFloat(monto) || 0,
+              fechaFinal,
+              detallesJson
+            ]
+          );
+          if (res.rows.length > 0) {
+            const trId = res.rows[0].id;
+            transferMap.set(numeroTransaccion, trId);
+            syncedTransfers.push({ id_local, server_id: trId, status: 'synced' });
+          }
+        } catch (tErr) {
+          console.error('Error insertando transfer en bulk sync:', tErr);
+        }
+      }
+    }
+
+    // 2. Sincronizar ventas
     for (const sale of sales) {
-        const { productoId, cantidad, fecha, parametros, id_local, metodoPago, montoEfectivo, montoTransferencia } = sale;
+        const { 
+          productoId, cantidad, fecha, parametros, id_local, metodoPago, montoEfectivo, montoTransferencia,
+          clienteNombre, cliente_nombre,
+          clienteCarnet, cliente_carnet,
+          clienteTelefono, cliente_telefono,
+          numeroTransaccion, numero_transaccion,
+          banco,
+          cuentaBancoId, cuenta_banco_id,
+          cuentaNombre, cuenta_nombre,
+          cuentaNumero, cuenta_numero,
+          transferenciaId, transferencia_id
+        } = sale;
 
         try {
           await query('BEGIN');
@@ -66,11 +134,42 @@ export async function POST(request: NextRequest) {
             mTransferencia = parseFloat(montoTransferencia) || 0;
           }
 
+          const cNombre = clienteNombre || cliente_nombre || null;
+          const cCarnet = clienteCarnet || cliente_carnet || null;
+          const cTelefono = clienteTelefono || cliente_telefono || null;
+          const nTransaccion = numeroTransaccion || numero_transaccion || null;
+          const bco = banco || null;
+          const rawCuentaId = cuentaBancoId !== undefined ? cuentaBancoId : cuenta_banco_id;
+          const cBancoId = rawCuentaId ? parseInt(rawCuentaId, 10) : null;
+          const cNombreCuenta = cuentaNombre || cuenta_nombre || null;
+          const cNumeroCuenta = cuentaNumero || cuenta_numero || null;
+
+          // Resolver ID del registro de transferencia si aplica
+          let tId = transferenciaId || transferencia_id || null;
+          if (!tId && nTransaccion) {
+            if (transferMap.has(nTransaccion)) {
+              tId = transferMap.get(nTransaccion);
+            } else {
+              const exTr = await query(
+                'SELECT id FROM registro_transferencias WHERE numero_transaccion = $1 AND vendedor_id = $2 LIMIT 1',
+                [nTransaccion, vendedorId ? parseInt(vendedorId, 10) : null]
+              );
+              if (exTr.rows.length > 0) {
+                tId = exTr.rows[0].id;
+              }
+            }
+          }
+
           // Crear venta
           const fechaVenta = new Date(fecha);
           const ventaResult = await query(
-            `INSERT INTO ventas (producto, cantidad, precio_unitario, precio_compra, total, vendedor, fecha, metodo_pago, monto_efectivo, monto_transferencia) 
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+            `INSERT INTO ventas (
+               producto, cantidad, precio_unitario, precio_compra, total, vendedor, fecha, 
+               metodo_pago, monto_efectivo, monto_transferencia,
+               cliente_nombre, cliente_carnet, cliente_telefono, numero_transaccion, banco, 
+               cuenta_banco_id, cuenta_nombre, cuenta_numero, transferencia_id
+             ) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19) RETURNING *`,
             [
               productoId,
               cantidad,
@@ -81,7 +180,16 @@ export async function POST(request: NextRequest) {
               fechaVenta,
               mPago,
               mEfectivo,
-              mTransferencia
+              mTransferencia,
+              cNombre,
+              cCarnet,
+              cTelefono,
+              nTransaccion,
+              bco,
+              cBancoId,
+              cNombreCuenta,
+              cNumeroCuenta,
+              tId
             ]
           );
 
@@ -126,60 +234,22 @@ export async function POST(request: NextRequest) {
         }
 
         await query('COMMIT');
-        results.push({ id_local, server_id: newVentaId, status: 'synced' });
+        results.push({ 
+          id_local, 
+          server_id: newVentaId, 
+          status: 'synced',
+          transferencia_id: tId || null,
+          cuenta_nombre: cNombreCuenta,
+          cuenta_numero: cNumeroCuenta,
+          banco: bco,
+          cliente_nombre: cNombre,
+          cliente_carnet: cCarnet,
+          cliente_telefono: cTelefono,
+          numero_transaccion: nTransaccion
+        });
       } catch (err: any) {
         await query('ROLLBACK');
         errors.push({ id_local, error: err.message });
-      }
-    }
-
-    const syncedTransfers = [];
-    if (body.transfers && Array.isArray(body.transfers)) {
-      for (const t of body.transfers) {
-        try {
-          const { id_local, clienteNombre, clienteTelefono, clienteCarnet, numeroTransaccion, banco, cuentaBancoId, cuentaNombre, cuentaNumero, monto, fecha, detalles, vendedorNombre } = t;
-          if (!clienteNombre || !numeroTransaccion || !banco) continue;
-
-          const existing = await query(
-            'SELECT id FROM registro_transferencias WHERE numero_transaccion = $1 AND vendedor_id = $2 LIMIT 1',
-            [numeroTransaccion, vendedorId ? parseInt(vendedorId, 10) : null]
-          );
-
-          if (existing.rows.length > 0) {
-            syncedTransfers.push({ id_local, server_id: existing.rows[0].id, status: 'already_exists' });
-            continue;
-          }
-
-          const fechaFinal = fecha ? new Date(fecha) : new Date();
-          const detallesJson = typeof detalles === 'string' ? detalles : JSON.stringify(detalles || []);
-
-          const res = await query(
-            `INSERT INTO registro_transferencias 
-             (vendedor_id, vendedor_nombre, cliente_nombre, cliente_telefono, cliente_carnet, numero_transaccion, banco, cuenta_banco_id, cuenta_nombre, cuenta_numero, monto, fecha, detalles) 
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) 
-             RETURNING id`,
-            [
-              vendedorId ? parseInt(vendedorId, 10) : null,
-              vendedorNombre || null,
-              clienteNombre,
-              clienteTelefono || '',
-              clienteCarnet || null,
-              numeroTransaccion,
-              banco,
-              cuentaBancoId ? parseInt(cuentaBancoId, 10) : null,
-              cuentaNombre || null,
-              cuentaNumero || null,
-              parseFloat(monto) || 0,
-              fechaFinal,
-              detallesJson
-            ]
-          );
-          if (res.rows.length > 0) {
-            syncedTransfers.push({ id_local, server_id: res.rows[0].id, status: 'synced' });
-          }
-        } catch (tErr) {
-          console.error('Error insertando transfer en bulk sync:', tErr);
-        }
       }
     }
 

@@ -1584,6 +1584,15 @@ export const getRegistroTransferencias = async (params: {
   }
 };
 
+export const deleteRegistroTransferencia = async (id: number): Promise<void> => {
+  try {
+    await api.delete(`/registro-transferencias?id=${id}`);
+  } catch (error) {
+    console.error('Error al eliminar registro de transferencia:', error);
+    throw new Error('No se pudo eliminar el registro de transferencia');
+  }
+};
+
 export interface CuentaBanco {
   id: number;
   nombre: string;

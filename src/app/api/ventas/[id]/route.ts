@@ -77,6 +77,103 @@ export async function DELETE(
     // Eliminar los registros en venta_parametros
     await query('DELETE FROM venta_parametros WHERE venta_id = $1', [ventaId]);
 
+    // Eliminar o actualizar registro_transferencias si la venta tiene transferencia asociada
+    try {
+      let transferRecord = null;
+
+      if (venta.transferencia_id) {
+        const trRes = await query('SELECT * FROM registro_transferencias WHERE id = $1', [venta.transferencia_id]);
+        if (trRes.rows.length > 0) {
+          transferRecord = trRes.rows[0];
+        }
+      }
+
+      if (!transferRecord && venta.numero_transaccion) {
+        const trRes = await query(
+          'SELECT * FROM registro_transferencias WHERE numero_transaccion = $1 AND vendedor_id = $2 LIMIT 1',
+          [venta.numero_transaccion, vendedorId]
+        );
+        if (trRes.rows.length > 0) {
+          transferRecord = trRes.rows[0];
+        }
+      }
+
+      // Fallback para ventas históricas donde no se guardó numero_transaccion o transferencia_id
+      if (!transferRecord && (venta.metodo_pago === 'transferencia' || venta.metodo_pago === 'mixto')) {
+        const trCandidates = await query(
+          `SELECT * FROM registro_transferencias 
+           WHERE vendedor_id = $1 
+             AND ABS(EXTRACT(EPOCH FROM (fecha - $2::timestamp))) < 18000
+           ORDER BY ABS(EXTRACT(EPOCH FROM (fecha - $2::timestamp))) ASC`,
+          [vendedorId, venta.fecha]
+        );
+
+        for (const cand of trCandidates.rows) {
+          let det = [];
+          try {
+            det = typeof cand.detalles === 'string' ? JSON.parse(cand.detalles) : (cand.detalles || []);
+          } catch {}
+          if (Array.isArray(det) && det.some((d: any) => Number(d.id) === Number(venta.producto))) {
+            transferRecord = cand;
+            break;
+          }
+        }
+      }
+
+      if (transferRecord) {
+        // Verificar si quedan otras ventas activas asociadas a esta misma transferencia
+        const otherSalesRes = await query(
+          `SELECT id, producto, total, monto_transferencia 
+           FROM ventas 
+           WHERE id != $1 AND vendedor = $2 AND (
+             (transferencia_id IS NOT NULL AND transferencia_id = $3) OR
+             (numero_transaccion IS NOT NULL AND numero_transaccion = $4)
+           )`,
+          [ventaId, vendedorId, transferRecord.id, transferRecord.numero_transaccion]
+        );
+
+        let detallesArr: any[] = [];
+        try {
+          detallesArr = typeof transferRecord.detalles === 'string'
+            ? JSON.parse(transferRecord.detalles)
+            : (transferRecord.detalles || []);
+        } catch {}
+
+        // Si no quedan otras ventas asociadas a la transferencia o el desglose tenía 1 solo ítem,
+        // eliminamos completamente el registro de transferencia
+        if (otherSalesRes.rows.length === 0 || detallesArr.length <= 1) {
+          await query('DELETE FROM registro_transferencias WHERE id = $1', [transferRecord.id]);
+          console.log(`✅ Registro de transferencia #${transferRecord.numero_transaccion} (ID: ${transferRecord.id}) eliminado junto con la venta ${ventaId}`);
+        } else {
+          // Si quedan otras ventas activas en esta misma transferencia, retiramos el producto de detalles y descontamos el monto
+          let removed = false;
+          const newDetalles = detallesArr.filter((item: any) => {
+            if (!removed && Number(item.id) === Number(venta.producto)) {
+              removed = true;
+              return false;
+            }
+            return true;
+          });
+
+          const montoVentaTransf = parseFloat(venta.monto_transferencia !== undefined && venta.monto_transferencia !== null ? venta.monto_transferencia : venta.total) || 0;
+          const nuevoMonto = Math.max(0, parseFloat(transferRecord.monto) - montoVentaTransf);
+
+          if (newDetalles.length === 0 || nuevoMonto <= 0) {
+            await query('DELETE FROM registro_transferencias WHERE id = $1', [transferRecord.id]);
+            console.log(`✅ Registro de transferencia ID ${transferRecord.id} eliminado tras remover su último producto`);
+          } else {
+            await query(
+              'UPDATE registro_transferencias SET monto = $1, detalles = $2 WHERE id = $3',
+              [nuevoMonto, JSON.stringify(newDetalles), transferRecord.id]
+            );
+            console.log(`✅ Registro de transferencia ID ${transferRecord.id} actualizado: nuevo monto $${nuevoMonto}`);
+          }
+        }
+      }
+    } catch (errTransfer) {
+      console.error('⚠️ Error al eliminar/actualizar registro de transferencias asociado:', errTransfer);
+    }
+
     // Eliminar la venta
     await query('DELETE FROM ventas WHERE id = $1', [ventaId]);
 

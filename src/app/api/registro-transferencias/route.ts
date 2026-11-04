@@ -208,3 +208,25 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message || 'Error interno' }, { status: 500 });
   }
 }
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+
+    if (!id) {
+      return NextResponse.json({ error: 'Se requiere el ID del registro de transferencia' }, { status: 400 });
+    }
+
+    const res = await query('DELETE FROM registro_transferencias WHERE id = $1 RETURNING id', [parseInt(id, 10)]);
+
+    if (res.rows.length === 0) {
+      return NextResponse.json({ error: 'Registro no encontrado' }, { status: 404 });
+    }
+
+    return NextResponse.json({ success: true, message: 'Registro de transferencia eliminado correctamente' });
+  } catch (error: any) {
+    console.error('Error al eliminar registro de transferencia:', error);
+    return NextResponse.json({ error: error.message || 'Error interno' }, { status: 500 });
+  }
+}

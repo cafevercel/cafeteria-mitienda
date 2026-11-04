@@ -4,7 +4,17 @@ import { query } from '@/lib/db';
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { productoId, cantidad, fecha, parametros, vendedorId, metodoPago, montoEfectivo, montoTransferencia } = body;
+  const { 
+    productoId, cantidad, fecha, parametros, vendedorId, metodoPago, montoEfectivo, montoTransferencia,
+    clienteNombre, cliente_nombre,
+    clienteCarnet, cliente_carnet,
+    clienteTelefono, cliente_telefono,
+    numeroTransaccion, numero_transaccion,
+    banco,
+    cuentaBancoId, cuenta_banco_id,
+    cuentaNombre, cuenta_nombre,
+    cuentaNumero, cuenta_numero
+  } = body;
 
   if (!productoId || !cantidad || !fecha || !vendedorId) {
     return NextResponse.json({ error: 'Faltan datos requeridos' }, { status: 400 });
@@ -71,10 +81,37 @@ export async function POST(request: NextRequest) {
       mTransferencia = parseFloat(montoTransferencia) || 0;
     }
 
+    const cNombre = clienteNombre || cliente_nombre || null;
+    const cCarnet = clienteCarnet || cliente_carnet || null;
+    const cTelefono = clienteTelefono || cliente_telefono || null;
+    const nTransaccion = numeroTransaccion || numero_transaccion || null;
+    const bco = banco || null;
+    const rawCuentaId = cuentaBancoId !== undefined ? cuentaBancoId : cuenta_banco_id;
+    const cBancoId = rawCuentaId ? parseInt(rawCuentaId, 10) : null;
+    const cNombreCuenta = cuentaNombre || cuenta_nombre || null;
+    const cNumeroCuenta = cuentaNumero || cuenta_numero || null;
+
+    // Buscar si existe registro de transferencia previo para asociar transferencia_id
+    let transId = body.transferenciaId || body.transferencia_id || null;
+    if (!transId && nTransaccion) {
+      const exTrans = await query(
+        'SELECT id FROM registro_transferencias WHERE numero_transaccion = $1 AND vendedor_id = $2 LIMIT 1',
+        [nTransaccion, vendedorId ? parseInt(vendedorId, 10) : null]
+      );
+      if (exTrans.rows.length > 0) {
+        transId = exTrans.rows[0].id;
+      }
+    }
+
     // Crear venta
     const ventaResult = await query(
-      `INSERT INTO ventas (producto, cantidad, precio_unitario, precio_compra, total, vendedor, fecha, metodo_pago, monto_efectivo, monto_transferencia) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+      `INSERT INTO ventas (
+         producto, cantidad, precio_unitario, precio_compra, total, vendedor, fecha, 
+         metodo_pago, monto_efectivo, monto_transferencia,
+         cliente_nombre, cliente_carnet, cliente_telefono, numero_transaccion, banco, 
+         cuenta_banco_id, cuenta_nombre, cuenta_numero, transferencia_id
+       ) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19) RETURNING *`,
       [
         productoId,
         cantidad,
@@ -85,7 +122,16 @@ export async function POST(request: NextRequest) {
         fechaVenta,
         mPago,
         mEfectivo,
-        mTransferencia
+        mTransferencia,
+        cNombre,
+        cCarnet,
+        cTelefono,
+        nTransaccion,
+        bco,
+        cBancoId,
+        cNombreCuenta,
+        cNumeroCuenta,
+        transId
       ]
     );
 

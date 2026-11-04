@@ -46,4 +46,18 @@ CREATE INDEX IF NOT EXISTS idx_reg_transf_telefono ON registro_transferencias(cl
 CREATE INDEX IF NOT EXISTS idx_reg_transf_carnet ON registro_transferencias(cliente_carnet);
 CREATE INDEX IF NOT EXISTS idx_reg_transf_banco ON registro_transferencias(banco);
 
+-- Vinculación de la tabla ventas con registro_transferencias
+ALTER TABLE ventas ADD COLUMN IF NOT EXISTS cliente_nombre VARCHAR(255);
+ALTER TABLE ventas ADD COLUMN IF NOT EXISTS cliente_carnet VARCHAR(50);
+ALTER TABLE ventas ADD COLUMN IF NOT EXISTS cliente_telefono VARCHAR(50);
+ALTER TABLE ventas ADD COLUMN IF NOT EXISTS numero_transaccion VARCHAR(100);
+ALTER TABLE ventas ADD COLUMN IF NOT EXISTS banco VARCHAR(100);
+ALTER TABLE ventas ADD COLUMN IF NOT EXISTS cuenta_banco_id INTEGER;
+ALTER TABLE ventas ADD COLUMN IF NOT EXISTS cuenta_nombre VARCHAR(150);
+ALTER TABLE ventas ADD COLUMN IF NOT EXISTS cuenta_numero VARCHAR(100);
+ALTER TABLE ventas ADD COLUMN IF NOT EXISTS transferencia_id INTEGER REFERENCES registro_transferencias(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_ventas_numero_transaccion ON ventas(numero_transaccion);
+CREATE INDEX IF NOT EXISTS idx_ventas_transferencia_id ON ventas(transferencia_id);
+
 COMMIT;

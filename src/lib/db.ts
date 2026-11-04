@@ -9,6 +9,17 @@ export async function ensureDbSchema() {
       ALTER TABLE ventas ADD COLUMN IF NOT EXISTS metodo_pago VARCHAR(20) DEFAULT 'efectivo';
       ALTER TABLE ventas ADD COLUMN IF NOT EXISTS monto_efectivo NUMERIC(10,2) DEFAULT 0;
       ALTER TABLE ventas ADD COLUMN IF NOT EXISTS monto_transferencia NUMERIC(10,2) DEFAULT 0;
+      ALTER TABLE ventas ADD COLUMN IF NOT EXISTS cliente_nombre VARCHAR(255);
+      ALTER TABLE ventas ADD COLUMN IF NOT EXISTS cliente_carnet VARCHAR(50);
+      ALTER TABLE ventas ADD COLUMN IF NOT EXISTS cliente_telefono VARCHAR(50);
+      ALTER TABLE ventas ADD COLUMN IF NOT EXISTS numero_transaccion VARCHAR(100);
+      ALTER TABLE ventas ADD COLUMN IF NOT EXISTS banco VARCHAR(100);
+      ALTER TABLE ventas ADD COLUMN IF NOT EXISTS cuenta_banco_id INTEGER;
+      ALTER TABLE ventas ADD COLUMN IF NOT EXISTS cuenta_nombre VARCHAR(150);
+      ALTER TABLE ventas ADD COLUMN IF NOT EXISTS cuenta_numero VARCHAR(100);
+      ALTER TABLE ventas ADD COLUMN IF NOT EXISTS transferencia_id INTEGER REFERENCES registro_transferencias(id) ON DELETE SET NULL;
+      CREATE INDEX IF NOT EXISTS idx_ventas_numero_transaccion ON ventas(numero_transaccion);
+      CREATE INDEX IF NOT EXISTS idx_ventas_transferencia_id ON ventas(transferencia_id);
       ALTER TABLE gastos ADD COLUMN IF NOT EXISTS tipo_gasto VARCHAR(20) DEFAULT 'fijo';
       CREATE TABLE IF NOT EXISTS salarios_mensuales (
         id SERIAL PRIMARY KEY,
