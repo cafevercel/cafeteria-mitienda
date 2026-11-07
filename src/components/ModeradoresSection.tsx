@@ -6,7 +6,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Shield, Plus, Edit, Trash2, Calendar, ClipboardList, Loader2, UserCheck, UserX, Phone, ClipboardCheck, FileSpreadsheet, Download, AlertTriangle, Eye, CheckCircle2, XCircle } from 'lucide-react';
+import { 
+  Shield, Plus, Edit, Trash2, Calendar, ClipboardList, Loader2, UserCheck, UserX, Phone, 
+  ClipboardCheck, FileSpreadsheet, Download, AlertTriangle, Eye, CheckCircle2, XCircle,
+  PackageCheck, ArrowRightLeft, Layers
+} from 'lucide-react';
 import { toast } from "@/hooks/use-toast";
 import {
   getModeradores,
@@ -27,13 +31,29 @@ interface Moderador {
   activo: boolean;
 }
 
+interface ResumenEntregaItem {
+  nombre: string;
+  cantidad: number;
+  precio_compra: number;
+  subtotal: number;
+}
+
+interface ResumenEntrega {
+  total_unidades: number;
+  total_monto: number;
+  items: ResumenEntregaItem[];
+}
+
 interface LogEntry {
   id: string;
   moderador_id: number;
   accion: string;
   detalles: string;
   fecha: string;
+  resumen_entrega?: ResumenEntrega;
 }
+
+type BitacoraFilter = 'todos' | 'inventarios' | 'creacion_edicion' | 'entregas' | 'bajas' | 'traslados';
 
 export default function ModeradoresSection() {
   const [moderadores, setModeradores] = useState<Moderador[]>([]);
@@ -61,6 +81,7 @@ export default function ModeradoresSection() {
   // Bitacora logs
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
+  const [bitacoraFilter, setBitacoraFilter] = useState<BitacoraFilter>('todos');
 
   // Inventarios
   const [inventariosList, setInventariosList] = useState<any[]>([]);
@@ -249,6 +270,7 @@ export default function ModeradoresSection() {
 
   const handleOpenBitacora = async (mod: Moderador) => {
     setSelectedModerador(mod);
+    setBitacoraFilter('todos');
     setShowOptionsDialog(false);
     setShowBitacoraDialog(true);
     try {
@@ -260,6 +282,76 @@ export default function ModeradoresSection() {
     } finally {
       setLoadingLogs(false);
     }
+  };
+
+  const matchesFilter = (log: LogEntry, filter: BitacoraFilter) => {
+    if (filter === 'todos') return true;
+    const accion = (log.accion || '').toLowerCase();
+    const detalles = (log.detalles || '').toLowerCase();
+
+    switch (filter) {
+      case 'inventarios':
+        return accion.includes('inventario') || detalles.includes('inventario') || detalles.includes('auditoría');
+      case 'creacion_edicion':
+        return accion.startsWith('crear') || accion.startsWith('editar') || detalles.startsWith('creó') || detalles.startsWith('editó');
+      case 'entregas':
+        return accion.includes('entreg') || detalles.startsWith('entregó');
+      case 'bajas':
+        return accion.includes('baja') || accion.includes('eliminar') || detalles.includes('baja') || detalles.includes('eliminó');
+      case 'traslados':
+        return accion.includes('mover') || accion.includes('traslado') || accion.includes('transfer') || detalles.startsWith('transfirió');
+      default:
+        return true;
+    }
+  };
+
+  const getEntregaInfo = (log: LogEntry): ResumenEntrega => {
+    if (log.resumen_entrega && (log.resumen_entrega.items?.length > 0 || log.resumen_entrega.total_unidades > 0)) {
+      return log.resumen_entrega;
+    }
+
+    const text = log.detalles || '';
+    const multiMatch = text.match(/^(?:Entregó\s+)?(\d+)\s+unidades\s+totales\s*\((.+?)\)/i);
+    const singleMatch = text.match(/^(?:Entregó\s+)?(\d+)\s+unidades\s+de\s+["']([^"']+)["']/i);
+    const fallbackMatch = text.match(/^(?:Entregó\s+)?(\d+)\s+unidades\s+totales/i);
+
+    let items: ResumenEntregaItem[] = [];
+    let totalUnidades = 0;
+
+    if (multiMatch) {
+      totalUnidades = parseInt(multiMatch[1], 10) || 0;
+      const inner = multiMatch[2];
+      const itemRegex = /["']([^"']+)["']\s*:\s*(\d+)/g;
+      let m;
+      while ((m = itemRegex.exec(inner)) !== null) {
+        items.push({
+          nombre: m[1].trim(),
+          cantidad: parseInt(m[2], 10) || 0,
+          precio_compra: 0,
+          subtotal: 0
+        });
+      }
+      if (items.length > 0) {
+        totalUnidades = items.reduce((sum, it) => sum + it.cantidad, 0);
+      }
+    } else if (singleMatch) {
+      const qty = parseInt(singleMatch[1], 10) || 0;
+      totalUnidades = qty;
+      items.push({
+        nombre: singleMatch[2].trim(),
+        cantidad: qty,
+        precio_compra: 0,
+        subtotal: 0
+      });
+    } else if (fallbackMatch) {
+      totalUnidades = parseInt(fallbackMatch[1], 10) || 0;
+    }
+
+    return {
+      total_unidades: totalUnidades,
+      total_monto: 0,
+      items
+    };
   };
 
   // Group logs by local date
@@ -279,18 +371,110 @@ export default function ModeradoresSection() {
     return groups;
   };
 
-  const groupedLogs = groupLogsByDate(logs);
+  const filteredLogs = logs.filter(log => matchesFilter(log, bitacoraFilter));
+  const groupedLogs = groupLogsByDate(filteredLogs);
 
-  const getActionBadgeColor = (action: string) => {
-    switch (action) {
-      case 'crear_producto': return 'bg-emerald-100 text-emerald-800 border-emerald-200';
-      case 'editar_producto': return 'bg-cyan-100 text-cyan-800 border-cyan-200';
-      case 'entregar_producto': return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'mover_vendedores': return 'bg-amber-100 text-amber-800 border-amber-200';
-      case 'ver_transacciones': return 'bg-purple-100 text-purple-800 border-purple-200';
-      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+  const filterCounts: Record<BitacoraFilter, number> = {
+    todos: logs.length,
+    inventarios: logs.filter(l => matchesFilter(l, 'inventarios')).length,
+    creacion_edicion: logs.filter(l => matchesFilter(l, 'creacion_edicion')).length,
+    entregas: logs.filter(l => matchesFilter(l, 'entregas')).length,
+    bajas: logs.filter(l => matchesFilter(l, 'bajas')).length,
+    traslados: logs.filter(l => matchesFilter(l, 'traslados')).length,
+  };
+
+  const entregasFiltradas = filteredLogs.filter(l => matchesFilter(l, 'entregas'));
+  const totalEntregasUnidades = entregasFiltradas.reduce((sum, l) => sum + (getEntregaInfo(l).total_unidades || 0), 0);
+  const totalEntregasMonto = entregasFiltradas.reduce((sum, l) => sum + (getEntregaInfo(l).total_monto || 0), 0);
+
+  const getActionBadge = (accion: string) => {
+    switch (accion) {
+      case 'inventario_fisico':
+        return {
+          label: 'Inventario Realizado',
+          classes: 'bg-emerald-100 text-emerald-800 border-emerald-200'
+        };
+      case 'crear_producto':
+        return {
+          label: 'Creación',
+          classes: 'bg-emerald-100 text-emerald-800 border-emerald-200'
+        };
+      case 'editar_producto':
+        return {
+          label: 'Edición',
+          classes: 'bg-cyan-100 text-cyan-800 border-cyan-200'
+        };
+      case 'entregar_producto':
+        return {
+          label: 'Entrega',
+          classes: 'bg-blue-100 text-blue-800 border-blue-200'
+        };
+      case 'mover_vendedores':
+        return {
+          label: 'Traslado',
+          classes: 'bg-amber-100 text-amber-800 border-amber-200'
+        };
+      case 'eliminar_producto':
+        return {
+          label: 'Baja',
+          classes: 'bg-red-100 text-red-800 border-red-200'
+        };
+      case 'ver_transacciones':
+        return {
+          label: 'Consulta Historial',
+          classes: 'bg-purple-100 text-purple-800 border-purple-200'
+        };
+      default:
+        return {
+          label: accion.replace(/_/g, ' '),
+          classes: 'bg-gray-100 text-gray-800 border-gray-200'
+        };
     }
   };
+
+  const filterOptions: {
+    id: BitacoraFilter;
+    label: string;
+    icon: React.ReactNode;
+    activeClasses: string;
+  }[] = [
+    {
+      id: 'todos',
+      label: 'Todos',
+      icon: <Layers className="w-3.5 h-3.5" />,
+      activeClasses: 'bg-orange-600 text-white border-orange-600 shadow-sm'
+    },
+    {
+      id: 'inventarios',
+      label: 'Inventarios Realizados',
+      icon: <ClipboardCheck className="w-3.5 h-3.5" />,
+      activeClasses: 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+    },
+    {
+      id: 'creacion_edicion',
+      label: 'Creación/Edición',
+      icon: <Edit className="w-3.5 h-3.5" />,
+      activeClasses: 'bg-cyan-700 text-white border-cyan-700 shadow-sm'
+    },
+    {
+      id: 'entregas',
+      label: 'Entregas',
+      icon: <PackageCheck className="w-3.5 h-3.5" />,
+      activeClasses: 'bg-blue-600 text-white border-blue-600 shadow-sm'
+    },
+    {
+      id: 'bajas',
+      label: 'Bajas',
+      icon: <Trash2 className="w-3.5 h-3.5" />,
+      activeClasses: 'bg-red-600 text-white border-red-600 shadow-sm'
+    },
+    {
+      id: 'traslados',
+      label: 'Traslados',
+      icon: <ArrowRightLeft className="w-3.5 h-3.5" />,
+      activeClasses: 'bg-amber-600 text-white border-amber-600 shadow-sm'
+    },
+  ];
 
   return (
     <div className="space-y-6">
@@ -515,6 +699,77 @@ export default function ModeradoresSection() {
             </DialogTitle>
           </DialogHeader>
 
+          {/* BARRA DE FILTROS */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-2 pt-1 border-b border-gray-150">
+            {filterOptions.map(opt => {
+              const isSelected = bitacoraFilter === opt.id;
+              const count = filterCounts[opt.id];
+              return (
+                <button
+                  key={opt.id}
+                  onClick={() => setBitacoraFilter(opt.id)}
+                  className={`px-2.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 border cursor-pointer ${
+                    isSelected
+                      ? opt.activeClasses
+                      : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50 hover:text-gray-900'
+                  }`}
+                >
+                  {opt.icon}
+                  <span>{opt.label}</span>
+                  <span
+                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                      isSelected ? 'bg-white/25 text-white' : 'bg-gray-100 text-gray-600'
+                    }`}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* BANNER ESPECÍFICO CUANDO SE SELECCIONA EL FILTRO ENTREGAS */}
+          {bitacoraFilter === 'entregas' && entregasFiltradas.length > 0 && (
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-3 sm:p-3.5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 shadow-xs">
+              <div>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-blue-900 block">
+                  Resumen de Entregas Filtradas
+                </span>
+                <span className="text-xs text-blue-700 font-medium">
+                  {entregasFiltradas.length} {entregasFiltradas.length === 1 ? 'despacho registrado' : 'despachos registrados'}
+                </span>
+              </div>
+              <div className="sm:text-right">
+                <span className="text-sm sm:text-base font-extrabold text-blue-950 block">
+                  {totalEntregasUnidades.toLocaleString('en-US')} unidades entregadas
+                </span>
+                <span className="text-xs font-bold text-blue-800">
+                  Monto total: {totalEntregasMonto.toLocaleString('en-US')} cup
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* BANNER ESPECÍFICO CUANDO SE SELECCIONA EL FILTRO INVENTARIOS */}
+          {bitacoraFilter === 'inventarios' && filterCounts.inventarios > 0 && (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+              <div className="text-xs text-emerald-800">
+                Auditorías físicas realizadas por este moderador
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setShowBitacoraDialog(false);
+                  if (selectedModerador) handleOpenInventarios(selectedModerador);
+                }}
+                className="border-emerald-300 text-emerald-800 hover:bg-emerald-100 text-xs h-7"
+              >
+                Ver auditorías con Excel →
+              </Button>
+            </div>
+          )}
+
           <div className="flex-1 overflow-y-auto pr-2 py-4 space-y-6">
             {loadingLogs ? (
               <div className="flex justify-center py-12">
@@ -533,6 +788,8 @@ export default function ModeradoresSection() {
                         hour: '2-digit',
                         minute: '2-digit'
                       });
+                      const badge = getActionBadge(log.accion);
+
                       return (
                         <div key={log.id} className="relative">
                           {/* Dot on the timeline */}
@@ -540,41 +797,91 @@ export default function ModeradoresSection() {
                           
                           <div className="bg-white p-3.5 rounded-md border border-gray-150 shadow-sm space-y-2">
                             <div className="flex justify-between items-center">
-                              <span className={`inline-block border text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full ${getActionBadgeColor(log.accion)}`}>
-                                {log.accion.replace('_', ' ')}
+                              <span className={`inline-block border text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full ${badge.classes}`}>
+                                {badge.label}
                               </span>
                               <span className="text-xs text-gray-400 font-medium">{logTime}</span>
                             </div>
                             <div className="text-sm text-gray-700 leading-relaxed font-normal">
                               {(() => {
-                                const detalles = log.detalles;
-                                // 1. Check for entregar_producto with multiple products
-                                const entregarRegex = /^(Entregó \d+ unidades totales )\((.+?)\)( al punto de venta ".+")$/;
-                                const entregarMatch = detalles.match(entregarRegex);
-                                if (entregarMatch) {
-                                  const [_, prefix, productsList, suffix] = entregarMatch;
-                                  const products = productsList.split(/,\s*/);
+                                const isEntrega = log.accion === 'entregar_producto' || (log.detalles && log.detalles.toLowerCase().startsWith('entregó'));
+
+                                if (isEntrega) {
+                                  const entrega = getEntregaInfo(log);
+                                  const posMatch = log.detalles.match(/al punto de venta\s+["']([^"']+)["']/i);
+                                  const posName = posMatch ? posMatch[1] : null;
+
                                   return (
-                                    <div className="space-y-1">
-                                      <span className="font-medium text-gray-800">{prefix}{suffix}:</span>
-                                      <ul className="list-disc pl-5 mt-1 space-y-1 text-gray-700">
-                                        {products.map((p, idx) => (
-                                          <li key={idx} className="text-sm font-normal text-gray-600">
-                                            {p}
-                                          </li>
-                                        ))}
-                                      </ul>
+                                    <div className="space-y-2">
+                                      <div className="font-semibold text-gray-800 text-sm">
+                                        {posName ? (
+                                          <>
+                                            Entrega al punto de venta: <span className="font-bold text-orange-950">&quot;{posName}&quot;</span>
+                                          </>
+                                        ) : (
+                                          <>Entrega realizada:</>
+                                        )}
+                                      </div>
+
+                                      {entrega.items && entrega.items.length > 0 ? (
+                                        <ul className="list-disc pl-5 mt-1 space-y-1 text-gray-700">
+                                          {entrega.items.map((it, idx) => (
+                                            <li key={idx} className="text-sm text-gray-700">
+                                              <span className="font-medium text-gray-900">{it.nombre}</span>: {it.cantidad} {it.cantidad === 1 ? 'unidad' : 'unidades'}
+                                              {it.precio_compra > 0 ? (
+                                                <span className="text-xs text-gray-500 ml-1.5 font-normal">
+                                                  (${it.precio_compra.toLocaleString('en-US')} cup c/u)
+                                                </span>
+                                              ) : null}
+                                            </li>
+                                          ))}
+                                        </ul>
+                                      ) : (
+                                        <p className="text-sm text-gray-600">{log.detalles}</p>
+                                      )}
+
+                                      {/* Resumen en negritas al final de la lista de entrega */}
+                                      <div className="mt-2.5 pt-2 border-t border-gray-150">
+                                        <p className="text-sm font-bold text-gray-900">
+                                          {entrega.total_unidades.toLocaleString('en-US')} unidades entregadas por un monto de {entrega.total_monto.toLocaleString('en-US')} cup
+                                        </p>
+                                      </div>
                                     </div>
                                   );
                                 }
 
-                                // 2. Check for pipe-separated details (like crear_producto/editar_producto)
+                                if (log.accion === 'inventario_fisico') {
+                                  return (
+                                    <div className="space-y-2">
+                                      <div className="text-sm text-gray-800 leading-relaxed font-normal">
+                                        {log.detalles}
+                                      </div>
+                                      <div className="pt-1">
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => {
+                                            setShowBitacoraDialog(false);
+                                            if (selectedModerador) handleOpenInventarios(selectedModerador);
+                                          }}
+                                          className="border-emerald-200 text-emerald-800 hover:bg-emerald-50 text-xs h-7 flex items-center gap-1.5"
+                                        >
+                                          <ClipboardCheck className="w-3.5 h-3.5 text-emerald-600" />
+                                          Ver auditorías de inventario
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  );
+                                }
+
+                                const detalles = log.detalles;
+
+                                // Check for pipe-separated details (crear_producto / editar_producto)
                                 if (detalles.includes(' | ')) {
                                   const parts = detalles.split(' | ');
                                   return (
                                     <div className="space-y-1 text-gray-700">
                                       {parts.map((part, idx) => {
-                                        // If a part is "Parámetros: ...", format the list of parameters
                                         if (part.includes('Parámetros: ')) {
                                           const paramMatch = part.match(/^(Parámetros:\s*)(.+)$/);
                                           if (paramMatch) {
@@ -602,7 +909,6 @@ export default function ModeradoresSection() {
                                   );
                                 }
 
-                                // 3. Fallback: check if we have "Parámetros: " or similar in a single-line string
                                 if (detalles.includes('Parámetros: ')) {
                                   const paramMatch = detalles.match(/^(.*Parámetros:\s*)(.+)$/);
                                   if (paramMatch) {
@@ -634,8 +940,26 @@ export default function ModeradoresSection() {
             ) : (
               <div className="text-center py-12 text-gray-500">
                 <ClipboardList className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                <p className="font-medium text-sm">No hay acciones registradas en la bitácora</p>
-                <p className="text-xs text-gray-400 mt-1">Las operaciones que realice el moderador se verán reflejadas aquí por día</p>
+                <p className="font-medium text-sm text-gray-700">
+                  {bitacoraFilter === 'todos'
+                    ? 'No hay acciones registradas en la bitácora'
+                    : `No hay registros en la categoría "${filterOptions.find(o => o.id === bitacoraFilter)?.label || bitacoraFilter}"`}
+                </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  {bitacoraFilter === 'todos'
+                    ? 'Las operaciones que realice el moderador se verán reflejadas aquí por día'
+                    : 'Prueba seleccionando otro filtro para ver más actividad'}
+                </p>
+                {bitacoraFilter !== 'todos' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setBitacoraFilter('todos')}
+                    className="mt-3 text-xs border-orange-200 text-orange-700 hover:bg-orange-50"
+                  >
+                    Ver todas las acciones ({logs.length})
+                  </Button>
+                )}
               </div>
             )}
           </div>
