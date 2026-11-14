@@ -104,4 +104,12 @@
   .btn-orange-outline {
     @apply border border-orange-300 bg-transparent text-orange-700 hover:bg-orange-50;
   }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 }

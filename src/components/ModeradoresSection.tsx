@@ -691,86 +691,91 @@ export default function ModeradoresSection() {
 
       {/* BITACORA DIALOG */}
       <Dialog open={showBitacoraDialog} onOpenChange={setShowBitacoraDialog}>
-        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-orange-950 flex items-center gap-2">
-              <ClipboardList className="w-6 h-6 text-orange-600" />
-              Bitácora de Actividad: {selectedModerador?.nombre}
+        <DialogContent className="w-[96vw] sm:max-w-2xl max-h-[92vh] sm:max-h-[88vh] flex flex-col p-3.5 sm:p-6 overflow-hidden gap-0">
+          <DialogHeader className="shrink-0 pb-2 pr-7 sm:pr-0 border-b border-gray-100">
+            <DialogTitle className="text-lg sm:text-xl font-bold text-orange-950 flex items-center gap-2">
+              <ClipboardList className="w-5 h-5 sm:w-6 sm:h-6 text-orange-600 shrink-0" />
+              <span className="truncate">Bitácora: {selectedModerador?.nombre}</span>
             </DialogTitle>
           </DialogHeader>
 
-          {/* BARRA DE FILTROS */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-2 pt-1 border-b border-gray-150">
-            {filterOptions.map(opt => {
-              const isSelected = bitacoraFilter === opt.id;
-              const count = filterCounts[opt.id];
-              return (
-                <button
-                  key={opt.id}
-                  onClick={() => setBitacoraFilter(opt.id)}
-                  className={`px-2.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 border cursor-pointer ${
-                    isSelected
-                      ? opt.activeClasses
-                      : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50 hover:text-gray-900'
-                  }`}
-                >
-                  {opt.icon}
-                  <span>{opt.label}</span>
-                  <span
-                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                      isSelected ? 'bg-white/25 text-white' : 'bg-gray-100 text-gray-600'
+          {/* SECCIÓN FIJA DE FILTROS Y RESÚMENES (SIEMPRE VISIBLE Y RESPONSIVE) */}
+          <div className="shrink-0 space-y-2 py-2.5 border-b border-gray-150 bg-white z-10">
+            {/* BARRA DE FILTROS RESPONSIVE */}
+            <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1 pt-0.5 no-scrollbar scroll-smooth">
+              {filterOptions.map(opt => {
+                const isSelected = bitacoraFilter === opt.id;
+                const count = filterCounts[opt.id];
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => setBitacoraFilter(opt.id)}
+                    className={`px-2.5 sm:px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 border cursor-pointer shrink-0 ${
+                      isSelected
+                        ? opt.activeClasses
+                        : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50 hover:text-gray-900 active:bg-gray-100'
                     }`}
                   >
-                    {count}
+                    {opt.icon}
+                    <span>{opt.label}</span>
+                    <span
+                      className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold leading-none ${
+                        isSelected ? 'bg-white/25 text-white' : 'bg-gray-100 text-gray-600'
+                      }`}
+                    >
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* BANNER ESPECÍFICO CUANDO SE SELECCIONA EL FILTRO ENTREGAS */}
+            {bitacoraFilter === 'entregas' && entregasFiltradas.length > 0 && (
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-2.5 sm:p-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 shadow-xs">
+                <div>
+                  <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-blue-900 block">
+                    Resumen de Entregas Filtradas
                   </span>
-                </button>
-              );
-            })}
+                  <span className="text-xs text-blue-700 font-medium">
+                    {entregasFiltradas.length} {entregasFiltradas.length === 1 ? 'despacho registrado' : 'despachos registrados'}
+                  </span>
+                </div>
+                <div className="sm:text-right">
+                  <span className="text-sm sm:text-base font-extrabold text-blue-950 block">
+                    {totalEntregasUnidades.toLocaleString('en-US')} unidades entregadas
+                  </span>
+                  <span className="text-xs font-bold text-blue-800">
+                    Monto total: {totalEntregasMonto.toLocaleString('en-US')} cup
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* BANNER ESPECÍFICO CUANDO SE SELECCIONA EL FILTRO INVENTARIOS */}
+            {bitacoraFilter === 'inventarios' && filterCounts.inventarios > 0 && (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-2 sm:p-2.5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                <div className="text-xs text-emerald-800">
+                  Auditorías físicas realizadas por este moderador
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setShowBitacoraDialog(false);
+                    if (selectedModerador) handleOpenInventarios(selectedModerador);
+                  }}
+                  className="border-emerald-300 text-emerald-800 hover:bg-emerald-100 text-xs h-7"
+                >
+                  Ver auditorías con Excel →
+                </Button>
+              </div>
+            )}
           </div>
 
-          {/* BANNER ESPECÍFICO CUANDO SE SELECCIONA EL FILTRO ENTREGAS */}
-          {bitacoraFilter === 'entregas' && entregasFiltradas.length > 0 && (
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-3 sm:p-3.5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 shadow-xs">
-              <div>
-                <span className="text-[11px] font-bold uppercase tracking-wider text-blue-900 block">
-                  Resumen de Entregas Filtradas
-                </span>
-                <span className="text-xs text-blue-700 font-medium">
-                  {entregasFiltradas.length} {entregasFiltradas.length === 1 ? 'despacho registrado' : 'despachos registrados'}
-                </span>
-              </div>
-              <div className="sm:text-right">
-                <span className="text-sm sm:text-base font-extrabold text-blue-950 block">
-                  {totalEntregasUnidades.toLocaleString('en-US')} unidades entregadas
-                </span>
-                <span className="text-xs font-bold text-blue-800">
-                  Monto total: {totalEntregasMonto.toLocaleString('en-US')} cup
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* BANNER ESPECÍFICO CUANDO SE SELECCIONA EL FILTRO INVENTARIOS */}
-          {bitacoraFilter === 'inventarios' && filterCounts.inventarios > 0 && (
-            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-              <div className="text-xs text-emerald-800">
-                Auditorías físicas realizadas por este moderador
-              </div>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  setShowBitacoraDialog(false);
-                  if (selectedModerador) handleOpenInventarios(selectedModerador);
-                }}
-                className="border-emerald-300 text-emerald-800 hover:bg-emerald-100 text-xs h-7"
-              >
-                Ver auditorías con Excel →
-              </Button>
-            </div>
-          )}
-
-          <div className="flex-1 overflow-y-auto pr-2 py-4 space-y-6">
+          {/* LISTA SCROLLABLE DE LOGS (CON MIN-H-0 PARA QUE EL SCROLL NO EMPUJE O TAPE LOS FILTROS) */}
+          <div className="flex-1 overflow-y-auto min-h-0 pr-1 sm:pr-2 py-3 sm:py-4 space-y-4 sm:space-y-6">
             {loadingLogs ? (
               <div className="flex justify-center py-12">
                 <Loader2 className="w-8 h-8 animate-spin text-orange-600" />
@@ -778,11 +783,11 @@ export default function ModeradoresSection() {
             ) : Object.keys(groupedLogs).length > 0 ? (
               Object.keys(groupedLogs).map(dateStr => (
                 <div key={dateStr} className="space-y-3">
-                  <h4 className="font-bold text-orange-800 text-sm flex items-center gap-1.5 bg-orange-50/70 p-2 rounded border border-orange-100">
-                    <Calendar className="w-4 h-4" />
-                    {dateStr}
+                  <h4 className="font-bold text-orange-800 text-xs sm:text-sm flex items-center gap-1.5 bg-orange-50/70 p-2 rounded border border-orange-100">
+                    <Calendar className="w-4 h-4 shrink-0" />
+                    <span>{dateStr}</span>
                   </h4>
-                  <div className="relative pl-6 ml-3 border-l-2 border-orange-100 space-y-4">
+                  <div className="relative pl-5 sm:pl-6 ml-2 sm:ml-3 border-l-2 border-orange-100 space-y-3 sm:space-y-4">
                     {groupedLogs[dateStr].map(log => {
                       const logTime = new Date(log.fecha).toLocaleTimeString('es-ES', {
                         hour: '2-digit',
@@ -793,14 +798,14 @@ export default function ModeradoresSection() {
                       return (
                         <div key={log.id} className="relative">
                           {/* Dot on the timeline */}
-                          <div className="absolute -left-[31px] top-1 w-2.5 h-2.5 rounded-full bg-orange-400 border border-white"></div>
+                          <div className="absolute -left-[27px] sm:-left-[31px] top-1.5 w-2.5 h-2.5 rounded-full bg-orange-400 border border-white"></div>
                           
-                          <div className="bg-white p-3.5 rounded-md border border-gray-150 shadow-sm space-y-2">
-                            <div className="flex justify-between items-center">
+                          <div className="bg-white p-3 sm:p-3.5 rounded-md border border-gray-150 shadow-xs space-y-2">
+                            <div className="flex justify-between items-center gap-2">
                               <span className={`inline-block border text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full ${badge.classes}`}>
                                 {badge.label}
                               </span>
-                              <span className="text-xs text-gray-400 font-medium">{logTime}</span>
+                              <span className="text-[11px] sm:text-xs text-gray-400 font-medium shrink-0">{logTime}</span>
                             </div>
                             <div className="text-sm text-gray-700 leading-relaxed font-normal">
                               {(() => {
@@ -841,8 +846,8 @@ export default function ModeradoresSection() {
                                       )}
 
                                       {/* Resumen en negritas al final de la lista de entrega */}
-                                      <div className="mt-2.5 pt-2 border-t border-gray-150">
-                                        <p className="text-sm font-bold text-gray-900">
+                                      <div className="mt-2.5 pt-2 border-t border-gray-150 bg-gray-50/80 -mx-3 sm:-mx-3.5 -mb-3 sm:-mb-3.5 p-2.5 sm:p-3 rounded-b-md">
+                                        <p className="text-xs sm:text-sm font-bold text-gray-900 break-words">
                                           {entrega.total_unidades.toLocaleString('en-US')} unidades entregadas por un monto de {entrega.total_monto.toLocaleString('en-US')} cup
                                         </p>
                                       </div>
@@ -964,8 +969,8 @@ export default function ModeradoresSection() {
             )}
           </div>
 
-          <DialogFooter className="border-t pt-4">
-            <Button onClick={() => setShowBitacoraDialog(false)}>
+          <DialogFooter className="shrink-0 border-t border-gray-150 pt-3 sm:pt-4 bg-white">
+            <Button onClick={() => setShowBitacoraDialog(false)} className="w-full sm:w-auto">
               Cerrar
             </Button>
           </DialogFooter>
