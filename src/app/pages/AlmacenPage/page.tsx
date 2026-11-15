@@ -58,6 +58,7 @@ import NotificacionesSystem from '@/components/NotificacionesSystem'
 import VencimientoBell from '@/components/VencimientoBell'
 import RecordatoriosSection from '@/components/RecordatoriosSection'
 import RegistroTransferenciasSection from '@/components/RegistroTransferenciasSection'
+import AIAssistantWidget from '@/components/AIAssistantWidget'
 import React from 'react'
 
 
@@ -3054,6 +3055,9 @@ export default function AlmacenPage() {
         onClose={() => setShowNotificacionesModal(false)}
         vendedores={vendedores}
       />
+
+      {/* Asistente Inteligente de Negocio */}
+      <AIAssistantWidget />
 
     </div>
   )
