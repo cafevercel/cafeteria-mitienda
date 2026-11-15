@@ -222,8 +222,19 @@ No agregues comentarios ni explicaciones fuera del bloque JSON.
     }
   } catch (err: any) {
     console.error('Error al generar SQL con Gemini:', err);
+    let msgAmigable = 'Lo siento, tuve un problema al interpretar tu pregunta. Por favor, intenta reformularla.';
+    const errMsg = (err.message || '').toLowerCase();
+    
+    if (errMsg.includes('leaked') || errMsg.includes('reported as leaked')) {
+      msgAmigable = '⚠️ Google detectó que tu clave de API fue filtrada/expuesta públicamente y la desactivó por seguridad.\n\nPor favor, genera una **nueva clave de API** en [Google AI Studio](https://aistudio.google.com/app/apikey) y colócala directamente en tu archivo `.env.local` sin compartirla públicamente.';
+    } else if (err.status === 403 || errMsg.includes('403') || errMsg.includes('api_key_invalid')) {
+      msgAmigable = '⚠️ La clave de API de Gemini no es válida o no tiene permisos. Por favor verifica tu clave en `.env.local`.';
+    } else if (err.status === 429 || errMsg.includes('429') || errMsg.includes('quota') || errMsg.includes('resource_exhausted')) {
+      msgAmigable = '⏳ Se ha alcanzado temporalmente el límite de consultas por minuto de Google. Espera unos segundos y vuelve a intentar.';
+    }
+
     return {
-      respuesta: 'Lo siento, tuve un problema al interpretar tu pregunta. Por favor, intenta reformularla.',
+      respuesta: msgAmigable,
       error: err.message,
     };
   }
