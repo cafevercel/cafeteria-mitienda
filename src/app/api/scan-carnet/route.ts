@@ -6,7 +6,7 @@ const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
 const MODEL_NAME = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
 
 // Función para validar y extraer el Carné de Identidad de Cuba (11 dígitos con validación YYMMDD)
-export function extractCubanCI(text: string): string {
+function extractCubanCI(text: string): string {
   if (!text) return '';
   // Buscar secuencias de 11 dígitos numéricos
   const matches = text.match(/\b\d{11}\b/g) || [];
@@ -22,7 +22,7 @@ export function extractCubanCI(text: string): string {
 }
 
 // Parser heurístico para texto de carnet cubano
-export function parseCubanCarnetText(text: string) {
+function parseCubanCarnetText(text: string) {
   if (!text) return { carnet: '', nombre: '', nombres: '', apellidos: '' };
 
   const carnet = extractCubanCI(text);
