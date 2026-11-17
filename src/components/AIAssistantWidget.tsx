@@ -20,17 +20,23 @@ import {
   Package, 
   AlertTriangle,
   Bot,
-  User as UserIcon
+  User as UserIcon,
+  Cpu,
+  Zap,
+  Flame,
+  Crown
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { AVAILABLE_MODELS, DEFAULT_MODEL } from '@/lib/ai/openrouter';
 
 interface ChatMessage {
   id: string;
   sender: 'user' | 'assistant';
   text: string;
   sql?: string;
+  modeloUsado?: string;
   tiempoMs?: number;
   error?: string;
   timestamp: string;
@@ -52,6 +58,17 @@ export default function AIAssistantWidget() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [expandedSqlIds, setExpandedSqlIds] = useState<Record<string, boolean>>({});
   
+  const [selectedModel, setSelectedModel] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        return localStorage.getItem('ai_selected_model') || DEFAULT_MODEL;
+      } catch (e) {
+        return DEFAULT_MODEL;
+      }
+    }
+    return DEFAULT_MODEL;
+  });
+
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -65,6 +82,15 @@ export default function AIAssistantWidget() {
   });
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Guardar modelo seleccionado en localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('ai_selected_model', selectedModel);
+    } catch (e) {
+      console.error('Error guardando modelo:', e);
+    }
+  }, [selectedModel]);
 
   // Guardar mensajes en localStorage
   useEffect(() => {
@@ -81,6 +107,8 @@ export default function AIAssistantWidget() {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages, loading, isOpen]);
+
+  const currentModelMeta = AVAILABLE_MODELS.find((m) => m.id === selectedModel) || AVAILABLE_MODELS[0];
 
   const handleSendMessage = async (customText?: string) => {
     const textToSend = (customText || inputMessage).trim();
@@ -101,7 +129,10 @@ export default function AIAssistantWidget() {
       const response = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mensaje: textToSend }),
+        body: JSON.stringify({ 
+          mensaje: textToSend,
+          modelo: selectedModel 
+        }),
       });
 
       const data = await response.json();
@@ -111,6 +142,7 @@ export default function AIAssistantWidget() {
         sender: 'assistant',
         text: data.respuesta || 'No recibí respuesta del servidor.',
         sql: data.sqlEjecutado,
+        modeloUsado: currentModelMeta.nombre,
         tiempoMs: data.tiempoMs,
         error: data.error,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -163,7 +195,6 @@ export default function AIAssistantWidget() {
 
       if (rows.length >= 2) {
         const headers = rows[0];
-        // Omitir fila separadora si existe (contiene ---)
         const dataRows = rows.slice(1).filter((r) => !r.every((c) => /^[-:\s]+$/.test(c)));
 
         elements.push(
@@ -206,7 +237,6 @@ export default function AIAssistantWidget() {
           flushTable(idx);
         }
 
-        // Renderizado de texto normal con negrita
         const parts = line.split(/(\*\*.*?\*\*)/g);
         const formattedLine = parts.map((part, pIdx) => {
           if (part.startsWith('**') && part.endsWith('**')) {
@@ -278,10 +308,10 @@ export default function AIAssistantWidget() {
           className={`fixed z-50 transition-all duration-300 shadow-2xl rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 flex flex-col overflow-hidden ${
             isExpanded
               ? 'inset-4 md:inset-10'
-              : 'bottom-6 right-6 w-[95vw] sm:w-[460px] h-[640px] max-h-[88vh]'
+              : 'bottom-6 right-6 w-[95vw] sm:w-[480px] h-[670px] max-h-[90vh]'
           }`}
         >
-          {/* Header */}
+          {/* Header Principal */}
           <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-sm">
             <div className="flex items-center space-x-2.5">
               <div className="p-2 rounded-xl bg-white/10 backdrop-blur-md">
@@ -291,10 +321,10 @@ export default function AIAssistantWidget() {
                 <h3 className="font-semibold text-sm flex items-center gap-1.5">
                   Copiloto de Negocio
                   <Badge variant="outline" className="text-[10px] py-0 px-1.5 border-white/30 text-white bg-white/10">
-                    IA
+                    OpenRouter
                   </Badge>
                 </h3>
-                <p className="text-[11px] text-blue-100">Consultas de ventas, márgenes y rendimiento</p>
+                <p className="text-[11px] text-blue-100">Consultas de ventas, márgenes e inventario</p>
               </div>
             </div>
 
@@ -331,17 +361,62 @@ export default function AIAssistantWidget() {
             </div>
           </div>
 
+          {/* Barra Selectora de Modelos */}
+          <div className="px-3 py-2 bg-zinc-100 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between gap-2">
+            <div className="flex items-center space-x-1.5 text-zinc-600 dark:text-zinc-400 shrink-0">
+              <Cpu className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+              <span className="text-[11px] font-medium hidden sm:inline">Modelo:</span>
+            </div>
+
+            <div className="flex items-center space-x-1 bg-white dark:bg-zinc-800/80 p-0.5 rounded-lg border border-zinc-200 dark:border-zinc-700 shadow-2xs overflow-x-auto w-full sm:w-auto justify-end">
+              {AVAILABLE_MODELS.map((m) => {
+                const isSelected = selectedModel === m.id;
+                return (
+                  <button
+                    key={m.id}
+                    onClick={() => setSelectedModel(m.id)}
+                    title={`${m.nombre} - ${m.descripcion}`}
+                    className={`flex items-center space-x-1 px-2 py-1 rounded-md text-[11px] font-medium transition-all shrink-0 ${
+                      isSelected
+                        ? m.tier === 'free'
+                          ? 'bg-emerald-600 text-white shadow-xs'
+                          : m.tier === 'medium'
+                          ? 'bg-amber-600 text-white shadow-xs'
+                          : 'bg-purple-600 text-white shadow-xs'
+                        : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700/50'
+                    }`}
+                  >
+                    {m.tier === 'free' && <Zap className="h-3 w-3" />}
+                    {m.tier === 'medium' && <Flame className="h-3 w-3" />}
+                    {m.tier === 'pro' && <Crown className="h-3 w-3" />}
+                    <span>{m.tag}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Banner informativo del modelo activo */}
+          <div className="px-3.5 py-1.5 bg-blue-50/60 dark:bg-blue-950/20 border-b border-blue-100 dark:border-blue-900/30 flex items-center justify-between text-[11px] text-zinc-600 dark:text-zinc-400">
+            <span className="truncate">
+              Activo: <strong className="text-zinc-900 dark:text-zinc-200">{currentModelMeta.nombre}</strong>
+            </span>
+            <span className="text-[10px] text-zinc-500 shrink-0 ml-2">
+              {currentModelMeta.tier === 'free' ? '🎉 Sin gasto de saldo' : '💳 Consume créditos'}
+            </span>
+          </div>
+
           {/* Cuerpo de Mensajes */}
           <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-zinc-50/50 dark:bg-zinc-900/50">
             {messages.length === 0 ? (
-              <div className="h-full flex flex-col justify-center items-center text-center px-4 py-8">
+              <div className="h-full flex flex-col justify-center items-center text-center px-4 py-6">
                 <div className="w-14 h-14 rounded-2xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center mb-3">
                   <Bot className="h-8 w-8 text-blue-600 dark:text-blue-400" />
                 </div>
                 <h4 className="font-semibold text-zinc-900 dark:text-zinc-100 text-sm mb-1">
                   ¡Hola! ¿Qué deseas consultar hoy?
                 </h4>
-                <p className="text-xs text-zinc-500 max-w-xs mb-6">
+                <p className="text-xs text-zinc-500 max-w-xs mb-5">
                   Pregúntame cualquier dato sobre ventas por fecha, productos más vendidos, márgenes o rendimiento de vendedores.
                 </p>
 
@@ -399,7 +474,22 @@ export default function AIAssistantWidget() {
                             {renderFormattedText(msg.text)}
                           </div>
 
-                          {/* Sección técnica SQL (opcional para auditar) */}
+                          {/* Botón de cambio rápido si faltan créditos */}
+                          {msg.text.includes('CRÉDITOS_INSUFICIENTES') && (
+                            <div className="pt-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setSelectedModel('nvidia/nemotron-3.5-lightning:free')}
+                                className="text-xs border-emerald-500 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                              >
+                                <Zap className="h-3.5 w-3.5 mr-1 text-emerald-500" />
+                                Cambiar a modelo Gratuito (NVIDIA Nemotron)
+                              </Button>
+                            </div>
+                          )}
+
+                          {/* Sección técnica SQL desplegable */}
                           {msg.sql && (
                             <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800">
                               <button
@@ -425,7 +515,15 @@ export default function AIAssistantWidget() {
 
                           {/* Footer del mensaje */}
                           <div className="flex items-center justify-between pt-1 text-[10px] text-zinc-400">
-                            <span>{msg.tiempoMs ? `${(msg.tiempoMs / 1000).toFixed(2)}s` : ''}</span>
+                            <div className="flex items-center space-x-1.5">
+                              {msg.modeloUsado && (
+                                <span className="bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded text-[9px] font-medium text-zinc-500">
+                                  {msg.modeloUsado}
+                                </span>
+                              )}
+                              <span>{msg.tiempoMs ? `${(msg.tiempoMs / 1000).toFixed(2)}s` : ''}</span>
+                            </div>
+
                             <div className="flex items-center space-x-2">
                               <span>{msg.timestamp}</span>
                               <button
@@ -455,7 +553,7 @@ export default function AIAssistantWidget() {
               ))
             )}
 
-            {/* Indicador de carga / pensando */}
+            {/* Indicador de carga */}
             {loading && (
               <div className="flex items-start space-x-2 max-w-[90%]">
                 <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-white shrink-0 shadow-sm animate-pulse">
@@ -464,7 +562,7 @@ export default function AIAssistantWidget() {
                 <div className="rounded-2xl rounded-tl-none p-3.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-sm flex items-center space-x-2.5">
                   <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
                   <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                    Analizando datos y calculando métricas...
+                    {currentModelMeta.nombre} analizando datos de NeonDB...
                   </span>
                 </div>
               </div>
@@ -498,9 +596,10 @@ export default function AIAssistantWidget() {
                 <Send className="h-4 w-4" />
               </Button>
             </form>
-            <p className="text-[10px] text-zinc-400 text-center mt-2">
-              💡 Consultas inteligentes sobre la base de datos de tu tienda.
-            </p>
+            <div className="flex items-center justify-between mt-2 text-[10px] text-zinc-400 px-1">
+              <span>💡 Respuestas directas de PostgreSQL</span>
+              <span className="font-mono text-[9px]">OpenRouter API</span>
+            </div>
           </div>
         </div>
       )}

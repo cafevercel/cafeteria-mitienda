@@ -1,10 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { processBusinessQueryOpenRouter, AVAILABLE_MODELS } from '@/lib/ai/openrouter';
 import { processBusinessQuery } from '@/lib/ai/gemini';
+
+export async function GET() {
+  return NextResponse.json({
+    modelos: AVAILABLE_MODELS,
+    proveedor: process.env.OPENROUTER_API_KEY ? 'OpenRouter' : 'Gemini',
+  });
+}
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
-    const { mensaje } = body;
+    const { mensaje, modelo } = body;
 
     if (!mensaje || typeof mensaje !== 'string' || !mensaje.trim()) {
       return NextResponse.json(
@@ -13,7 +21,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const resultado = await processBusinessQuery(mensaje.trim());
+    let resultado;
+    if (process.env.OPENROUTER_API_KEY) {
+      resultado = await processBusinessQueryOpenRouter(mensaje.trim(), modelo);
+    } else {
+      resultado = await processBusinessQuery(mensaje.trim());
+    }
 
     return NextResponse.json(resultado, {
       headers: {

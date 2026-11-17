@@ -14,7 +14,7 @@ const getGenAI = () => {
 const MODEL_NAME = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
 
 // Diccionario de datos y reglas de negocio del sistema
-const SYSTEM_SCHEMA_CONTEXT = `
+export const SYSTEM_SCHEMA_CONTEXT = `
 Eres el Analista de Datos Inteligente y Asistente Financiero de "Mi Tienda / Cafetería".
 Tu objetivo es responder con precisión preguntas de negocio, ventas, márgenes, inventario y vendedores traduciendo las preguntas a consultas SQL para PostgreSQL.
 
