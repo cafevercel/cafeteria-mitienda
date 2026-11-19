@@ -14,27 +14,27 @@ export interface ModelOption {
 export const AVAILABLE_MODELS: ModelOption[] = [
   {
     id: 'nvidia/nemotron-3.5-lightning:free',
-    nombre: 'NVIDIA Nemotron 3.5',
+    nombre: 'Nemotron 3.5',
     tier: 'free',
-    tag: 'Gratis',
-    badgeClass: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800',
-    descripcion: 'Sin costo. Rápido y confiable para ventas, inventario y consultas diarias.',
+    tag: 'Estándar',
+    badgeClass: 'bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-200 border-zinc-300 dark:border-zinc-700',
+    descripcion: 'Sin costo. Procesamiento rápido para consultas operativas frecuentes.',
   },
   {
     id: 'deepseek/deepseek-v4.1-flash-1017',
     nombre: 'DeepSeek V4.1 Flash',
     tier: 'medium',
-    tag: 'Económico',
-    badgeClass: 'bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400 border-amber-200 dark:border-amber-800',
-    descripcion: 'Ultra veloz y económico ($0.036/1M tokens). Excelente en SQL y análisis contable.',
+    tag: 'Optimizado',
+    badgeClass: 'bg-amber-100 text-amber-900 dark:bg-amber-950/40 dark:text-amber-300 border-amber-300 dark:border-amber-800',
+    descripcion: 'Alta velocidad y eficiencia ($0.036/1M tokens). Precisión optimizada en cálculos y SQL.',
   },
   {
     id: 'anthropic/claude-3.5-sonnet',
     nombre: 'Claude 3.5 Sonnet',
     tier: 'pro',
     tag: 'Avanzado',
-    badgeClass: 'bg-purple-100 text-purple-700 dark:bg-purple-950/50 dark:text-purple-400 border-purple-200 dark:border-purple-800',
-    descripcion: 'Máxima inteligencia analítica y razonamiento financiero profundo.',
+    badgeClass: 'bg-purple-100 text-purple-900 dark:bg-purple-950/40 dark:text-purple-300 border-purple-300 dark:border-purple-800',
+    descripcion: 'Máxima profundidad analítica para correlaciones complejas y auditoría.',
   },
 ];
 
@@ -125,7 +125,7 @@ Si la pregunta es solo un saludo o no requiere consultar la base de datos (por e
   "sql": "",
   "intencion": "conversacion",
   "requiere_sql": false,
-  "mensaje_directo": "¡Hola! Soy tu asistente de Mi Tienda. Puedes preguntarme sobre ventas de cualquier fecha, productos más vendidos, márgenes de ganancia o rendimiento de tus vendedores."
+  "mensaje_directo": "Sistema de consultas y analítica listo. Puede solicitar reportes de ventas por fecha, márgenes de ganancia, auditoría de inventario o comparativas de rendimiento por vendedor."
 }
 No agregues comentarios ni explicaciones fuera del bloque JSON.
 `;
@@ -208,12 +208,13 @@ DATOS REALES OBTENIDOS DE LA BASE DE DATOS:
 ${JSON.stringify(dbRows, null, 2)}
 
 INSTRUCCIÓN DE REDACCIÓN:
-- Responde directamente a la pregunta del usuario en español claro, profesional y conciso.
-- Si hay cantidades de dinero, usa formato de moneda (ej. $1,250.00 CUP o $).
-- Si hay porcentajes de margen, exprésalos claramente (ej. 35.4%).
-- Si hay listas o comparaciones (ej. varios productos o vendedores), preséntalos en una tabla Markdown limpia o con viñetas ordenadas.
-- Si no hubo ventas o resultados, indícalo amablemente (ej. "No se registraron ventas para esa fecha").
-- Si los datos sugieren algo importante (ej. producto con alto margen, o merma elevada, o stock casi agotado), agrega una breve recomendación o apunte al final con 💡.
+- Responde directamente con un tono ejecutivo, sobrio, formal y analítico.
+- ESTRICTAMENTE PROHIBIDO EL USO DE EMOJIS o íconos decorativos en todo el texto.
+- Si hay cifras de dinero, usa formato de moneda estándar (ej. $1,250.00).
+- Si hay márgenes o tasas, exprésalos con dos decimales y símbolo de porcentaje (ej. 35.40%).
+- Si hay comparativas o listas de registros, organízalas en tablas Markdown elegantes o con viñetas estructuradas.
+- Si no hubo registros en el período indicado, indícalo de manera precisa y profesional.
+- Si identificas una anomalía o punto de atención relevante, agrégalo al final bajo el encabezado 'Observación analítica:' de forma concisa.
 `;
 
   try {

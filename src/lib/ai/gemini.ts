@@ -202,7 +202,7 @@ Si la pregunta es solo un saludo o no requiere consultar la base de datos (por e
   "sql": "",
   "intencion": "conversacion",
   "requiere_sql": false,
-  "mensaje_directo": "¡Hola! Soy tu asistente de Mi Tienda. Puedes preguntarme sobre ventas de cualquier fecha, productos más vendidos, márgenes de ganancia o rendimiento de tus vendedores."
+  "mensaje_directo": "Sistema de consultas y analítica listo. Puede solicitar reportes de ventas por fecha, márgenes de ganancia, auditoría de inventario o comparativas de rendimiento por vendedor."
 }
 No agregues comentarios ni explicaciones fuera del bloque JSON.
 `;
@@ -290,12 +290,13 @@ DATOS REALES OBTENIDOS DE LA BASE DE DATOS:
 ${JSON.stringify(dbRows, null, 2)}
 
 INSTRUCCIÓN DE REDACCIÓN:
-- Responde directamente a la pregunta del usuario en español claro, profesional y conciso.
-- Si hay cantidades de dinero, usa formato de moneda (ej. $1,250.00 CUP o $).
-- Si hay porcentajes de margen, exprésalos claramente (ej. 35.4%).
-- Si hay listas o comparaciones (ej. varios productos o vendedores), preséntalos en una tabla Markdown limpia o con viñetas ordenadas.
-- Si no hubo ventas o resultados, indícalo amablemente (ej. "No se registraron ventas para esa fecha").
-- Si los datos sugieren algo importante (ej. producto con alto margen, o merma elevada, o stock casi agotado), agrega una breve recomendación o apunte al final con 💡.
+- Responde directamente con un tono ejecutivo, sobrio, formal y analítico.
+- ESTRICTAMENTE PROHIBIDO EL USO DE EMOJIS o íconos decorativos en todo el texto.
+- Si hay cifras de dinero, usa formato de moneda estándar (ej. $1,250.00).
+- Si hay márgenes o tasas, exprésalos con dos decimales y símbolo de porcentaje (ej. 35.40%).
+- Si hay comparativas o listas de registros, organízalas en tablas Markdown elegantes o con viñetas estructuradas.
+- Si no hubo registros en el período indicado, indícalo de manera precisa y profesional.
+- Si identificas una anomalía o punto de atención relevante, agrégalo al final bajo el encabezado 'Observación analítica:' de forma concisa.
 `;
 
   try {
