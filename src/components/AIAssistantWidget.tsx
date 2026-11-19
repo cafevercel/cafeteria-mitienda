@@ -36,6 +36,7 @@ interface ChatMessage {
   sender: 'user' | 'assistant';
   text: string;
   sql?: string;
+  proveedor?: string;
   modeloUsado?: string;
   tiempoMs?: number;
   error?: string;
@@ -142,7 +143,8 @@ export default function AIAssistantWidget() {
         sender: 'assistant',
         text: data.respuesta || 'No recibí respuesta del servidor.',
         sql: data.sqlEjecutado,
-        modeloUsado: currentModelMeta.nombre,
+        proveedor: data.proveedor,
+        modeloUsado: data.proveedor === 'Gemini' ? 'Google Gemini' : currentModelMeta.nombre,
         tiempoMs: data.tiempoMs,
         error: data.error,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -516,11 +518,19 @@ export default function AIAssistantWidget() {
                           {/* Footer del mensaje */}
                           <div className="flex items-center justify-between pt-1 text-[10px] text-zinc-400">
                             <div className="flex items-center space-x-1.5">
-                              {msg.modeloUsado && (
+                              {msg.proveedor ? (
+                                <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium border ${
+                                  msg.proveedor === 'OpenRouter'
+                                    ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800'
+                                    : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                                }`}>
+                                  {msg.proveedor} • {msg.modeloUsado}
+                                </span>
+                              ) : msg.modeloUsado ? (
                                 <span className="bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded text-[9px] font-medium text-zinc-500">
                                   {msg.modeloUsado}
                                 </span>
-                              )}
+                              ) : null}
                               <span>{msg.tiempoMs ? `${(msg.tiempoMs / 1000).toFixed(2)}s` : ''}</span>
                             </div>
 

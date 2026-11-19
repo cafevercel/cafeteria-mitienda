@@ -3,9 +3,12 @@ import { processBusinessQueryOpenRouter, AVAILABLE_MODELS } from '@/lib/ai/openr
 import { processBusinessQuery } from '@/lib/ai/gemini';
 
 export async function GET() {
+  const proveedor = process.env.OPENROUTER_API_KEY ? 'OpenRouter' : 'Gemini';
   return NextResponse.json({
+    proveedor,
+    openrouterConfigurado: Boolean(process.env.OPENROUTER_API_KEY),
+    geminiConfigurado: Boolean(process.env.GEMINI_API_KEY),
     modelos: AVAILABLE_MODELS,
-    proveedor: process.env.OPENROUTER_API_KEY ? 'OpenRouter' : 'Gemini',
   });
 }
 
@@ -22,13 +25,21 @@ export async function POST(request: NextRequest) {
     }
 
     let resultado;
+    let proveedor = 'OpenRouter';
+
     if (process.env.OPENROUTER_API_KEY) {
       resultado = await processBusinessQueryOpenRouter(mensaje.trim(), modelo);
+      proveedor = 'OpenRouter';
     } else {
       resultado = await processBusinessQuery(mensaje.trim());
+      proveedor = 'Gemini';
     }
 
-    return NextResponse.json(resultado, {
+    return NextResponse.json({
+      ...resultado,
+      proveedor,
+      modeloUsadoId: modelo || (proveedor === 'OpenRouter' ? 'nvidia/nemotron-3.5-lightning:free' : 'gemini-3.5-flash'),
+    }, {
       headers: {
         'Cache-Control': 'no-store, max-age=0',
       },
