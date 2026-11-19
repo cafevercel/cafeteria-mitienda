@@ -637,7 +637,7 @@ const useVendedorData = (vendedorId: string) => {
   }, [pendingSales, vendedorId, fecha, setProductosSeleccionados, totalCarrito, metodoPago, montoEfectivoInput, montoTransferenciaInput]);
 
   const syncSales = useCallback(async () => {
-    if (pendingSales.length === 0) return;
+    if (pendingSales.length === 0 || isSyncing) return;
     setIsSyncing(true);
     try {
       const response = await fetch('/api/ventas/bulk', {

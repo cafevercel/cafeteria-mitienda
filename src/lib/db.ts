@@ -18,8 +18,11 @@ export async function ensureDbSchema() {
       ALTER TABLE ventas ADD COLUMN IF NOT EXISTS cuenta_nombre VARCHAR(150);
       ALTER TABLE ventas ADD COLUMN IF NOT EXISTS cuenta_numero VARCHAR(100);
       ALTER TABLE ventas ADD COLUMN IF NOT EXISTS transferencia_id INTEGER REFERENCES registro_transferencias(id) ON DELETE SET NULL;
+      ALTER TABLE ventas ADD COLUMN IF NOT EXISTS id_local VARCHAR(100);
       CREATE INDEX IF NOT EXISTS idx_ventas_numero_transaccion ON ventas(numero_transaccion);
       CREATE INDEX IF NOT EXISTS idx_ventas_transferencia_id ON ventas(transferencia_id);
+      CREATE INDEX IF NOT EXISTS idx_ventas_vendedor_id_local ON ventas(vendedor, id_local);
+      CREATE INDEX IF NOT EXISTS idx_ventas_dedup ON ventas(vendedor, producto, fecha);
       ALTER TABLE gastos ADD COLUMN IF NOT EXISTS tipo_gasto VARCHAR(20) DEFAULT 'fijo';
       CREATE TABLE IF NOT EXISTS salarios_mensuales (
         id SERIAL PRIMARY KEY,

@@ -5,6 +5,7 @@ import { query } from '@/lib/db';
 export async function POST(request: NextRequest) {
   const body = await request.json();
   const { 
+    id_local, uuid,
     productoId, cantidad, fecha, parametros, vendedorId, metodoPago, montoEfectivo, montoTransferencia,
     clienteNombre, cliente_nombre,
     clienteCarnet, cliente_carnet,
@@ -22,7 +23,49 @@ export async function POST(request: NextRequest) {
 
   try {
     const fechaVenta = new Date(fecha);
+    const vId = parseInt(vendedorId, 10);
+    const pId = parseInt(productoId, 10);
+    const cant = parseFloat(cantidad);
+    const clientUniqueId = (uuid || id_local || '').toString();
+
     await query('BEGIN');
+
+    // SEGURO ANTI-DUPLICADOS (IDEMPOTENCIA)
+    let existingVenta = null;
+    if (clientUniqueId) {
+      try {
+        const existingById = await query(
+          'SELECT * FROM ventas WHERE vendedor = $1 AND id_local = $2 LIMIT 1',
+          [vId, clientUniqueId]
+        );
+        if (existingById.rows.length > 0) {
+          existingVenta = existingById.rows[0];
+        }
+      } catch (e) {}
+    }
+
+    if (!existingVenta && fecha) {
+      try {
+        const existingByData = await query(
+          `SELECT * FROM ventas 
+           WHERE vendedor = $1 
+             AND producto = $2 
+             AND cantidad = $3 
+             AND ABS(EXTRACT(EPOCH FROM (fecha - $4::timestamptz))) <= 2
+           ORDER BY id DESC LIMIT 1`,
+          [vId, pId, cant, fechaVenta]
+        );
+        if (existingByData.rows.length > 0) {
+          existingVenta = existingByData.rows[0];
+        }
+      } catch (e) {}
+    }
+
+    if (existingVenta) {
+      await query('COMMIT');
+      console.log(`🛡️ Venta duplicada omitida en POST /ventas: ID ${existingVenta.id}`);
+      return NextResponse.json(existingVenta, { status: 200 });
+    }
 
     // Verificar si el producto tiene parámetros y obtener stock del vendedor
     const productoResult = await query(
@@ -104,36 +147,56 @@ export async function POST(request: NextRequest) {
     }
 
     // Crear venta
-    const ventaResult = await query(
-      `INSERT INTO ventas (
-         producto, cantidad, precio_unitario, precio_compra, total, vendedor, fecha, 
-         metodo_pago, monto_efectivo, monto_transferencia,
-         cliente_nombre, cliente_carnet, cliente_telefono, numero_transaccion, banco, 
-         cuenta_banco_id, cuenta_nombre, cuenta_numero, transferencia_id
-       ) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19) RETURNING *`,
-      [
-        productoId,
-        cantidad,
-        precioUnitario,
-        precioCompra || 0,
-        totalVenta,
-        vendedorId,
-        fechaVenta,
-        mPago,
-        mEfectivo,
-        mTransferencia,
-        cNombre,
-        cCarnet,
-        cTelefono,
-        nTransaccion,
-        bco,
-        cBancoId,
-        cNombreCuenta,
-        cNumeroCuenta,
-        transId
-      ]
-    );
+    let ventaResult;
+    const baseParams = [
+      productoId,
+      cantidad,
+      precioUnitario,
+      precioCompra || 0,
+      totalVenta,
+      vendedorId,
+      fechaVenta,
+      mPago,
+      mEfectivo,
+      mTransferencia,
+      cNombre,
+      cCarnet,
+      cTelefono,
+      nTransaccion,
+      bco,
+      cBancoId,
+      cNombreCuenta,
+      cNumeroCuenta,
+      transId
+    ];
+
+    try {
+      ventaResult = await query(
+        `INSERT INTO ventas (
+           producto, cantidad, precio_unitario, precio_compra, total, vendedor, fecha, 
+           metodo_pago, monto_efectivo, monto_transferencia,
+           cliente_nombre, cliente_carnet, cliente_telefono, numero_transaccion, banco, 
+           cuenta_banco_id, cuenta_nombre, cuenta_numero, transferencia_id, id_local
+         ) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20) RETURNING *`,
+        [...baseParams, clientUniqueId || null]
+      );
+    } catch (insertErr: any) {
+      if (insertErr?.message && insertErr.message.includes('id_local')) {
+        ventaResult = await query(
+          `INSERT INTO ventas (
+             producto, cantidad, precio_unitario, precio_compra, total, vendedor, fecha, 
+             metodo_pago, monto_efectivo, monto_transferencia,
+             cliente_nombre, cliente_carnet, cliente_telefono, numero_transaccion, banco, 
+             cuenta_banco_id, cuenta_nombre, cuenta_numero, transferencia_id
+           ) 
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19) RETURNING *`,
+          baseParams
+        );
+      } else {
+        throw insertErr;
+      }
+    }
 
     // Manejar actualizaciones según el tipo de producto
     if (tiene_parametros && parametros) {

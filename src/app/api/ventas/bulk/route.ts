@@ -1,6 +1,6 @@
 
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/db';
+import { query, ensureDbSchema } from '@/lib/db';
 
 export async function POST(request: NextRequest) {
   try {
@@ -9,6 +9,13 @@ export async function POST(request: NextRequest) {
 
     if (!sales || !Array.isArray(sales) || !vendedorId) {
       return NextResponse.json({ error: 'Faltan datos requeridos (sales, vendedorId)' }, { status: 400 });
+    }
+
+    // Asegurar que el esquema cuenta con la columna id_local e índices
+    try {
+      await ensureDbSchema();
+    } catch (schemaErr) {
+      console.warn('Advertencia asegurando esquema en bulk ventas:', schemaErr);
     }
 
     const results = [];
@@ -73,7 +80,7 @@ export async function POST(request: NextRequest) {
     // 2. Sincronizar ventas
     for (const sale of sales) {
         const { 
-          productoId, cantidad, fecha, parametros, id_local, metodoPago, montoEfectivo, montoTransferencia,
+          productoId, cantidad, fecha, parametros, id_local, uuid, metodoPago, montoEfectivo, montoTransferencia,
           clienteNombre, cliente_nombre,
           clienteCarnet, cliente_carnet,
           clienteTelefono, cliente_telefono,
@@ -87,6 +94,95 @@ export async function POST(request: NextRequest) {
 
         try {
           await query('BEGIN');
+
+          const vId = parseInt(vendedorId, 10);
+          const pId = Number(productoId);
+          const cant = Number(cantidad);
+          const fechaVenta = new Date(fecha);
+          const clientUniqueId = (uuid || id_local || '').toString();
+
+          const cNombre = clienteNombre || cliente_nombre || null;
+          const cCarnet = clienteCarnet || cliente_carnet || null;
+          const cTelefono = clienteTelefono || cliente_telefono || null;
+          const nTransaccion = numeroTransaccion || numero_transaccion || null;
+          const bco = banco || null;
+          const rawCuentaId = cuentaBancoId !== undefined ? cuentaBancoId : cuenta_banco_id;
+          const cBancoId = rawCuentaId ? parseInt(rawCuentaId, 10) : null;
+          const cNombreCuenta = cuentaNombre || cuenta_nombre || null;
+          const cNumeroCuenta = cuentaNumero || cuenta_numero || null;
+
+          // Resolver ID del registro de transferencia si aplica
+          let tId = transferenciaId || transferencia_id || null;
+          if (!tId && nTransaccion) {
+            if (transferMap.has(nTransaccion)) {
+              tId = transferMap.get(nTransaccion);
+            } else {
+              const exTr = await query(
+                'SELECT id FROM registro_transferencias WHERE numero_transaccion = $1 AND vendedor_id = $2 LIMIT 1',
+                [nTransaccion, vId]
+              );
+              if (exTr.rows.length > 0) {
+                tId = exTr.rows[0].id;
+              }
+            }
+          }
+
+          // SEGURO ANTI-DUPLICADOS (IDEMPOTENCIA):
+          // 1. Verificar si ya existe por id_local / uuid
+          let existingVentaId: number | null = null;
+          if (clientUniqueId) {
+            try {
+              const existingById = await query(
+                'SELECT id FROM ventas WHERE vendedor = $1 AND id_local = $2 LIMIT 1',
+                [vId, clientUniqueId]
+              );
+              if (existingById.rows.length > 0) {
+                existingVentaId = existingById.rows[0].id;
+              }
+            } catch (e) {
+              // Si la columna id_local aún no existe o hay algún error menor en la consulta
+            }
+          }
+
+          // 2. Fallback: verificar por datos de negocio (mismo vendedor, producto, cantidad y fecha)
+          if (!existingVentaId && fecha) {
+            try {
+              const existingByData = await query(
+                `SELECT id FROM ventas 
+                 WHERE vendedor = $1 
+                   AND producto = $2 
+                   AND cantidad = $3 
+                   AND ABS(EXTRACT(EPOCH FROM (fecha - $4::timestamptz))) <= 2
+                 ORDER BY id DESC LIMIT 1`,
+                [vId, pId, cant, fechaVenta]
+              );
+              if (existingByData.rows.length > 0) {
+                existingVentaId = existingByData.rows[0].id;
+              }
+            } catch (e) {
+              console.warn('Error verificando duplicados por datos de negocio:', e);
+            }
+          }
+
+          // Si ya existe la venta en el servidor, no volver a insertar ni descontar stock
+          if (existingVentaId) {
+            await query('COMMIT');
+            console.log(`🛡️ Venta duplicada omitida en bulk (Servidor ID: ${existingVentaId}, Local: ${clientUniqueId})`);
+            results.push({ 
+              id_local: id_local || clientUniqueId, 
+              server_id: existingVentaId, 
+              status: 'already_exists',
+              transferencia_id: tId || null,
+              cuenta_nombre: cNombreCuenta,
+              cuenta_numero: cNumeroCuenta,
+              banco: bco,
+              cliente_nombre: cNombre,
+              cliente_carnet: cCarnet,
+              cliente_telefono: cTelefono,
+              numero_transaccion: nTransaccion
+            });
+            continue;
+          }
 
           // Verificar stock y obtener datos del producto
           const productoResult = await query(
@@ -134,64 +230,57 @@ export async function POST(request: NextRequest) {
             mTransferencia = parseFloat(montoTransferencia) || 0;
           }
 
-          const cNombre = clienteNombre || cliente_nombre || null;
-          const cCarnet = clienteCarnet || cliente_carnet || null;
-          const cTelefono = clienteTelefono || cliente_telefono || null;
-          const nTransaccion = numeroTransaccion || numero_transaccion || null;
-          const bco = banco || null;
-          const rawCuentaId = cuentaBancoId !== undefined ? cuentaBancoId : cuenta_banco_id;
-          const cBancoId = rawCuentaId ? parseInt(rawCuentaId, 10) : null;
-          const cNombreCuenta = cuentaNombre || cuenta_nombre || null;
-          const cNumeroCuenta = cuentaNumero || cuenta_numero || null;
+          // Crear venta con id_local para idempotencia futura
+          let ventaResult;
+          const baseParams = [
+            productoId,
+            cantidad,
+            precioUnitario,
+            precioCompra || 0,
+            totalVenta,
+            vendedorId,
+            fechaVenta,
+            mPago,
+            mEfectivo,
+            mTransferencia,
+            cNombre,
+            cCarnet,
+            cTelefono,
+            nTransaccion,
+            bco,
+            cBancoId,
+            cNombreCuenta,
+            cNumeroCuenta,
+            tId
+          ];
 
-          // Resolver ID del registro de transferencia si aplica
-          let tId = transferenciaId || transferencia_id || null;
-          if (!tId && nTransaccion) {
-            if (transferMap.has(nTransaccion)) {
-              tId = transferMap.get(nTransaccion);
-            } else {
-              const exTr = await query(
-                'SELECT id FROM registro_transferencias WHERE numero_transaccion = $1 AND vendedor_id = $2 LIMIT 1',
-                [nTransaccion, vendedorId ? parseInt(vendedorId, 10) : null]
+          try {
+            ventaResult = await query(
+              `INSERT INTO ventas (
+                 producto, cantidad, precio_unitario, precio_compra, total, vendedor, fecha, 
+                 metodo_pago, monto_efectivo, monto_transferencia,
+                 cliente_nombre, cliente_carnet, cliente_telefono, numero_transaccion, banco, 
+                 cuenta_banco_id, cuenta_nombre, cuenta_numero, transferencia_id, id_local
+               ) 
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20) RETURNING *`,
+              [...baseParams, clientUniqueId || null]
+            );
+          } catch (insertErr: any) {
+            if (insertErr?.message && insertErr.message.includes('id_local')) {
+              ventaResult = await query(
+                `INSERT INTO ventas (
+                   producto, cantidad, precio_unitario, precio_compra, total, vendedor, fecha, 
+                   metodo_pago, monto_efectivo, monto_transferencia,
+                   cliente_nombre, cliente_carnet, cliente_telefono, numero_transaccion, banco, 
+                   cuenta_banco_id, cuenta_nombre, cuenta_numero, transferencia_id
+                 ) 
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19) RETURNING *`,
+                baseParams
               );
-              if (exTr.rows.length > 0) {
-                tId = exTr.rows[0].id;
-              }
+            } else {
+              throw insertErr;
             }
           }
-
-          // Crear venta
-          const fechaVenta = new Date(fecha);
-          const ventaResult = await query(
-            `INSERT INTO ventas (
-               producto, cantidad, precio_unitario, precio_compra, total, vendedor, fecha, 
-               metodo_pago, monto_efectivo, monto_transferencia,
-               cliente_nombre, cliente_carnet, cliente_telefono, numero_transaccion, banco, 
-               cuenta_banco_id, cuenta_nombre, cuenta_numero, transferencia_id
-             ) 
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19) RETURNING *`,
-            [
-              productoId,
-              cantidad,
-              precioUnitario,
-              precioCompra || 0,
-              totalVenta,
-              vendedorId,
-              fechaVenta,
-              mPago,
-              mEfectivo,
-              mTransferencia,
-              cNombre,
-              cCarnet,
-              cTelefono,
-              nTransaccion,
-              bco,
-              cBancoId,
-              cNombreCuenta,
-              cNumeroCuenta,
-              tId
-            ]
-          );
 
         const newVentaId = ventaResult.rows[0].id;
 
