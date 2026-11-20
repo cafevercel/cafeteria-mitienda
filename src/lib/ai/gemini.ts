@@ -43,9 +43,15 @@ TABLAS DE LA BASE DE DATOS DISPONIBLES:
 
 4. usuarios (Puntos de Venta / Sucursales y Almacén):
    - id: integer o text (PK)
-   - nombre: varchar (Nombre de la sucursal o punto de venta, ej: "ML Dórticos", "ML Santa Elena", etc.)
+   - nombre: varchar (Nombre de la sucursal o punto de venta)
    - rol: varchar ('Almacen', 'Vendedor') -> Las sucursales o puntos de venta tienen rol = 'Vendedor'
    - activo: boolean
+
+   CATÁLOGO EXACTO DE SUCURSALES / PUNTOS DE VENTA REGISTRADOS EN LA BASE DE DATOS:
+   - ID 6: "ML Dorticos" (¡ATENCIÓN CRÍTICA!: En la base de datos está guardado EXACTAMENTE como "ML Dorticos", SIN TILDE. Aunque el usuario escriba "ML Dórticos" con tilde, en SQL debes contemplar ambas variantes o su ID: (u.nombre ILIKE '%Dorticos%' OR u.nombre ILIKE '%Dórticos%' OR u.id = 6))
+   - ID 2: "ML Santa Elena" (En la base de datos: 'ML Santa Elena' o u.id = 2)
+   - ID 30: "Marianny Perché" (En la base de datos: 'Marianny Perché ' o u.id = 30)
+   - ID 31: "Marianny Campo" (En la base de datos: 'Marianny Campo' o u.id = 31)
 
 5. empleados:
    - id: varchar (PK)
@@ -101,22 +107,52 @@ TABLAS DE LA BASE DE DATOS DISPONIBLES:
 REGLAS CRÍTICAS DE STOCK Y SUCURSALES (MUY IMPORTANTE):
 1. DIFERENCIA ENTRE ALMACÉN CENTRAL Y PUNTOS DE VENTA (SUCURSALES):
    - La tabla "productos.cantidad" es ÚNICAMENTE el stock en el Almacén Central.
-   - El stock en las SUCURSALES / PUNTOS DE VENTA (como "ML Dórticos", "ML Santa Elena", etc.) está en la tabla "usuario_productos.cantidad".
-   - Cuando el usuario pregunte por inventario, stock disponible o productos de una sucursal o punto de venta, NUNCA uses "productos.cantidad". DEBES consultar "usuario_productos up JOIN productos p ON up.producto_id = p.id JOIN usuarios u ON up.usuario_id::text = u.id::text".
+   - El stock en las SUCURSALES / PUNTOS DE VENTA (como "ML Dorticos", "ML Santa Elena", etc.) está en la tabla "usuario_productos.cantidad".
+   - Cuando el usuario pregunte por inventario, stock disponible o productos de una sucursal o punto de venta, NUNCA uses "productos.cantidad". DEBES consultar:
+     "usuario_productos up JOIN productos p ON up.producto_id = p.id JOIN usuarios u ON up.usuario_id::text = u.id::text"
    - El filtro de stock disponible en una sucursal es estrictamente: "up.cantidad > 0".
-   - Para identificar la sucursal, usa coincidencia flexible de texto sobre usuarios.nombre: "u.nombre ILIKE '%Dórticos%'" o "u.nombre ILIKE '%Santa Elena%'".
 
-2. ANÁLISIS DE VENTAS Y RENTABILIDAD POR SUCURSAL:
+2. REGLA ESTRICTA DE BÚSQUEDA DE SUCURSALES Y TOLERANCIA A TILDES EN POSTGRESQL:
+   - PostgreSQL distingue acentos en LIKE/ILIKE (por ejemplo 'ML Dorticos' ILIKE '%Dórticos%' evalúa a FALSE).
+   - Por ello, cuando busques por sucursal:
+     * Para ML Dórticos / ML Dorticos usa: (u.nombre ILIKE '%Dorticos%' OR u.nombre ILIKE '%Dórticos%' OR u.id = 6)
+     * Para ML Santa Elena usa: (u.nombre ILIKE '%Santa Elena%' OR u.id = 2)
+     * Si no estás seguro de la tilde en cualquier término, usa comodín '_' (ej. u.nombre ILIKE '%D_rticos%') o translate(lower(u.nombre), 'áéíóú', 'aeiou') ILIKE '%dorticos%' o filtra por u.id.
+
+3. REGLA PARA COMPARATIVAS Y RANKINGS MULTI-SUCURSAL (TOP N POR SUCURSAL):
+   - Si el usuario solicita un Top N de productos por sucursal (ejemplo: "Top 20 por ganancia en cada sucursal"):
+     * NUNCA apliques un LIMIT global pequeño al final de la consulta (como LIMIT 20), ya que eso devolvería productos de una sola sucursal y dejaría a la otra con 0 filas.
+     * Utiliza Window Functions con PARTITION BY para calcular el ranking por separado en cada sucursal:
+       WITH ranking AS (
+          SELECT 
+            u.nombre AS sucursal,
+            p.nombre AS producto,
+            up.cantidad AS stock_disponible,
+            SUM(v.cantidad) AS unidades_vendidas,
+            SUM(v.total) AS ingreso_total,
+            SUM(v.total - (COALESCE(v.precio_compra, p.precio_compra, 0) * v.cantidad)) AS ganancia_bruta,
+            CASE WHEN SUM(v.total) > 0 THEN ROUND((SUM(v.total - (COALESCE(v.precio_compra, p.precio_compra, 0) * v.cantidad)) / SUM(v.total)) * 100, 2) ELSE 0 END AS margen_pct,
+            ROW_NUMBER() OVER (PARTITION BY u.id ORDER BY SUM(v.total - (COALESCE(v.precio_compra, p.precio_compra, 0) * v.cantidad)) DESC) AS rn
+          FROM usuario_productos up
+          JOIN productos p ON up.producto_id = p.id
+          JOIN usuarios u ON up.usuario_id::text = u.id::text
+          LEFT JOIN ventas v ON v.producto = up.producto_id AND v.vendedor::text = up.usuario_id::text AND v.fecha >= NOW() - INTERVAL '90 days'
+          WHERE up.cantidad > 0 
+            AND (u.nombre ILIKE '%Dorticos%' OR u.nombre ILIKE '%Dórticos%' OR u.nombre ILIKE '%Santa Elena%' OR u.id IN (2, 6))
+          GROUP BY u.id, u.nombre, p.id, p.nombre, up.cantidad
+        )
+        SELECT * FROM ranking WHERE rn <= 20 ORDER BY sucursal, ganancia_bruta DESC;
+     * De este modo, AMBAS sucursales tendrán sus datos completos garantizados en el reporte.
+
+4. ANÁLISIS DE VENTAS Y RENTABILIDAD POR SUCURSAL:
    - En la tabla "ventas", la columna "vendedor" es la FK hacia "usuarios.id" (la sucursal que vendió).
    - Para cruzar el inventario disponible de una sucursal con sus ventas históricas, une:
      "usuario_productos up" con "ventas v" mediante:
      "ON v.producto = up.producto_id AND v.vendedor::text = up.usuario_id::text"
+   - Si se analizan productos con stock disponible que se vendieron poco o nada, usa LEFT JOIN con ventas, para que los productos con stock disponible pero 0 ventas no sean descartados.
    - Ganancia Bruta por Venta = total - (COALESCE(precio_compra, 0) * cantidad)
    - Ganancia Bruta Total = SUM(v.total - (COALESCE(v.precio_compra, p.precio_compra, 0) * v.cantidad))
    - Margen Bruto (%) = CASE WHEN SUM(v.total) > 0 THEN (SUM(v.total - (COALESCE(v.precio_compra, p.precio_compra, 0) * v.cantidad)) / SUM(v.total)) * 100 ELSE 0 END
-
-3. COMPARATIVAS ENTRE SUCURSALES:
-   - Para comparar dos o más sucursales para productos con stock_disponible > 0 en cada una, haz GROUP BY por sucursal ("u.nombre") y producto ("p.nombre", "p.id"), filtrando "up.cantidad > 0".
    - Las fechas en "ventas.fecha" son TIMESTAMP: para los últimos 90 días usa "v.fecha >= NOW() - INTERVAL '90 days'".
    - Para nombres de productos usa siempre comparación insensible a mayúsculas/minúsculas: ILIKE '%termino%'.
 `;
@@ -165,7 +201,7 @@ export function validateAndSanitizeSql(rawSql: string): string {
 
   // Si no tiene LIMIT, agregar un límite defensivo para no sobrecargar memoria
   if (!upper.includes('LIMIT')) {
-    sqlClean += ' LIMIT 100';
+    sqlClean += ' LIMIT 500';
   }
 
   return sqlClean;
