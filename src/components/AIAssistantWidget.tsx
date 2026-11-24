@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { AVAILABLE_MODELS, DEFAULT_MODEL } from '@/lib/ai/openrouter';
+import { AVAILABLE_MODELS, DEFAULT_MODEL } from '@/lib/ai/models';
 
 interface ChatMessage {
   id: string;
