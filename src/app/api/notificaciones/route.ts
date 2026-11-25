@@ -8,6 +8,11 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
 
     const isBellMode = searchParams.get('mode') === 'bell';
+    const vendedorIdParam = searchParams.get('vendedor_id');
+    const parsedVendedorId =
+      vendedorIdParam && vendedorIdParam !== 'todos' && /^\d+$/.test(vendedorIdParam)
+        ? Number(vendedorIdParam)
+        : null;
 
     // 1. VENCIMIENTOS
     let vencimientos: any[] = [];
@@ -161,6 +166,15 @@ export async function GET(request: NextRequest) {
       // Si es modo campana, no calculamos la rotación pesada ni rankings históricos
       if (!isBellMode) {
         try {
+          const rotacionParams: any[] = [];
+          const vigenciasWhere = parsedVendedorId !== null ? 'WHERE vp.usuario_id = $1' : '';
+          const ventasWhere =
+            parsedVendedorId !== null ? 'WHERE COALESCE(v.vendedor_id, v.vendedor) = $1' : '';
+          const usuarioFilter = parsedVendedorId !== null ? 'AND u.id = $1' : '';
+          if (parsedVendedorId !== null) {
+            rotacionParams.push(parsedVendedorId);
+          }
+
           const resRotacion = await query(`
           WITH vigencias_resumen AS (
             SELECT 
@@ -177,6 +191,7 @@ export async function GET(request: NextRequest) {
               ) AS total_dias_vigencia,
               bool_or(vp.estado = 'activa') AS tiene_vigencia_activa
             FROM vigencias_productos vp
+            ${vigenciasWhere}
             GROUP BY vp.usuario_id, vp.producto_id
           ),
           ventas_resumen AS (
@@ -189,6 +204,7 @@ export async function GET(request: NextRequest) {
                                        AND vp.producto_id = v.producto
                                        AND v.fecha >= vp.fecha_inicio
                                        AND v.fecha <= COALESCE(vp.fecha_fin, NOW())
+            ${ventasWhere}
             GROUP BY COALESCE(v.vendedor_id, v.vendedor), v.producto
           )
           SELECT 
@@ -214,12 +230,12 @@ export async function GET(request: NextRequest) {
             END AS estado_stock,
             vr.tiene_vigencia_activa
           FROM vigencias_resumen vr
-          JOIN usuarios u ON u.id = vr.usuario_id AND u.rol = 'Vendedor'
+          JOIN usuarios u ON u.id = vr.usuario_id AND u.rol = 'Vendedor' ${usuarioFilter}
           JOIN productos p ON p.id = vr.producto_id
           LEFT JOIN usuario_productos up ON up.usuario_id = vr.usuario_id AND up.producto_id = vr.producto_id
           LEFT JOIN ventas_resumen vnt ON vnt.usuario_id = vr.usuario_id AND vnt.producto_id = vr.producto_id
           ORDER BY indice_rotacion_diaria DESC
-        `);
+        `, rotacionParams);
 
         rotacionProductos = resRotacion.rows.map((row) => {
           const indice = Number(row.indice_rotacion_diaria) || 0;
