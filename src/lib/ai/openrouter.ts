@@ -26,20 +26,34 @@ async function callOpenRouter(
     temperature,
   };
 
-  if (stage === 'interpret' && model.toLowerCase().includes('nemotron')) {
+  if (model.toLowerCase().includes('nemotron')) {
     requestBody.reasoning = { enabled: false };
   }
 
-  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL || 'https://mitienda-cuba.com',
-      'X-Title': 'Mi Tienda Cafeteria POS',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(requestBody),
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 25000);
+
+  let response: Response;
+  try {
+    response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL || 'https://mitienda-cuba.com',
+        'X-Title': 'Mi Tienda Cafeteria POS',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
+      signal: controller.signal,
+    });
+  } catch (err: any) {
+    if (err?.name === 'AbortError') {
+      throw new Error(`El modelo (${model}) tardó demasiado en responder (>25s). Intenta con una pregunta más específica o cambia de modelo.`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   const data = await response.json().catch(() => ({}));
 

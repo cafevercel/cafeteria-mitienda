@@ -326,7 +326,7 @@ No incluyas texto ni explicaciones fuera del JSON.
   let dbRows: any[] = [];
   let lastDbError: any = null;
   let zeroRowRetried = false;
-  const maxSqlAttempts = 3;
+  const maxSqlAttempts = 2;
 
   for (let attempt = 1; attempt <= maxSqlAttempts; attempt++) {
     try {
