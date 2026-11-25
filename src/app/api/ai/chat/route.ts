@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { processBusinessQueryOpenRouter, AVAILABLE_MODELS } from '@/lib/ai/openrouter';
 import { processBusinessQuery } from '@/lib/ai/gemini';
 
+export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
+
 export async function GET() {
   const proveedor = process.env.OPENROUTER_API_KEY ? 'OpenRouter' : 'Gemini';
   return NextResponse.json({

@@ -1,22 +1,33 @@
 import { AVAILABLE_MODELS, DEFAULT_MODEL, ModelOption } from './models';
-import { runAiSqlPipeline, AiQueryResult, ChatCompletionMessage } from './query-pipeline';
+import {
+  runAiSqlPipeline,
+  AiQueryResult,
+  ChatCompletionMessage,
+  CompletionStage,
+} from './query-pipeline';
 
 export { AVAILABLE_MODELS, DEFAULT_MODEL };
 export type { ModelOption };
 
-// Asegurar soporte TLS en entornos locales y certificados autofirmados
-if (!process.env.NODE_TLS_REJECT_UNAUTHORIZED) {
-  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-}
-
 async function callOpenRouter(
   messages: ChatCompletionMessage[],
   model: string = DEFAULT_MODEL,
-  temperature: number = 0.1
+  temperature: number = 0.1,
+  stage?: CompletionStage
 ): Promise<string> {
   const apiKey = process.env.OPENROUTER_API_KEY || '';
   if (!apiKey) {
     throw new Error('OPENROUTER_API_KEY_MISSING');
+  }
+
+  const requestBody: Record<string, unknown> = {
+    model,
+    messages,
+    temperature,
+  };
+
+  if (stage === 'interpret' && model.toLowerCase().includes('nemotron')) {
+    requestBody.reasoning = { enabled: false };
   }
 
   const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -27,11 +38,7 @@ async function callOpenRouter(
       'X-Title': 'Mi Tienda Cafeteria POS',
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      model,
-      messages,
-      temperature,
-    }),
+    body: JSON.stringify(requestBody),
   });
 
   const data = await response.json().catch(() => ({}));
@@ -65,6 +72,7 @@ export async function processBusinessQueryOpenRouter(
   return runAiSqlPipeline({
     userQuestion,
     providerLabel: `OpenRouter (${selectedModel})`,
-    generateCompletion: (messages, temperature) => callOpenRouter(messages, selectedModel, temperature),
+    generateCompletion: (messages, temperature, stage) =>
+      callOpenRouter(messages, selectedModel, temperature, stage),
   });
 }

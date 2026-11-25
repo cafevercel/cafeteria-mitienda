@@ -19,9 +19,12 @@ export interface ChatCompletionMessage {
   content: string;
 }
 
+export type CompletionStage = 'sql' | 'interpret';
+
 export type GenerateCompletionFn = (
   messages: ChatCompletionMessage[],
-  temperature: number
+  temperature: number,
+  stage?: CompletionStage
 ) => Promise<string>;
 
 interface SqlPlan {
@@ -296,7 +299,8 @@ No incluyas texto ni explicaciones fuera del JSON.
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userSqlPrompt },
       ],
-      0.1
+      0.1,
+      'sql'
     );
     parsedPlan = parseAiPlanJson(rawSqlReply);
   } catch (err: any) {
@@ -365,7 +369,8 @@ Revisa la consulta anterior para la pregunta "${userQuestion}". Si es posible am
                 { role: 'assistant', content: JSON.stringify(parsedPlan) },
                 { role: 'user', content: retryPrompt },
               ],
-              0.1
+              0.1,
+              'sql'
             );
             const nextPlan = parseAiPlanJson(correctedReply);
             if (nextPlan.sql && nextPlan.sql.trim() !== (parsedPlan.sql || '').trim()) {
@@ -413,7 +418,8 @@ INSTRUCCIONES DE CORRECCIÓN:
             { role: 'assistant', content: JSON.stringify(parsedPlan) },
             { role: 'user', content: fixPrompt },
           ],
-          0.1
+          0.1,
+          'sql'
         );
         parsedPlan = parseAiPlanJson(fixedReply);
         if (!parsedPlan.sql) break;
@@ -474,7 +480,8 @@ INSTRUCCIÓN DE REDACCIÓN:
         },
         { role: 'user', content: promptInterpretacion },
       ],
-      0.3
+      0.3,
+      'interpret'
     );
 
     return {

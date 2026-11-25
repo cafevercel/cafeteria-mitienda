@@ -155,7 +155,59 @@ export default function AIAssistantWidget() {
         }),
       });
 
-      const data = await response.json();
+      const rawText = await response.text();
+      let data: any = null;
+      let jsonParseError: string | null = null;
+
+      if (rawText.trim()) {
+        try {
+          data = JSON.parse(rawText);
+        } catch (parseErr: any) {
+          jsonParseError = parseErr?.message || 'Respuesta no es JSON válido';
+        }
+      }
+
+      if (!response.ok) {
+        const isTimeout = response.status === 504 || response.status === 408;
+        const serverMessage =
+          data?.respuesta ||
+          data?.error ||
+          (isTimeout
+            ? 'La consulta excedió el tiempo límite del servidor (504 Timeout). Intenta hacer una pregunta más específica o seleccionar otro modelo.'
+            : `El servidor devolvió un error (HTTP ${response.status}${response.statusText ? `: ${response.statusText}` : ''}). Por favor, intenta de nuevo.`);
+
+        const errorMsg: ChatMessage = {
+          id: `asst_err_${Date.now()}`,
+          sender: 'assistant',
+          text: serverMessage,
+          sql: data?.sqlEjecutado,
+          proveedor: data?.proveedor,
+          modeloUsado: data?.proveedor
+            ? data.proveedor === 'Gemini'
+              ? 'Google Gemini'
+              : currentModelMeta.nombre
+            : undefined,
+          tiempoMs: data?.tiempoMs,
+          error: data?.error || jsonParseError || `HTTP ${response.status}`,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        };
+
+        setMessages((prev) => [...prev, errorMsg]);
+        return;
+      }
+
+      if (!data || typeof data !== 'object') {
+        const invalidFormatMsg: ChatMessage = {
+          id: `asst_err_${Date.now()}`,
+          sender: 'assistant',
+          text: 'El servidor devolvió una respuesta inesperada (no es JSON válido). Por favor, intenta nuevamente.',
+          error: jsonParseError || 'Respuesta vacía o inválida del servidor',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        };
+
+        setMessages((prev) => [...prev, invalidFormatMsg]);
+        return;
+      }
 
       const assistantMsg: ChatMessage = {
         id: `asst_${Date.now()}`,

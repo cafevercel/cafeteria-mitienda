@@ -11,11 +11,6 @@ import {
 export { SYSTEM_SCHEMA_CONTEXT, validateAndSanitizeSql };
 export type { AiQueryResult };
 
-// Asegurar soporte TLS en entornos locales y certificados autofirmados
-if (!process.env.NODE_TLS_REJECT_UNAUTHORIZED) {
-  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-}
-
 const getApiKey = () => process.env.GEMINI_API_KEY || '';
 const getGenAI = () => {
   const key = getApiKey();
