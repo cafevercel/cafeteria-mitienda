@@ -311,7 +311,7 @@ export default function ModeradoresSection() {
     }
 
     const text = log.detalles || '';
-    const multiMatch = text.match(/^(?:Entregó\s+)?(\d+)\s+unidades\s+totales\s*\((.+?)\)/i);
+    const multiMatch = text.match(/^(?:Entregó\s+)?(\d+)\s+unidades\s+totales\s*\((.+?)\)(?:\s+al\s+punto\s+de\s+venta|\s*$)/i);
     const singleMatch = text.match(/^(?:Entregó\s+)?(\d+)\s+unidades\s+de\s+["']([^"']+)["']/i);
     const fallbackMatch = text.match(/^(?:Entregó\s+)?(\d+)\s+unidades\s+totales/i);
 

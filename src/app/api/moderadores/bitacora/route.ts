@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
       const isEntrega = row.accion === 'entregar_producto' || (row.detalles && row.detalles.toLowerCase().startsWith('entregó'));
       if (isEntrega && row.detalles) {
         const text = row.detalles;
-        const multiMatch = text.match(/^(?:Entregó\s+)?(\d+)\s+unidades\s+totales\s*\((.+?)\)/i);
+        const multiMatch = text.match(/^(?:Entregó\s+)?(\d+)\s+unidades\s+totales\s*\((.+?)\)(?:\s+al\s+punto\s+de\s+venta|\s*$)/i);
         const singleMatch = text.match(/^(?:Entregó\s+)?(\d+)\s+unidades\s+de\s+["']([^"']+)["']/i);
         const fallbackMatch = text.match(/^(?:Entregó\s+)?(\d+)\s+unidades\s+totales/i);
 
